@@ -1,7 +1,9 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-const DETAIL_URL = 'https://sktorrent.eu/torrent/details.php?name=Casino-Royale-3137322e3232352e34302e3131392d31&id=436597e1af1612dacae85462e472c060d88e910c';
+const BASE = 'https://sktorrent.eu';
+const SEARCH_URL = `${BASE}/torrent/torrents_v2.php`;
+const QUERY = 'Casino Royale 2006';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36';
 
 const http = axios.create({
@@ -77,6 +79,40 @@ function summary(url) {
   }
 }
 
+async function findDetail() {
+  const search = await http.get('/torrent/torrents_v2.php', {
+    baseURL: BASE,
+    responseType: 'text',
+    transformResponse: [v => v],
+    params: { search: QUERY, category: 0, active: 0, order: 'data', by: 'DESC', page: 0 },
+    headers: { Referer: SEARCH_URL }
+  });
+  console.log(`search status=${search.status} type=${search.headers['content-type'] || ''}`);
+  if (search.status < 200 || search.status >= 400) return null;
+
+  const $ = cheerio.load(String(search.data || ''));
+  const candidates = [];
+  const seen = new Set();
+  $('a[href*="details.php"]').each((_, el) => {
+    const link = $(el);
+    const href = String(link.attr('href') || '');
+    const id = (href.match(/[?&]id=([a-f0-9]{40})/i) || [])[1];
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    const card = link.closest('td, tr, article, div');
+    const name = String(link.attr('title') || link.find('img').attr('alt') || link.text() || card.text() || '').replace(/\s+/g, ' ').trim();
+    const detailUrl = absolute(href, SEARCH_URL);
+    if (detailUrl) candidates.push({ id, name, detailUrl });
+  });
+  console.log(`detail candidates=${candidates.length}`);
+  candidates.slice(0, 8).forEach((item, i) => console.log(`candidate ${i + 1}: ${item.name.slice(0, 140)}`));
+
+  return candidates.find(item => /casino[ ._-]*royale/i.test(item.name) && /2006|1080|720|bluray|web|bdrip/i.test(item.name))
+    || candidates.find(item => /casino[ ._-]*royale/i.test(item.name))
+    || candidates[0]
+    || null;
+}
+
 async function rangeProbe(url, headers) {
   try {
     const response = await http.get(url, {
@@ -102,24 +138,31 @@ async function rangeProbe(url, headers) {
 }
 
 async function main() {
-  const detail = await http.get(DETAIL_URL, {
+  const picked = await findDetail();
+  if (!picked) {
+    console.log('No SKTorrent detail candidate found.');
+    return;
+  }
+  console.log(`picked: ${picked.name.slice(0, 160)}`);
+
+  const detail = await http.get(picked.detailUrl, {
     responseType: 'text',
     transformResponse: [v => v],
-    headers: { Referer: 'https://sktorrent.eu/torrent/torrents_v2.php' }
+    headers: { Referer: SEARCH_URL }
   });
   console.log(`detail status=${detail.status} type=${detail.headers['content-type'] || ''}`);
   if (detail.status < 200 || detail.status >= 400) return;
 
   const detailHtml = String(detail.data || '');
-  const media = collectMedia(detailHtml, DETAIL_URL);
-  const onlinePages = collectOnlinePages(detailHtml, DETAIL_URL).slice(0, 3);
+  const media = collectMedia(detailHtml, picked.detailUrl);
+  const onlinePages = collectOnlinePages(detailHtml, picked.detailUrl).slice(0, 3);
 
   for (const pageUrl of onlinePages) {
     try {
       const page = await http.get(pageUrl, {
         responseType: 'text',
         transformResponse: [v => v],
-        headers: { Referer: DETAIL_URL }
+        headers: { Referer: picked.detailUrl }
       });
       console.log(`online page ${new URL(pageUrl).pathname} status=${page.status}`);
       if (page.status >= 200 && page.status < 400) media.push(...collectMedia(String(page.data || ''), pageUrl));
@@ -136,7 +179,7 @@ async function main() {
     const variants = [
       ['no-referrer', {}],
       ['stremio-web', { Referer: 'https://web.stremio.com/', Origin: 'https://web.stremio.com' }],
-      ['skt-detail', { Referer: DETAIL_URL }],
+      ['skt-detail', { Referer: picked.detailUrl }],
       ['sktonline', { Referer: 'https://online.sktorrent.eu/' }]
     ];
     for (const [name, headers] of variants) {
