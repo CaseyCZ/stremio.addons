@@ -225,21 +225,27 @@ function makeStream(provider, pageTitle, url, label, referer) {
   };
 }
 
-function streamVariantKey(stream) {
-  const name = String(stream && stream.name || '').replace(/\s+/g, ' ').trim().toLowerCase();
-  const title = String(stream && stream.title || '').replace(/\s+/g, ' ').trim().toLowerCase();
-  return `${name}|${title}`;
+function canonicalDirectIdentity(stream) {
+  const raw = String(stream && stream.url || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    const path = decodeURIComponent(parsed.pathname || '');
+    const skt = path.match(/\/h264\/(\d+)_((?:2160|1440|1080|720|480|360|240)p)\.mp4$/i);
+    if (skt) return `sktvideo:${skt[1]}:${skt[2].toLowerCase()}`;
+    return `url:${parsed.protocol.toLowerCase()}//${parsed.hostname.toLowerCase()}${parsed.pathname}${parsed.search}`;
+  } catch (_) {
+    return `url:${raw}`;
+  }
 }
 
 function dedupeStreams(streams) {
-  const seenUrls = new Set();
-  const seenVariants = new Set();
-  return streams.filter(stream => {
-    if (!stream || !stream.url || seenUrls.has(stream.url)) return false;
-    const variant = streamVariantKey(stream);
-    if (variant && seenVariants.has(variant)) return false;
-    seenUrls.add(stream.url);
-    if (variant) seenVariants.add(variant);
+  const seen = new Set();
+  return (streams || []).filter(stream => {
+    if (!stream || !stream.url) return false;
+    const identity = canonicalDirectIdentity(stream);
+    if (!identity || seen.has(identity)) return false;
+    seen.add(identity);
     return true;
   });
 }
@@ -731,7 +737,7 @@ async function findFromSktorrentDetails(queries, titles) {
   for (const query of queries.slice(0, 4)) {
     const found = await searchSktorrentDetails(query, titles);
     for (const item of found) if (!candidates.has(item.id)) candidates.set(item.id, item);
-    if (candidates.size >= 8) break;
+    if (candidates.size >= 10) break;
   }
   if (!candidates.size) return [];
   const rankedCandidates = [...candidates.values()].sort((a, b) => {
@@ -739,7 +745,7 @@ async function findFromSktorrentDetails(queries, titles) {
     if (scoreDiff) return scoreDiff;
     return candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
   });
-const batches = await Promise.all(rankedCandidates.slice(0, 8).map(streamsFromSktorrentDetail));
+const batches = await Promise.all(rankedCandidates.slice(0, 10).map(streamsFromSktorrentDetail));
   return dedupeStreams(batches.flat()).slice(0, 12);
 }
 

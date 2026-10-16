@@ -191,16 +191,31 @@ function normalizePlaybackStreams(streams) {
   });
 }
 
+function combinedStreamIdentity(stream) {
+  if (!stream) return '';
+  if (stream.infoHash) {
+    return `torrent:${String(stream.infoHash).toLowerCase()}:${Number(stream.fileIdx || 0)}`;
+  }
+  if (stream.url) {
+    const raw = String(stream.url).trim();
+    try {
+      const parsed = new URL(raw);
+      const path = decodeURIComponent(parsed.pathname || '');
+      const skt = path.match(/\/h264\/(\d+)_((?:2160|1440|1080|720|480|360|240)p)\.mp4$/i);
+      if (skt) return `sktvideo:${skt[1]}:${skt[2].toLowerCase()}`;
+      return `url:${parsed.protocol.toLowerCase()}//${parsed.hostname.toLowerCase()}${parsed.pathname}${parsed.search}`;
+    } catch (_) {
+      return `url:${raw}`;
+    }
+  }
+  return `other:${stream.name || ''}:${stream.title || ''}`;
+}
+
 function dedupeCombinedStreams(streams) {
   const seen = new Set();
   return (streams || []).filter(stream => {
-    if (!stream) return false;
-    const key = stream.url
-      ? `url:${stream.url}`
-      : stream.infoHash
-        ? `torrent:${String(stream.infoHash).toLowerCase()}:${Number(stream.fileIdx || 0)}`
-        : `other:${stream.name || ''}:${stream.title || ''}`;
-    if (seen.has(key)) return false;
+    const key = combinedStreamIdentity(stream);
+    if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
@@ -268,7 +283,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const parsed = parseStremioId(req.params.id);
   if (!parsed) return res.json({ streams: [], cacheMaxAge: 0 });
 
-  const cacheKey = `combined-v5:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
+  const cacheKey = `combined-v6:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
   const cached = streamCache.get(cacheKey);
   if (cached !== undefined) return res.json({ streams: cached, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
 
@@ -294,7 +309,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
           type: req.params.type,
           season: parsed.season,
           episode: parsed.episode,
-          limit: 8
+          limit: 10
         }), 15000, 'sktorrent-p2p')
       : Promise.resolve([]);
 
