@@ -387,7 +387,10 @@ async function searchSktorrentDetails(query, wantedTitles) {
       const href = String(link.attr('href') || '');
       const idMatch = href.match(/[?&]id=([a-f0-9]{40})/i);
       if (!idMatch || seen.has(idMatch[1])) return;
-      const card = link.closest('td, tr, article, div');
+      // Use the whole result row when possible: the blue Play Video icon is
+      // often a sibling of the details link, not inside the link itself.
+      const row = link.closest('tr');
+      const card = row.length ? row : link.closest('td, article, div');
       const name = String(link.attr('title') || link.find('img').attr('alt') || link.text() || card.text() || '')
         .replace(/\s+/g, ' ').trim();
       const score = titleMatchScore(name, wantedTitles);
@@ -396,13 +399,22 @@ async function searchSktorrentDetails(query, wantedTitles) {
       if (category && !/(film|seri|dokum|tv)/i.test(category)) return;
       const detailsUrl = absoluteUrl(href, SKTORRENT_SEARCH_URL);
       if (!detailsUrl) return;
+
+      // Priority hint only: entries without the icon remain as fallback.
+      const rowHtml = String(card.html() || '');
+      const hasPlayVideo = /play[\s_-]*video|title\s*=\s*["'][^"']*\bplay\b|alt\s*=\s*["'][^"']*\bplay\b|fa-play(?:-circle)?|glyphicon-play|online\d*\.sktorrent\.eu/i.test(rowHtml);
+
       seen.add(idMatch[1]);
-      items.push({ id: idMatch[1], name, detailsUrl, score, category });
+      items.push({ id: idMatch[1], name, detailsUrl, score, category, hasPlayVideo });
     });
 
     const result = items
-      .sort((a, b) => (b.score - a.score) || (candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name)))
-      .slice(0, 8);
+      .sort((a, b) =>
+        (Number(b.hasPlayVideo) - Number(a.hasPlayVideo)) ||
+        (b.score - a.score) ||
+        (candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name))
+      )
+      .slice(0, 10);
     cache.set(key, result, result.length ? 5 * 60 : 60);
     return result;
   } catch (error) {
@@ -796,11 +808,13 @@ async function findFromSktorrentDetails(queries, titles) {
   }
   if (!candidates.size) return [];
   const rankedCandidates = [...candidates.values()].sort((a, b) => {
+    const playVideoDiff = Number(b.hasPlayVideo) - Number(a.hasPlayVideo);
+    if (playVideoDiff) return playVideoDiff;
     const scoreDiff = (b.score || titleMatchScore(b.name, titles)) - (a.score || titleMatchScore(a.name, titles));
     if (scoreDiff) return scoreDiff;
     return candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
   });
-const batches = await Promise.all(rankedCandidates.slice(0, 10).map(streamsFromSktorrentDetail));
+  const batches = await Promise.all(rankedCandidates.slice(0, 10).map(streamsFromSktorrentDetail));
   return dedupeStreams(batches.flat()).slice(0, 12);
 }
 
