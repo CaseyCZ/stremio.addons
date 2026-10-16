@@ -1,0 +1,123 @@
+name: Apply CZ stream priority fix
+
+on:
+  push:
+    branches:
+      - Master
+    paths:
+      - '.github/workflows/one-time-cz-priority.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prefer Czech SKTOnline releases and keep release language metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('api/sktonline.js')
+          text = path.read_text()
+
+          old = """function subtitleCodesInText(text) {"""
+          insert = r"""function releaseLanguageCodesInText(text) {
+            const source = stripDiacritics(String(text || '')).toUpperCase();
+            const out = [];
+            const groups = source.matchAll(/[\[(]\s*([A-Z]{2,3}(?:\s*[\/+ ,]\s*[A-Z]{2,3}){0,4})\s*[\])]/g);
+            for (const match of groups) {
+              for (const token of String(match[1] || '').split(/[\/+ ,]+/)) {
+                const def = languageDefForAlias(token);
+                if (def) out.push(def.code);
+              }
+            }
+            return dedupe(out);
+          }
+
+          function candidateLanguagePriority(text) {
+            const codes = releaseLanguageCodesInText(text);
+            if (codes.length === 1 && codes[0] === 'CZ') return 0;
+            if (codes.includes('CZ')) return 1;
+            if (codes.length === 1 && codes[0] === 'SK') return 2;
+            if (codes.includes('SK')) return 3;
+            if (!codes.length) return 4;
+            if (codes.includes('EN')) return 5;
+            return 6;
+          }
+
+          function subtitleCodesInText(text) {"""
+          if old not in text:
+            raise SystemExit('subtitle insertion anchor missing')
+          text = text.replace(old, insert, 1)
+
+          old = """function streamLanguages(text) {
+            const all = languageCodesInText(text);
+            const subtitles = subtitleCodesInText(text);
+            const audio = all.filter(code => !subtitles.includes(code));
+            return { audio, subtitles };
+          }"""
+          new = """function streamLanguages(text) {
+            const subtitles = subtitleCodesInText(text);
+            const releaseLanguages = releaseLanguageCodesInText(text);
+            const all = releaseLanguages.length ? releaseLanguages : languageCodesInText(text);
+            const audio = all.filter(code => !subtitles.includes(code));
+            return { audio, subtitles };
+          }"""
+          if old not in text:
+            raise SystemExit('streamLanguages anchor missing')
+          text = text.replace(old, new, 1)
+
+          old = """async function streamsForOnlinePage(pageUrl, referer) {
+            const key = `linked-online:${pageUrl}`;"""
+          new = """async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
+            const key = `linked-online:${pageUrl}:${normalize(sourceTitle)}`;"""
+          if old not in text:
+            raise SystemExit('streamsForOnlinePage signature anchor missing')
+          text = text.replace(old, new, 1)
+
+          old = """    const title = $('title').text().replace(/\\s+/g, ' ').trim() || 'SKTOnline';"""
+          new = """    const title = sourceTitle || $('title').text().replace(/\\s+/g, ' ').trim() || 'SKTOnline';"""
+          if old not in text:
+            raise SystemExit('online title anchor missing')
+          text = text.replace(old, new, 1)
+
+          old = """        return streamsForOnlinePage(url, finalUrl);"""
+          new = """        return streamsForOnlinePage(url, finalUrl, title);"""
+          if old not in text:
+            raise SystemExit('online page call anchor missing')
+          text = text.replace(old, new, 1)
+
+          old = """  const batches = await Promise.all([...candidates.values()].slice(0, 6).map(streamsFromSktorrentDetail));"""
+          new = """  const rankedCandidates = [...candidates.values()].sort((a, b) =>
+            candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name)
+          );
+          const batches = await Promise.all(rankedCandidates.slice(0, 6).map(streamsFromSktorrentDetail));"""
+          if old not in text:
+            raise SystemExit('candidate batching anchor missing')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text)
+
+          addon = Path('addon.js')
+          addon_text = addon.read_text()
+          if 'direct-detail-v4:' not in addon_text:
+            raise SystemExit('addon cache key anchor missing')
+          addon.write_text(addon_text.replace('direct-detail-v4:', 'direct-detail-v6:', 1))
+          PY
+
+          node --check api/sktonline.js
+          node --check addon.js
+          git diff --check
+          git config user.name 'CaseyCZ automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add api/sktonline.js addon.js
+          git commit -m 'Prefer Czech SKTOnline releases'
+          git push origin HEAD:Master
