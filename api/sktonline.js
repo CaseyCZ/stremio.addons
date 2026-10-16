@@ -6,6 +6,7 @@ const SKTORRENT_BASE_URL = 'https://sktorrent.eu';
 const SKTORRENT_SEARCH_URL = `${SKTORRENT_BASE_URL}/torrent/torrents_v2.php`;
 const ONLINE_BASE_URL = 'https://online.sktorrent.eu';
 const SLEDUJTETO_BASE_URL = 'https://www.sledujteto.cz';
+const METADATA_BASE_URL = String(process.env.SKTONLINE_METADATA_BASE_URL || 'https://ceskarepublika.wiki').replace(/\/+$/, '');
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36';
 const cache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60, maxKeys: 1800 });
 
@@ -34,6 +35,7 @@ function makeHttp(baseURL, timeout = 9000) {
 const sktorrentHttp = makeHttp(SKTORRENT_BASE_URL, 9000);
 const onlineHttp = makeHttp(ONLINE_BASE_URL, 9000);
 const sledujtetoHttp = makeHttp(SLEDUJTETO_BASE_URL, 9000);
+const metadataHttp = makeHttp(METADATA_BASE_URL, 10000);
 
 function dedupe(values) { return [...new Set(values.filter(Boolean))]; }
 function stripDiacritics(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
@@ -619,6 +621,182 @@ async function findSledujtetoByTitle(queries, titles) {
   return [];
 }
 
+
+const CDN_EDGES = Array.from({ length: 30 }, (_, index) => index + 1);
+const CDN_QUALITIES = ['1080p', '720p', '480p', '360p', '240p'];
+
+function metadataLanguageCodes(text) {
+  const source = stripDiacritics(String(text || '')).toLowerCase();
+  const out = [];
+  if (/cestina|cesky|czech/.test(source)) out.push('CZ');
+  if (/slovenstina|slovensky|slovak/.test(source)) out.push('SK');
+  if (/anglictina|anglicky|english/.test(source)) out.push('EN');
+  if (/polstina|polsky|polish/.test(source)) out.push('PL');
+  if (/nemcina|nemecky|german/.test(source)) out.push('DE');
+  if (/madarstina|madarsky|hungarian/.test(source)) out.push('HU');
+  return dedupe(out);
+}
+
+function metadataStreamContext(row, fallbackTitle) {
+  const parts = [row.title || fallbackTitle || 'SKTOnline'];
+  for (const code of metadataLanguageCodes(row.audio)) parts.push(`(${code})`);
+  for (const code of metadataLanguageCodes(row.subs)) parts.push(`${code} titulky`);
+  return parts.filter(Boolean).join(' ');
+}
+
+async function searchMetadataCatalog(titles) {
+  const wantedNames = dedupe((titles || []).map(stripYearTokens).filter(Boolean));
+  const wantedYears = dedupe((titles || []).flatMap(yearsInText));
+  const key = `metadata-search:${wantedNames.map(normalize).sort().join('|')}:${wantedYears.join(',')}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+
+  const found = new Map();
+  for (const query of wantedNames.slice(0, 4)) {
+    try {
+      const response = await metadataHttp.get('/api/films/search', {
+        params: { q: query },
+        headers: { Accept: 'application/json', Referer: `${METADATA_BASE_URL}/filmy-online/` }
+      });
+      const items = Array.isArray(response.data) ? response.data : [];
+      for (const item of items) {
+        const slug = String(item && item.slug || '').trim();
+        const title = String(item && item.title || '').trim();
+        const year = item && item.year != null ? String(item.year) : '';
+        if (!slug || !title) continue;
+        if (wantedYears.length && (!year || !wantedYears.includes(year))) continue;
+        const score = titleMatchScore(title, wantedNames);
+        if (score < 0.7) continue;
+        const previous = found.get(slug);
+        if (!previous || score > previous.score) found.set(slug, { slug, title, year, score });
+      }
+    } catch (error) {
+      console.warn(`[metadata] search "${query}": ${error.message}`);
+    }
+  }
+
+  const result = [...found.values()].sort((a, b) => b.score - a.score).slice(0, 3);
+  cache.set(key, result, result.length ? 6 * 60 * 60 : 5 * 60);
+  return result;
+}
+
+async function metadataSourceRows(candidate) {
+  const key = `metadata-rows:${candidate.slug}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  try {
+    const path = `/filmy-online/${encodeURIComponent(candidate.slug)}/`;
+    const response = await metadataHttp.get(path, { headers: { Referer: `${METADATA_BASE_URL}/filmy-online/` } });
+    const $ = cheerio.load(response.data);
+    const rows = [];
+    const seen = new Set();
+
+    $('.source-row[data-provider="sktorrent"]').each((_, el) => {
+      const row = $(el);
+      const id = String(row.attr('data-external-id') || '').trim();
+      if (!/^\d+$/.test(id) || seen.has(id)) return;
+      seen.add(id);
+      rows.push({
+        id,
+        title: row.find('.source-row-title').text().replace(/\s+/g, ' ').trim(),
+        audio: row.find('.source-row-audio').text().replace(/\s+/g, ' ').trim(),
+        subs: row.find('.source-row-subs').text().replace(/\s+/g, ' ').trim(),
+        res: row.find('.source-row-res').text().replace(/\s+/g, ' ').trim(),
+        primary: row.hasClass('is-primary')
+      });
+    });
+
+    if (!rows.length) {
+      const match = String(response.data || '').match(/(?:initialVideoId|sktorrentVideoId)\s*=\s*(\d+)/i);
+      if (match) rows.push({ id: match[1], title: `${candidate.title}${candidate.year ? ` (${candidate.year})` : ''}`, audio: '', subs: '', res: '', primary: true });
+    }
+
+    rows.sort((a, b) => Number(b.primary) - Number(a.primary));
+    cache.set(key, rows, rows.length ? 6 * 60 * 60 : 5 * 60);
+    return rows;
+  } catch (error) {
+    console.warn(`[metadata] detail ${candidate.slug}: ${error.message}`);
+    return [];
+  }
+}
+
+async function probeCdnMedia(url) {
+  try {
+    const response = await axios.head(url, {
+      timeout: 3000,
+      maxRedirects: 2,
+      validateStatus: status => status >= 200 && status < 500,
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept-Encoding': 'identity',
+        Referer: `${SKTORRENT_BASE_URL}/`
+      }
+    });
+    const type = String(response.headers['content-type'] || '');
+    const length = Number(response.headers['content-length'] || 0);
+    return (response.status === 200 || response.status === 206) && (/^video\//i.test(type) || length > 1024 * 1024);
+  } catch (_) {
+    return false;
+  }
+}
+
+async function findCdnEdge(videoId, qualities) {
+  for (const quality of qualities) {
+    const probes = await Promise.all(CDN_EDGES.map(async edge => {
+      const url = `https://online${edge}.sktorrent.eu/media/videos//h264/${videoId}_${quality}.mp4`;
+      return await probeCdnMedia(url) ? edge : null;
+    }));
+    const edge = probes.find(Boolean);
+    if (edge) return edge;
+  }
+  return null;
+}
+
+async function resolveMetadataVideo(row) {
+  const key = `metadata-cdn:${row.id}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+
+  const hinted = /^\d{3,4}p$/i.test(row.res || '') ? String(row.res).toLowerCase() : '';
+  const discoveryQualities = dedupe([hinted, '720p', '480p', '1080p', '360p', '240p']);
+  const edge = await findCdnEdge(row.id, discoveryQualities);
+  if (!edge) {
+    cache.set(key, [], 5 * 60);
+    return [];
+  }
+
+  const sources = (await Promise.all(CDN_QUALITIES.map(async quality => {
+    const url = `https://online${edge}.sktorrent.eu/media/videos//h264/${row.id}_${quality}.mp4`;
+    return await probeCdnMedia(url) ? { url, quality } : null;
+  }))).filter(Boolean);
+
+  cache.set(key, sources, sources.length ? 6 * 60 * 60 : 5 * 60);
+  return sources;
+}
+
+async function findFromMetadataCatalog(titles, type) {
+  if (type !== 'movie') return [];
+  const candidates = await searchMetadataCatalog(titles);
+  for (const candidate of candidates) {
+    const rows = await metadataSourceRows(candidate);
+    if (!rows.length) continue;
+    const batches = await Promise.all(rows.slice(0, 4).map(async row => {
+      const context = metadataStreamContext(row, `${candidate.title}${candidate.year ? ` (${candidate.year})` : ''}`);
+      const sources = await resolveMetadataVideo(row);
+      return sources.map(source => makeStream(
+        'SKTOnline',
+        context,
+        source.url,
+        source.quality,
+        `${METADATA_BASE_URL}/filmy-online/${encodeURIComponent(candidate.slug)}/`
+      ));
+    }));
+    const result = dedupeStreams(batches.flat());
+    if (result.length) return result.slice(0, 12);
+  }
+  return [];
+}
+
 async function streamsFromSktorrentDetail(candidate) {
   const key = `skt-detail-direct:${candidate.id}`;
   const cached = cache.get(key);
@@ -679,16 +857,17 @@ const batches = await Promise.all(rankedCandidates.slice(0, 6).map(streamsFromSk
 
 async function findOnlineStreams({ titles, type, season, episode }) {
   const queries = buildQueries(titles, type, season, episode);
-  const [fromDetails, sledujToByTitle] = await Promise.all([
+  const [fromMetadata, fromDetails, sledujToByTitle] = await Promise.all([
+    findFromMetadataCatalog(titles, type),
     findFromSktorrentDetails(queries, titles),
     findSledujtetoByTitle(queries, titles)
   ]);
 
-  // Discover SKTOnline through SKTorrent detail pages. The central
-  // online.sktorrent.eu search/video pages can return empty bodies to datacenter
-  // clients, while the actual per-release onlineN embeds/CDN URLs still work.
-  // Returned media stays direct from the source; there is no video proxy.
-  return dedupeStreams([...fromDetails, ...sledujToByTitle]).slice(0, 18);
+  // The metadata catalog supplies SKTOnline video IDs from a non-datacenter
+  // source. This server only probes which onlineN CDN node/qualities exist and
+  // returns those final MP4 URLs to Stremio. Video bytes never pass through us.
+  // SKTorrent detail parsing remains a fallback and SledujTo stays independent.
+  return dedupeStreams([...fromMetadata, ...fromDetails, ...sledujToByTitle]).slice(0, 18);
 }
 
 module.exports = { findOnlineStreams };
