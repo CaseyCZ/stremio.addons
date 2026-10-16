@@ -1,0 +1,228 @@
+name: One-time fix Matrix matching
+
+on:
+  push:
+    branches: [Master]
+    paths:
+      - '.github/workflows/one-time-fix-matrix-matching.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: Master
+          fetch-depth: 0
+
+      - name: Patch direct and torrent matching
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('api/sktonline.js')
+          s=p.read_text()
+          old="""function candidateYearMatches(candidate, wantedTitles) {
+  const wantedYears = dedupe((wantedTitles || []).flatMap(yearsInText));
+  if (!wantedYears.length) return true;
+  const candidateYears = yearsInText(candidate);
+  if (!candidateYears.length) return false;
+  return candidateYears.some(year => wantedYears.includes(year));
+}
+"""
+          new="""function candidateYearMatches(candidate, wantedTitles) {
+  const wantedYears = dedupe((wantedTitles || []).flatMap(yearsInText));
+  if (!wantedYears.length) return true;
+  const candidateYears = yearsInText(candidate);
+  if (!candidateYears.length) return false;
+  return candidateYears.some(year => wantedYears.includes(year));
+}
+
+function candidateHasConflictingYears(candidate, wantedTitles) {
+  const wantedYears = dedupe((wantedTitles || []).flatMap(yearsInText));
+  if (wantedYears.length !== 1) return false;
+  const candidateYears = yearsInText(candidate);
+  return candidateYears.some(year => year !== wantedYears[0]);
+}
+"""
+          assert old in s
+          s=s.replace(old,new,1)
+
+          old="""      const card = link.closest('td, tr, article, div');
+      const name = String(link.attr('title') || link.find('img').attr('alt') || link.text() || card.text() || '')
+        .replace(/\\s+/g, ' ').trim();
+      const score = titleMatchScore(name, wantedTitles);
+      if (!name || !candidateYearMatches(name, wantedTitles) || score < 0.7) return;
+      const detailsUrl = absoluteUrl(href, SKTORRENT_SEARCH_URL);
+      if (!detailsUrl) return;
+      seen.add(idMatch[1]);
+      items.push({ id: idMatch[1], name, detailsUrl });
+    });
+
+    const result = items.slice(0, 8);
+"""
+          new="""      const card = link.closest('td, tr, article, div');
+      const name = String(link.attr('title') || link.find('img').attr('alt') || link.text() || card.text() || '')
+        .replace(/\\s+/g, ' ').trim();
+      const score = titleMatchScore(name, wantedTitles);
+      const category = String(card.find('b').first().text() || '').trim();
+      if (!name || !candidateYearMatches(name, wantedTitles) || candidateHasConflictingYears(name, wantedTitles) || score < 0.7) return;
+      if (category && !/(film|seri|dokum|tv)/i.test(category)) return;
+      const detailsUrl = absoluteUrl(href, SKTORRENT_SEARCH_URL);
+      if (!detailsUrl) return;
+      seen.add(idMatch[1]);
+      items.push({ id: idMatch[1], name, detailsUrl, score, category });
+    });
+
+    const result = items
+      .sort((a, b) => (b.score - a.score) || (candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name)))
+      .slice(0, 8);
+"""
+          assert old in s
+          s=s.replace(old,new,1)
+
+          old="""function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle) {
+  const entries = [];
+  const seen = new Set();
+  $('iframe[src], frame[src]').each((_, el) => {
+    const url = absoluteUrl($(el).attr('src'), pageUrl);
+    if (!url || !isSktOnlineUrl(url) || !/\\/embed\\//i.test(url) || seen.has(url)) return;
+    seen.add(url);
+    entries.push({ url, title: nearbyTitleForOnlineEmbed($, el) });
+  });
+
+  const explicitCodes = dedupe(entries.flatMap(entry => releaseLanguageCodesInText(entry.title)));
+  const releaseCodes = releaseLanguageCodesInText(releaseTitle);
+  const remainingCodes = releaseCodes.filter(code => !explicitCodes.includes(code));
+  if (remainingCodes.length === 1) {
+    for (const entry of entries) {
+      if (!releaseLanguageCodesInText(entry.title).length) {
+        entry.title = `${entry.title || releaseTitle} (${remainingCodes[0]})`;
+      }
+    }
+  }
+
+  return entries.sort((a, b) => candidateLanguagePriority(a.title) - candidateLanguagePriority(b.title));
+}
+"""
+          new="""function detailAudioCodes($) {
+  const text = stripDiacritics(String($('body').text() || '')).replace(/\\s+/g, ' ').toUpperCase();
+  const match = text.match(/\\bJAZYK\\s*:\\s*([A-Z]{2,3}(?:\\s*[,\\/]\\s*[A-Z]{2,3}){0,6})/i);
+  if (!match) return [];
+  const out = [];
+  for (const token of String(match[1] || '').split(/[,\\/]+/)) {
+    const def = languageDefForAlias(token.trim());
+    if (def) out.push(def.code);
+  }
+  return dedupe(out);
+}
+
+function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle) {
+  const entries = [];
+  const seen = new Set();
+  $('iframe[src], frame[src]').each((_, el) => {
+    const url = absoluteUrl($(el).attr('src'), pageUrl);
+    if (!url || !isSktOnlineUrl(url) || !/\\/embed\\//i.test(url) || seen.has(url)) return;
+    seen.add(url);
+    entries.push({ url, title: nearbyTitleForOnlineEmbed($, el) });
+  });
+
+  const unlabeled = entries.filter(entry => !releaseLanguageCodesInText(entry.title).length);
+  const pageCodes = detailAudioCodes($);
+  if (pageCodes.length && pageCodes.length === unlabeled.length) {
+    unlabeled.forEach((entry, index) => {
+      entry.title = `${entry.title || releaseTitle} (${pageCodes[index]})`;
+    });
+  } else {
+    const explicitCodes = dedupe(entries.flatMap(entry => releaseLanguageCodesInText(entry.title)));
+    const releaseCodes = releaseLanguageCodesInText(releaseTitle);
+    const remainingCodes = releaseCodes.filter(code => !explicitCodes.includes(code));
+    if (remainingCodes.length === 1) {
+      for (const entry of entries) {
+        if (!releaseLanguageCodesInText(entry.title).length) {
+          entry.title = `${entry.title || releaseTitle} (${remainingCodes[0]})`;
+        }
+      }
+    }
+  }
+
+  return entries.sort((a, b) => candidateLanguagePriority(a.title) - candidateLanguagePriority(b.title));
+}
+"""
+          assert old in s
+          s=s.replace(old,new,1)
+
+          old="""  const rankedCandidates = [...candidates.values()].sort((a, b) => {
+  const languageDiff = candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
+  if (languageDiff) return languageDiff;
+  return titleMatchScore(b.name, titles) - titleMatchScore(a.name, titles);
+});
+"""
+          new="""  const rankedCandidates = [...candidates.values()].sort((a, b) => {
+    const scoreDiff = (b.score || titleMatchScore(b.name, titles)) - (a.score || titleMatchScore(a.name, titles));
+    if (scoreDiff) return scoreDiff;
+    return candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
+  });
+"""
+          assert old in s
+          s=s.replace(old,new,1)
+          p.write_text(s)
+
+          p=Path('api/sktorrent.js')
+          s=p.read_text()
+          old="""function candidateYearMatches(candidate, wantedTitles) {
+  const wantedYears = [...new Set((wantedTitles || []).flatMap(yearsInText))];
+  if (!wantedYears.length) return true;
+  const candidateYears = yearsInText(candidate);
+  if (!candidateYears.length) return true;
+  return candidateYears.some(year => wantedYears.includes(year));
+}
+"""
+          new="""function candidateYearMatches(candidate, wantedTitles) {
+  const wantedYears = [...new Set((wantedTitles || []).flatMap(yearsInText))];
+  if (!wantedYears.length) return true;
+  const candidateYears = yearsInText(candidate);
+  if (!candidateYears.length) return false;
+  return candidateYears.some(year => wantedYears.includes(year));
+}
+
+function candidateHasConflictingYears(candidate, wantedTitles) {
+  const wantedYears = [...new Set((wantedTitles || []).flatMap(yearsInText))];
+  if (wantedYears.length !== 1) return false;
+  const candidateYears = yearsInText(candidate);
+  return candidateYears.some(year => year !== wantedYears[0]);
+}
+"""
+          assert old in s
+          s=s.replace(old,new,1)
+          old="""        const score = titleMatchScore(name, wantedTitles);
+        if (!name || !candidateYearMatches(name, wantedTitles) || score < 0.7) return;
+"""
+          new="""        const score = titleMatchScore(name, wantedTitles);
+        if (!name || !candidateYearMatches(name, wantedTitles) || candidateHasConflictingYears(name, wantedTitles) || score < 0.7) return;
+"""
+          assert old in s
+          s=s.replace(old,new,1)
+          p.write_text(s)
+
+          p=Path('addon.js')
+          s=p.read_text()
+          assert 'combined-v1:' in s
+          s=s.replace('combined-v1:', 'combined-v2:', 1)
+          p.write_text(s)
+          PY
+
+          node --check api/sktonline.js
+          node --check api/sktorrent.js
+          node --check addon.js
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add api/sktonline.js api/sktorrent.js addon.js
+          git commit -m 'Fix exact movie matching and Matrix online variants'
+          git push origin Master
