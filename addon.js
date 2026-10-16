@@ -35,6 +35,12 @@ app.use((req, res, next) => {
   next();
 });
 
+function noCache(res) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+}
+
 function encryptConfig(cfg) {
   if (!CONFIG_ENCRYPTION_KEY) {
     const error = new Error('Configuration encryption key is not available');
@@ -70,8 +76,6 @@ function decryptConfig(token) {
 
 function normalizeConfig(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  // Direct-only test mode. Old installed tokens remain valid, but torrents are
-  // deliberately ignored until direct SKTOnline + SledujTo lookup is proven.
   return {
     uiLanguage: ['cs', 'sk', 'en'].includes(value.uiLanguage) ? value.uiLanguage : 'cs',
     enableOnline: true,
@@ -89,9 +93,9 @@ function getHost(req) {
 
 function labels(language) {
   return {
-    cs: { name: 'SKTOnline + SledujTo', description: 'Přímé streamy ze SKTOnline a SledujTo, hledané podle názvu a roku.' },
-    sk: { name: 'SKTOnline + SledujTo', description: 'Priame streamy zo SKTOnline a SledujTo, hľadané podľa názvu a roku.' },
-    en: { name: 'SKTOnline + SledujTo', description: 'Direct SKTOnline and SledujTo streams searched by title and year.' }
+    cs: { name: 'SKTOnline + SledujTo DIRECT', description: 'Pouze přímé streamy ze SKTOnline a SledujTo, hledané podle názvu a roku.' },
+    sk: { name: 'SKTOnline + SledujTo DIRECT', description: 'Iba priame streamy zo SKTOnline a SledujTo, hľadané podľa názvu a roku.' },
+    en: { name: 'SKTOnline + SledujTo DIRECT', description: 'Direct-only SKTOnline and SledujTo streams searched by title and year.' }
   }[language] || null;
 }
 
@@ -155,10 +159,9 @@ function resolveWithin(promise, timeoutMs, label) {
 }
 
 app.post('/api/config-token', async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
+  noCache(res);
   const cfg = normalizeConfig(req.body || {});
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
-
   try {
     return res.json({ format: 'enc1', token: encryptConfig(cfg), loginVerified: false, directOnly: true });
   } catch (error) {
@@ -170,16 +173,16 @@ app.post('/api/config-token', async (req, res) => {
 
 app.get('/', (req, res) => res.redirect('/configure'));
 app.get('/configure', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
+  noCache(res);
   res.sendFile(path.join(__dirname, 'public', 'configure.html'));
 });
 
 app.get('/manifest.json', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
+  noCache(res);
   res.json({
     id: 'cz.caseycz.stremio.sktonline.configure',
     version: VERSION,
-    name: 'SKTOnline + SledujTo',
+    name: 'SKTOnline + SledujTo DIRECT',
     description: `Configure at ${getHost(req)}/configure`,
     types: [], resources: [], catalogs: [],
     behaviorHints: { configurable: true, configurationRequired: true }
@@ -187,28 +190,28 @@ app.get('/manifest.json', (req, res) => {
 });
 
 app.get('/:cfg/manifest.json', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
+  noCache(res);
   const cfg = normalizeConfig(decryptConfig(req.params.cfg));
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
   return res.json(buildManifest(cfg));
 });
 
 app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
+  noCache(res);
   const cfg = normalizeConfig(decryptConfig(req.params.cfg));
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
-  if (!['movie', 'series'].includes(req.params.type)) return res.json({ streams: [] });
+  if (!['movie', 'series'].includes(req.params.type)) return res.json({ streams: [], cacheMaxAge: 0 });
   const parsed = parseStremioId(req.params.id);
-  if (!parsed) return res.json({ streams: [] });
+  if (!parsed) return res.json({ streams: [], cacheMaxAge: 0 });
 
-  // Version the cache key so older direct/torrent results cannot leak after deploy.
-  const cacheKey = `direct-detail-v2:${req.params.type}:${req.params.id}`;
+  const cacheKey = `direct-detail-v3:${req.params.type}:${req.params.id}`;
   const cached = streamCache.get(cacheKey);
-  if (cached !== undefined) return res.json({ streams: cached });
+  if (cached !== undefined) return res.json({ streams: cached, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
 
   try {
     const meta = await cinemeta.getMeta(req.params.type, parsed.imdbId);
     const titles = titleCandidates(meta, req.params.type);
-    if (!titles.length) return res.json({ streams: [] });
+    if (!titles.length) return res.json({ streams: [], cacheMaxAge: 0 });
 
     const streams = await resolveWithin(findOnlineStreams({
       titles,
@@ -218,23 +221,29 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
     }), 12000, 'direct-detail');
 
     streamCache.set(cacheKey, streams, streams.length ? 5 * 60 : 60);
-    return res.json({ streams });
+    return res.json({ streams, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
   } catch (error) {
     console.error(`[stream] ${req.params.type}/${req.params.id}: ${error.message}`);
-    return res.json({ streams: [] });
+    return res.json({ streams: [], cacheMaxAge: 0 });
   }
 });
 
-app.get('/version', (req, res) => res.json({ version: VERSION }));
-app.get('/health', (req, res) => res.json({
-  ok: true,
-  version: VERSION,
-  encryption: Boolean(CONFIG_ENCRYPTION_KEY),
-  mode: 'direct-detail-only',
-  torrentsEnabled: false,
-  providers: ['SKTOnline via SKTorrent detail', 'SledujTo'],
-  streamCacheKeys: streamCache.keys().length
-}));
+app.get('/version', (req, res) => {
+  noCache(res);
+  res.json({ version: VERSION });
+});
+app.get('/health', (req, res) => {
+  noCache(res);
+  res.json({
+    ok: true,
+    version: VERSION,
+    encryption: Boolean(CONFIG_ENCRYPTION_KEY),
+    mode: 'direct-detail-only',
+    torrentsEnabled: false,
+    providers: ['SKTOnline via SKTorrent detail', 'SledujTo'],
+    streamCacheKeys: streamCache.keys().length
+  });
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`stremio-sktonline v${VERSION} listening on :${PORT} (direct detail search only)`);
