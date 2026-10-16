@@ -89,9 +89,9 @@ function getHost(req) {
 
 function labels(language) {
   return {
-    cs: { name: 'SKTOnline + SledujTo', description: 'Přímé streamy ze SKTOnline a SledujTo, hledané přímo podle názvu.' },
-    sk: { name: 'SKTOnline + SledujTo', description: 'Priame streamy zo SKTOnline a SledujTo, hľadané priamo podľa názvu.' },
-    en: { name: 'SKTOnline + SledujTo', description: 'Direct SKTOnline and SledujTo streams searched directly by title.' }
+    cs: { name: 'SKTOnline + SledujTo', description: 'Přímé streamy ze SKTOnline a SledujTo, hledané podle názvu a roku.' },
+    sk: { name: 'SKTOnline + SledujTo', description: 'Priame streamy zo SKTOnline a SledujTo, hľadané podľa názvu a roku.' },
+    en: { name: 'SKTOnline + SledujTo', description: 'Direct SKTOnline and SledujTo streams searched by title and year.' }
   }[language] || null;
 }
 
@@ -119,12 +119,22 @@ function parseStremioId(id) {
   return { imdbId: imdbId.toLowerCase(), season, episode };
 }
 
-function titleCandidates(meta) {
-  return uniqueStrings([
+function metaYear(meta) {
+  for (const value of [meta && meta.year, meta && meta.releaseInfo, meta && meta.released]) {
+    const match = String(value || '').match(/\b(19|20)\d{2}\b/);
+    if (match) return match[0];
+  }
+  return null;
+}
+
+function titleCandidates(meta, type) {
+  const titles = uniqueStrings([
     meta && meta.name,
     meta && meta.originalName,
     ...(Array.isArray(meta && meta.nameTranslations) ? meta.nameTranslations : [])
   ]).slice(0, 5);
+  const year = type === 'movie' ? metaYear(meta) : null;
+  return year ? titles.map(title => `${title} ${year}`) : titles;
 }
 
 function resolveWithin(promise, timeoutMs, label) {
@@ -190,15 +200,14 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const parsed = parseStremioId(req.params.id);
   if (!parsed) return res.json({ streams: [] });
 
-  // Version the cache key so previously cached torrent results can never leak
-  // into this direct-only test mode after deploy.
-  const cacheKey = `direct-title-v1:${req.params.type}:${req.params.id}`;
+  // Version the cache key so older direct/torrent results cannot leak after deploy.
+  const cacheKey = `direct-detail-v2:${req.params.type}:${req.params.id}`;
   const cached = streamCache.get(cacheKey);
   if (cached !== undefined) return res.json({ streams: cached });
 
   try {
     const meta = await cinemeta.getMeta(req.params.type, parsed.imdbId);
-    const titles = titleCandidates(meta);
+    const titles = titleCandidates(meta, req.params.type);
     if (!titles.length) return res.json({ streams: [] });
 
     const streams = await resolveWithin(findOnlineStreams({
@@ -206,7 +215,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
       type: req.params.type,
       season: parsed.season,
       episode: parsed.episode
-    }), 12000, 'direct-title');
+    }), 12000, 'direct-detail');
 
     streamCache.set(cacheKey, streams, streams.length ? 5 * 60 : 60);
     return res.json({ streams });
@@ -221,13 +230,13 @@ app.get('/health', (req, res) => res.json({
   ok: true,
   version: VERSION,
   encryption: Boolean(CONFIG_ENCRYPTION_KEY),
-  mode: 'direct-title-only',
+  mode: 'direct-detail-only',
   torrentsEnabled: false,
-  providers: ['SKTOnline', 'SledujTo'],
+  providers: ['SKTOnline via SKTorrent detail', 'SledujTo'],
   streamCacheKeys: streamCache.keys().length
 }));
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`stremio-sktonline v${VERSION} listening on :${PORT} (direct title search only)`);
+  console.log(`stremio-sktonline v${VERSION} listening on :${PORT} (direct detail search only)`);
   if (!CONFIG_ENCRYPTION_KEY) console.warn(`[config] Missing encryption key: ${CONFIG_KEY_FILE}`);
 });
