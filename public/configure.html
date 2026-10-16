@@ -3,25 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SKTOnline + SledujTo pro Stremio</title>
+  <title>SKTOnline + SledujTo + SKTorrent pro Stremio</title>
   <style>
     :root{color-scheme:dark;--bg:#0b1020;--panel:#111827;--panel2:#172033;--border:#2a3850;--text:#f8fafc;--muted:#94a3b8;--accent:#38bdf8;--accent2:#0284c7;--ok:#86efac;--err:#fca5a5}
     *{box-sizing:border-box}
     body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at top,#172554 0,#0b1020 42%,#070b14 100%);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text)}
-    .wrap{width:min(100%,680px)}
+    .wrap{width:min(100%,760px)}
     .card{background:rgba(17,24,39,.96);border:1px solid var(--border);border-radius:22px;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.45)}
     .badges{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
     .badge{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid #1d4ed8;border-radius:999px;background:#0f1f46;color:#bfdbfe;font-size:.78rem;font-weight:700}
     h1{margin:14px 0 6px;font-size:1.65rem;line-height:1.15}.lead{margin:0 0 24px;color:var(--muted);line-height:1.5}
     .field{margin:16px 0}label{display:block;margin-bottom:7px;color:#dbeafe;font-size:.9rem;font-weight:650}
     input,select{width:100%;min-height:46px;border:1px solid var(--border);border-radius:12px;background:#0b1220;color:var(--text);padding:0 13px;font:inherit;outline:none}
+    input:focus,select:focus{border-color:#0ea5e9;box-shadow:0 0 0 2px rgba(14,165,233,.15)}
+    .toggle{display:flex;align-items:flex-start;gap:11px;margin:18px 0;padding:14px;border:1px solid var(--border);border-radius:12px;background:#0b1220;cursor:pointer}.toggle input{width:20px;min-height:20px;height:20px;margin:1px 0 0;accent-color:#0284c7}.toggle strong{display:block;color:#dbeafe;font-size:.92rem}.toggle span{display:block;color:var(--muted);font-size:.8rem;line-height:1.4;margin-top:4px}
+    .auth{padding:2px 14px 12px;border:1px solid var(--border);border-radius:12px;background:rgba(23,32,51,.7);margin-bottom:16px}.auth[hidden]{display:none}
     .result-row{display:flex;gap:8px;align-items:stretch}.result-row input{min-width:0;flex:1}
     button,.btn{border:0;border-radius:12px;background:var(--accent2);color:#fff;font:inherit;font-weight:750;cursor:pointer;text-decoration:none;text-align:center}
     button:disabled{opacity:.55;cursor:wait}.copy{flex:0 0 auto;padding:0 13px;background:#243149;border:1px solid var(--border)}
     .primary{width:100%;min-height:48px;margin-top:10px;font-size:1rem}.note{margin:18px 0;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);color:#cbd5e1;font-size:.86rem;line-height:1.45}
-    .sources{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}.source{padding:14px;border:1px solid var(--border);border-radius:12px;background:#0b1220}.source strong{display:block;color:#dbeafe;font-size:.92rem}.source span{display:block;color:var(--muted);font-size:.8rem;line-height:1.4;margin-top:4px}
+    .sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}.source{padding:14px;border:1px solid var(--border);border-radius:12px;background:#0b1220}.source strong{display:block;color:#dbeafe;font-size:.92rem}.source span{display:block;color:var(--muted);font-size:.8rem;line-height:1.4;margin-top:4px}
     #result{display:none;margin-top:22px;padding-top:20px;border-top:1px solid var(--border)}#installUrl{font-size:.78rem}.btn{display:block;width:100%;padding:13px;margin-top:10px}#status{min-height:20px;margin-top:12px;color:var(--ok);font-size:.86rem}.error{color:var(--err)!important}.foot{margin:14px 4px 0;color:#64748b;text-align:center;font-size:.76rem}
-    @media(max-width:600px){.sources{grid-template-columns:1fr}}@media(max-width:520px){body{padding:14px}.card{padding:21px}}
+    @media(max-width:720px){.sources{grid-template-columns:1fr}}@media(max-width:520px){body{padding:14px}.card{padding:21px}}
   </style>
 </head>
 <body>
@@ -30,10 +33,10 @@
       <div class="badges">
         <span class="badge">🎬 Hlavní addon</span>
         <span id="versionBadge" class="badge">📦 Verze …</span>
-        <span class="badge">🎞️ Direct-only test</span>
+        <span class="badge">🎞️ Direct + P2P</span>
       </div>
-      <h1>SKTOnline + SledujTo</h1>
-      <p class="lead">Torrenty jsou dočasně vypnuté. Addon teď hledá oba přímé zdroje samostatně podle názvu filmu nebo seriálu.</p>
+      <h1>SKTOnline + SledujTo + SKTorrent</h1>
+      <p class="lead">Přímá videa zůstávají přímá. Volitelně lze přidat i SKTorrent P2P, kdy server pouze získá metadata .torrent a Stremio se připojuje k peerům samo.</p>
 
       <div class="field">
         <label for="uiLanguage">Jazyk addonu</label>
@@ -45,11 +48,29 @@
       </div>
 
       <div class="sources">
-        <div class="source"><strong>SKTOnline</strong><span>Vyhledávání přes online.sktorrent.eu podle názvu a následné načtení přímého videa.</span></div>
-        <div class="source"><strong>SledujTo</strong><span>Vyhledávání přes SledujTo podle názvu a následné získání přímého odkazu z nalezené stránky.</span></div>
+        <div class="source"><strong>SKTOnline</strong><span>Přímé MP4 streamy z CDN SKTorrent. Video nejde přes náš server.</span></div>
+        <div class="source"><strong>SledujTo</strong><span>Přímý odkaz získaný z nalezené stránky. Video nejde přes náš server.</span></div>
+        <div class="source"><strong>SKTorrent P2P</strong><span>Addon vrátí Stremiu infoHash, správný soubor a trackery z původního .torrentu.</span></div>
       </div>
 
-      <div class="note">Pro tento test není potřeba účet SKTorrent. Stávající nainstalovaný addon funguje dál; nový instalační odkaz je potřeba jen při nové instalaci.</div>
+      <label class="toggle" for="enableTorrents">
+        <input id="enableTorrents" type="checkbox" checked>
+        <span><strong>Zapnout SKTorrent P2P torrenty</strong><span>Vyžaduje účet SKTorrent, protože stažení .torrent souboru je dostupné po přihlášení.</span></span>
+      </label>
+
+      <div id="torrentAuth" class="auth">
+        <div class="field">
+          <label for="sktUsername">SKTorrent uživatelské jméno</label>
+          <input id="sktUsername" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Uživatelské jméno">
+        </div>
+        <div class="field">
+          <label for="sktPassword">SKTorrent heslo</label>
+          <input id="sktPassword" type="password" autocomplete="current-password" placeholder="Heslo">
+        </div>
+        <div class="note">Při vytvoření odkazu se přihlášení ověří. Jméno a heslo jsou uvnitř instalačního tokenu zašifrované AES-256-GCM. Když SKTorrent cookies vyprší, addon se znovu přihlásí automaticky — není potřeba přeinstalace.</div>
+      </div>
+
+      <div class="note">Přehrávání zůstává mimo náš server: direct zdroje jdou přímo z jejich CDN a torrent jde přímo přes P2P. Server řeší jen vyhledání, přihlášení a metadata.</div>
       <button id="generate" class="primary" type="button">Vytvořit instalační odkaz</button>
 
       <div id="result">
@@ -67,11 +88,15 @@ const result=document.getElementById('result');
 const status=document.getElementById('status');
 const installUrl=document.getElementById('installUrl');
 const stremioBtn=document.getElementById('stremioBtn');
+const enableTorrents=document.getElementById('enableTorrents');
+const torrentAuth=document.getElementById('torrentAuth');
 let requestId=0;
 function getBasePath(){return location.pathname.replace(/\/configure\/?$/,'').replace(/\/$/,'')}
 function setStatus(text,error=false){status.textContent=text;status.classList.toggle('error',error)}
+function syncTorrentUi(){torrentAuth.hidden=!enableTorrents.checked}
+enableTorrents.addEventListener('change',syncTorrentUi);syncTorrentUi();
 async function loadVersion(){for(const url of [...new Set([`${getBasePath()}/health`,'/health'])]){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)continue;const d=await r.json();if(d.version){versionBadge.textContent=`📦 Verze ${d.version}`;return}}catch(_){}}versionBadge.textContent='📦 Verze'}
-async function buildInstall(){const id=++requestId;result.style.display='block';installUrl.value='';stremioBtn.href='#';generateBtn.disabled=true;setStatus('Vytvářím konfiguraci…');try{const cfg={uiLanguage:document.getElementById('uiLanguage').value,enableOnline:true,enableTorrents:false};const response=await fetch(`${getBasePath()}/api/config-token`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},cache:'no-store',body:JSON.stringify(cfg)});const data=await response.json().catch(()=>({}));if(!response.ok||!data.token)throw new Error('Nepodařilo se vytvořit konfiguraci.');if(id!==requestId)return;const basePath=getBasePath();const path=`${basePath}/${data.token}/manifest.json`;installUrl.value=`${location.origin}${path}`;stremioBtn.href=`stremio://${location.host}${path}`;setStatus('✓ Instalační odkaz je připravený.')}catch(error){if(id===requestId)setStatus(error.message||'Chyba při vytváření konfigurace.',true)}finally{if(id===requestId)generateBtn.disabled=false}}
+async function buildInstall(){const id=++requestId;result.style.display='block';installUrl.value='';stremioBtn.href='#';generateBtn.disabled=true;try{const torrents=enableTorrents.checked;const username=document.getElementById('sktUsername').value.trim();const password=document.getElementById('sktPassword').value;if(torrents&&(!username||!password))throw new Error('Vyplň uživatelské jméno a heslo SKTorrent.');setStatus(torrents?'Ověřuji SKTorrent přihlášení a vytvářím konfiguraci…':'Vytvářím konfiguraci…');const cfg={uiLanguage:document.getElementById('uiLanguage').value,enableOnline:true,enableTorrents:torrents,sktUsername:username,sktPassword:password};const response=await fetch(`${getBasePath()}/api/config-token`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},cache:'no-store',body:JSON.stringify(cfg)});const data=await response.json().catch(()=>({}));if(!response.ok||!data.token)throw new Error(data.error||'Nepodařilo se vytvořit konfiguraci.');if(id!==requestId)return;const basePath=getBasePath();const path=`${basePath}/${data.token}/manifest.json`;installUrl.value=`${location.origin}${path}`;stremioBtn.href=`stremio://${location.host}${path}`;setStatus(data.torrentsEnabled?'✓ Přihlášení ověřeno. Direct + P2P instalační odkaz je připravený.':'✓ Direct instalační odkaz je připravený.')}catch(error){if(id===requestId)setStatus(error.message||'Chyba při vytváření konfigurace.',true)}finally{if(id===requestId)generateBtn.disabled=false}}
 generateBtn.addEventListener('click',buildInstall);document.getElementById('copyUrl').addEventListener('click',async()=>{if(!installUrl.value)return;try{await navigator.clipboard.writeText(installUrl.value);setStatus('Odkaz zkopírován.')}catch(_){installUrl.focus();installUrl.select();setStatus('Odkaz je označený. Zkopíruj ho ručně.')}});loadVersion();
 </script>
 </body>
