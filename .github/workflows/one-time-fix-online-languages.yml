@@ -98,17 +98,18 @@ jobs:
             raise SystemExit('onlineLinks line missing')
           text = text.replace(old_line, new_lines, 1)
 
-          old_promise = """      Promise.all(onlineLinks.slice(0, 4).map(async url => {
-                if (isPlayableMediaUrl(url)) return [makeStream('SKTOnline', title, url, '', finalUrl)];
-                return streamsForOnlinePage(url, finalUrl, title);
-              }))"""
-          new_promise = """      Promise.all([
+          start_marker = "Promise.all(onlineLinks.slice(0, 4).map(async url => {"
+          start = text.find(start_marker)
+          if start < 0:
+            raise SystemExit('online promise start missing')
+          end = text.find('}))', start)
+          if end < 0:
+            raise SystemExit('online promise end missing')
+          replacement = """Promise.all([
                 ...onlineEntries.slice(0, 6).map(entry => streamsForOnlinePage(entry.url, finalUrl, entry.title || title)),
                 ...onlineDirectLinks.slice(0, 4).map(url => Promise.resolve([makeStream('SKTOnline', title, url, '', finalUrl)]))
               ])"""
-          if old_promise not in text:
-            raise SystemExit('online promise missing')
-          text = text.replace(old_promise, new_promise, 1)
+          text = text[:start] + replacement + text[end + 3:]
 
           path.write_text(text)
 
