@@ -17,117 +17,11 @@ jobs:
         with:
           ref: Master
           fetch-depth: 0
-      - name: Dedupe players by source identity and torrents by infohash
+      - name: Dedupe source identities
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path('api/sktonline.js')
-          s = p.read_text()
-          old = r'''function streamVariantKey(stream) {
-  const name = String(stream && stream.name || '').replace(/\s+/g, ' ').trim().toLowerCase();
-  const title = String(stream && stream.title || '').replace(/\s+/g, ' ').trim().toLowerCase();
-  return `${name}|${title}`;
-}
-
-function dedupeStreams(streams) {
-  const seenUrls = new Set();
-  const seenVariants = new Set();
-  return streams.filter(stream => {
-    if (!stream || !stream.url || seenUrls.has(stream.url)) return false;
-    const variant = streamVariantKey(stream);
-    if (variant && seenVariants.has(variant)) return false;
-    seenUrls.add(stream.url);
-    if (variant) seenVariants.add(variant);
-    return true;
-  });
-}'''
-          new = r'''function canonicalDirectIdentity(stream) {
-  const raw = String(stream && stream.url || '').trim();
-  if (!raw) return '';
-  try {
-    const parsed = new URL(raw);
-    const path = decodeURIComponent(parsed.pathname || '');
-    const skt = path.match(/\/h264\/(\d+)_((?:2160|1440|1080|720|480|360|240)p)\.mp4$/i);
-    if (skt) return `sktvideo:${skt[1]}:${skt[2].toLowerCase()}`;
-    return `url:${parsed.protocol.toLowerCase()}//${parsed.hostname.toLowerCase()}${parsed.pathname}${parsed.search}`;
-  } catch (_) {
-    return `url:${raw}`;
-  }
-}
-
-function dedupeStreams(streams) {
-  const seen = new Set();
-  return (streams || []).filter(stream => {
-    if (!stream || !stream.url) return false;
-    const identity = canonicalDirectIdentity(stream);
-    if (!identity || seen.has(identity)) return false;
-    seen.add(identity);
-    return true;
-  });
-}'''
-          if old not in s:
-              raise SystemExit('dedupeStreams block not found')
-          s = s.replace(old, new, 1)
-          s = s.replace('if (candidates.size >= 8) break;', 'if (candidates.size >= 10) break;', 1)
-          s = s.replace('rankedCandidates.slice(0, 8).map(streamsFromSktorrentDetail)', 'rankedCandidates.slice(0, 10).map(streamsFromSktorrentDetail)', 1)
-          p.write_text(s)
-
-          p = Path('addon.js')
-          s = p.read_text()
-          old = r'''function dedupeCombinedStreams(streams) {
-  const seen = new Set();
-  return (streams || []).filter(stream => {
-    if (!stream) return false;
-    const key = stream.url
-      ? `url:${stream.url}`
-      : stream.infoHash
-        ? `torrent:${String(stream.infoHash).toLowerCase()}:${Number(stream.fileIdx || 0)}`
-        : `other:${stream.name || ''}:${stream.title || ''}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}'''
-          new = r'''function combinedStreamIdentity(stream) {
-  if (!stream) return '';
-  if (stream.infoHash) {
-    return `torrent:${String(stream.infoHash).toLowerCase()}:${Number(stream.fileIdx || 0)}`;
-  }
-  if (stream.url) {
-    const raw = String(stream.url).trim();
-    try {
-      const parsed = new URL(raw);
-      const path = decodeURIComponent(parsed.pathname || '');
-      const skt = path.match(/\/h264\/(\d+)_((?:2160|1440|1080|720|480|360|240)p)\.mp4$/i);
-      if (skt) return `sktvideo:${skt[1]}:${skt[2].toLowerCase()}`;
-      return `url:${parsed.protocol.toLowerCase()}//${parsed.hostname.toLowerCase()}${parsed.pathname}${parsed.search}`;
-    } catch (_) {
-      return `url:${raw}`;
-    }
-  }
-  return `other:${stream.name || ''}:${stream.title || ''}`;
-}
-
-function dedupeCombinedStreams(streams) {
-  const seen = new Set();
-  return (streams || []).filter(stream => {
-    const key = combinedStreamIdentity(stream);
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}'''
-          if old not in s:
-              raise SystemExit('dedupeCombinedStreams block not found')
-          s = s.replace(old, new, 1)
-          s = s.replace('combined-v5:', 'combined-v6:', 1)
-          s = s.replace('          limit: 8\n', '          limit: 10\n', 1)
-          p.write_text(s)
-          PY
-
+          python3 -c "import base64,zlib;exec(zlib.decompress(base64.b64decode('eJzFVttu2zYYvtdTsEFQSWgmy66XBjbSXqQrFqwYhhrpTR3EtEjXnCVSIOkcFuvd+5OiZPnYuk07X9jSfz5/nkiRoRzracrGiGW5kBr9A6+el6Nz+xT4OGctNdOCp4zT6F/lh54CZh5JismNpvc6CD2REqDJo6OjyZwnmgmOlAaB7COWDHP9F30ISkKIHj2EEsGVRhxnFNQGWjL+2fHR8+dONbLsxQL5fgjO8hQnNGgN1YvW5xPkIyCCXhbAj3gv7qi8wIoGYb+2rplO95kv+d9jX1I9lxyNjh9NiMXi+NHaKkZ9r/C8ugKEknlOB9abcv5VM39FKb+SqSknp3doQHUzfsN15duQcBE4m9GEpZrKKsXz19YHQmyCgmeOCHm6x2guU/NaeY+muIrOsMKwsj7BqaJ9a6mM6LaMBoLZ1dx+7beSNfVuJGKdOd5WT3VUmJBmVBuWw1W7RrzilLLOtpZza7oAcgED6plCrs1qgrngLMHpWyZpoi8J5dDRbSMr8d2ekXKV9evZMY5tF0Cvztb3DVnLB9em0nKOpaLENfrqw/vAqPRXBPQU2IQmgtCrD5cXAhaWQ6RBqRoZgcbONHVhgc3OgkCUYZ1MYc5b085pd9gKhuRFeBMEb3qd9mm8aHe78BWfxYtXnXjRhd+XQO104zAPh1GWd49brNELsFunNYKXW0ao6B0/wuOn9nXhnjrXqztkFqXRoRGUDSSrLKTQIhHpmkqrVUtMhdImzzWJpQVXhyVFUSyTaem2gG5DBVBwE7r6r4YBZXeChy/zjjWtxE1jPl2Hh6/r7pVkblTB81eGeNm0Z7WSuwJ2KSvizq20K1ZL7d8xcGMggQuIEM5UrxTGTFE0eFCaZn/cMx34K0VF41QkM6szEXNOHNCo+jaDxRNT3xPUXmf5Ji8oAGEEa6oixf6j6PU5OgvRGIzP+j6c9B0y7bghtGlZYj6j5KKhlzKgxydgHJYpr5r7DrB0ADgpJVToLdWYpaHxulsfHH+DAYgoj+4k07QEWxWuoDMhgh+AymXF4XSMAc3Jrxrn3fM7ow81nJhJtyyE3lTbuOQUI8frVeKMT8SfWE0d3Wq58oHmyo2uZdfQ3Fyov+fZuA7fJEMvyb3JLQ5rn8brSOgplcuYlqe2WBIbfyqqK2fvZLVlkO/+BTMCh+PXSj+3wte2bpRAZONbq9LaZXzqqpbndcW1vXJNPNyCtFaogaxNEP0GGP0xIP2ZUPoUYPo/wek2QN0JqWXXi8Zf6O/YqU1U/iXnrHmv9u9bA2mNeBNkn2D9D4LWtcr8EMRWSf92+3vPANvy/bS3FTlR/UlZxnQPnQ25Udygt2PL2ES6LwYBv/k=')))"
           node --check api/sktonline.js
           node --check api/sktorrent.js
           node --check addon.js
