@@ -102,7 +102,7 @@ function labels(language) {
 function buildManifest(cfg) {
   const copy = labels(cfg.uiLanguage) || labels('cs');
   return {
-    id: 'cz.caseycz.stremio.sktonline',
+    id: 'cz.caseycz.stremio.sktonline.direct',
     version: VERSION,
     name: copy.name,
     description: copy.description,
@@ -180,7 +180,7 @@ app.get('/configure', (req, res) => {
 app.get('/manifest.json', (req, res) => {
   noCache(res);
   res.json({
-    id: 'cz.caseycz.stremio.sktonline.configure',
+    id: 'cz.caseycz.stremio.sktonline.direct.configure',
     version: VERSION,
     name: 'SKTOnline + SledujTo DIRECT',
     description: `Configure at ${getHost(req)}/configure`,
@@ -204,7 +204,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const parsed = parseStremioId(req.params.id);
   if (!parsed) return res.json({ streams: [], cacheMaxAge: 0 });
 
-  const cacheKey = `direct-detail-v3:${req.params.type}:${req.params.id}`;
+  const cacheKey = `direct-detail-v4:${req.params.type}:${req.params.id}`;
   const cached = streamCache.get(cacheKey);
   if (cached !== undefined) return res.json({ streams: cached, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
 
@@ -237,6 +237,7 @@ app.get('/health', (req, res) => {
   res.json({
     ok: true,
     version: VERSION,
+    addonId: 'cz.caseycz.stremio.sktonline.direct',
     encryption: Boolean(CONFIG_ENCRYPTION_KEY),
     mode: 'direct-detail-only',
     torrentsEnabled: false,
