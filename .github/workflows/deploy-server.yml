@@ -1,0 +1,73 @@
+name: Deploy SKTOnline to server
+
+on:
+  push:
+    branches:
+      - Master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-stremio-sktonline
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check deployment configuration
+        id: config
+        env:
+          DEPLOY_KEY_B64: ${{ secrets.SKTONLINE_DEPLOY_SSH_KEY_B64 }}
+        run: |
+          if [[ -z "$DEPLOY_KEY_B64" ]]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Automatic deployment is not configured yet. Add SKTONLINE_DEPLOY_SSH_KEY_B64."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure SSH
+        if: steps.config.outputs.ready == 'true'
+        env:
+          DEPLOY_KEY_B64: ${{ secrets.SKTONLINE_DEPLOY_SSH_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s' "$DEPLOY_KEY_B64" | base64 --decode > ~/.ssh/deploy-key
+          chmod 600 ~/.ssh/deploy-key
+          ssh-keygen -y -f ~/.ssh/deploy-key >/dev/null
+          ssh-keyscan -T 10 -p 22 130.61.49.108 > /tmp/server-host-keys 2>/dev/null
+          test -s /tmp/server-host-keys
+          if ! ssh-keygen -lf /tmp/server-host-keys | awk '{print $2}' | grep -Fxq 'SHA256:SHoVgKDg5pnIiJP70GQCO90OZTECuaNlKnfLK/WZF5Y'; then
+            echo "::error::Oracle SSH host key fingerprint does not match the pinned server fingerprint."
+            exit 1
+          fi
+          ssh-keyscan -T 10 -p 22 -H 130.61.49.108 >> ~/.ssh/known_hosts
+
+      - name: Bootstrap and deploy
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy-key -o BatchMode=yes -o ConnectTimeout=15 ubuntu@130.61.49.108 '
+            set -euo pipefail
+            if [[ ! -d /home/ubuntu/stremio.sktonline/.git ]]; then
+              git clone --branch Master https://github.com/CaseyCZ/stremio.sktonline.git /home/ubuntu/stremio.sktonline
+            fi
+            bash /home/ubuntu/stremio.sktonline/deploy-server.sh
+          '
+
+      - name: Deployment summary
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          {
+            echo "### Deploy SKTOnline to server"
+            echo
+            echo "- GitHub commit: \`${GITHUB_SHA}\`"
+            echo "- Server: \`130.61.49.108\`"
+            echo "- PM2 process: \`stremio-sktonline\`"
+            echo "- Local port: \`7002\`"
+            echo "- Result: deployment completed successfully"
+          } >> "$GITHUB_STEP_SUMMARY"
