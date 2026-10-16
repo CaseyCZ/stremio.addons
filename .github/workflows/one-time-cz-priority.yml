@@ -1,4 +1,4 @@
-name: Apply CZ stream priority fix
+name: Tighten SKTorrent result matching
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Prefer Czech SKTOnline releases and keep release language metadata
+      - name: Match exact movie/year and keep all release variants
         shell: bash
         run: |
           set -euo pipefail
@@ -28,89 +28,69 @@ jobs:
           path = Path('api/sktonline.js')
           text = path.read_text()
 
-          old = """function subtitleCodesInText(text) {"""
-          insert = r"""function releaseLanguageCodesInText(text) {
-            const source = stripDiacritics(String(text || '')).toUpperCase();
-            const out = [];
-            const groups = source.matchAll(/[\[(]\s*([A-Z]{2,3}(?:\s*[\/+ ,]\s*[A-Z]{2,3}){0,4})\s*[\])]/g);
-            for (const match of groups) {
-              for (const token of String(match[1] || '').split(/[\/+ ,]+/)) {
-                const def = languageDefForAlias(token);
-                if (def) out.push(def.code);
-              }
-            }
-            return dedupe(out);
+          old = """function slugify(value) { return normalize(value).replace(/\\s+/g, '-'); }
+
+          function titleMatchScore(candidate, wantedTitles) {"""
+          new = r"""function slugify(value) { return normalize(value).replace(/\s+/g, '-'); }
+
+          function yearsInText(value) {
+            return dedupe((String(value || '').match(/\b(?:19|20)\d{2}\b/g) || []));
           }
 
-          function candidateLanguagePriority(text) {
-            const codes = releaseLanguageCodesInText(text);
-            if (codes.length === 1 && codes[0] === 'CZ') return 0;
-            if (codes.includes('CZ')) return 1;
-            if (codes.length === 1 && codes[0] === 'SK') return 2;
-            if (codes.includes('SK')) return 3;
-            if (!codes.length) return 4;
-            if (codes.includes('EN')) return 5;
-            return 6;
+          function candidateYearMatches(candidate, wantedTitles) {
+            const wantedYears = dedupe((wantedTitles || []).flatMap(yearsInText));
+            if (!wantedYears.length) return true;
+            const candidateYears = yearsInText(candidate);
+            if (!candidateYears.length) return false;
+            return candidateYears.some(year => wantedYears.includes(year));
           }
 
-          function subtitleCodesInText(text) {"""
+          function titleMatchScore(candidate, wantedTitles) {"""
           if old not in text:
-            raise SystemExit('subtitle insertion anchor missing')
-          text = text.replace(old, insert, 1)
-
-          old = """function streamLanguages(text) {
-            const all = languageCodesInText(text);
-            const subtitles = subtitleCodesInText(text);
-            const audio = all.filter(code => !subtitles.includes(code));
-            return { audio, subtitles };
-          }"""
-          new = """function streamLanguages(text) {
-            const subtitles = subtitleCodesInText(text);
-            const releaseLanguages = releaseLanguageCodesInText(text);
-            const all = releaseLanguages.length ? releaseLanguages : languageCodesInText(text);
-            const audio = all.filter(code => !subtitles.includes(code));
-            return { audio, subtitles };
-          }"""
-          if old not in text:
-            raise SystemExit('streamLanguages anchor missing')
+            raise SystemExit('slug/title anchor missing')
           text = text.replace(old, new, 1)
 
-          old = """async function streamsForOnlinePage(pageUrl, referer) {
-            const key = `linked-online:${pageUrl}`;"""
-          new = """async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
-            const key = `linked-online:${pageUrl}:${normalize(sourceTitle)}`;"""
+          old = """    const variants = dedupe([base, stripDiacritics(base), shortTitle(stripDiacritics(base), 3)]);
+            if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {"""
+          new = """    const plain = stripDiacritics(base);
+            const variants = type === 'movie'
+              ? dedupe([base, plain])
+              : dedupe([base, plain, shortTitle(plain, 3)]);
+            if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {"""
           if old not in text:
-            raise SystemExit('streamsForOnlinePage signature anchor missing')
+            raise SystemExit('buildQueries anchor missing')
           text = text.replace(old, new, 1)
 
-          old = """    const title = $('title').text().replace(/\\s+/g, ' ').trim() || 'SKTOnline';"""
-          new = """    const title = sourceTitle || $('title').text().replace(/\\s+/g, ' ').trim() || 'SKTOnline';"""
+          old = """      if (!name || titleMatchScore(name, wantedTitles) < 0.45) return;
+            const detailsUrl = absoluteUrl(href, SKTORRENT_SEARCH_URL);"""
+          new = """      const score = titleMatchScore(name, wantedTitles);
+            if (!name || !candidateYearMatches(name, wantedTitles) || score < 0.7) return;
+            const detailsUrl = absoluteUrl(href, SKTORRENT_SEARCH_URL);"""
           if old not in text:
-            raise SystemExit('online title anchor missing')
+            raise SystemExit('search filter anchor missing')
           text = text.replace(old, new, 1)
 
-          old = """        return streamsForOnlinePage(url, finalUrl);"""
-          new = """        return streamsForOnlinePage(url, finalUrl, title);"""
-          if old not in text:
-            raise SystemExit('online page call anchor missing')
-          text = text.replace(old, new, 1)
-
-          old = """  const batches = await Promise.all([...candidates.values()].slice(0, 6).map(streamsFromSktorrentDetail));"""
-          new = """  const rankedCandidates = [...candidates.values()].sort((a, b) =>
+          old = """  const rankedCandidates = [...candidates.values()].sort((a, b) =>
             candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name)
           );
           const batches = await Promise.all(rankedCandidates.slice(0, 6).map(streamsFromSktorrentDetail));"""
+          new = """  const rankedCandidates = [...candidates.values()].sort((a, b) => {
+            const languageDiff = candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
+            if (languageDiff) return languageDiff;
+            return titleMatchScore(b.name, titles) - titleMatchScore(a.name, titles);
+          });
+          const batches = await Promise.all(rankedCandidates.slice(0, 6).map(streamsFromSktorrentDetail));"""
           if old not in text:
-            raise SystemExit('candidate batching anchor missing')
+            raise SystemExit('ranking anchor missing')
           text = text.replace(old, new, 1)
 
           path.write_text(text)
 
           addon = Path('addon.js')
           addon_text = addon.read_text()
-          if 'direct-detail-v4:' not in addon_text:
+          if 'direct-detail-v6:' not in addon_text:
             raise SystemExit('addon cache key anchor missing')
-          addon.write_text(addon_text.replace('direct-detail-v4:', 'direct-detail-v6:', 1))
+          addon.write_text(addon_text.replace('direct-detail-v6:', 'direct-detail-v7:', 1))
           PY
 
           node --check api/sktonline.js
@@ -119,5 +99,5 @@ jobs:
           git config user.name 'CaseyCZ automation'
           git config user.email 'actions@users.noreply.github.com'
           git add api/sktonline.js addon.js
-          git commit -m 'Prefer Czech SKTOnline releases'
+          git commit -m 'Match SKTorrent releases by exact movie year'
           git push origin HEAD:Master
