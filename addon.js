@@ -158,6 +158,26 @@ function resolveWithin(promise, timeoutMs, label) {
   ]).finally(() => clearTimeout(timer));
 }
 
+function normalizePlaybackStreams(streams) {
+  if (!Array.isArray(streams)) return [];
+  return streams.map(stream => {
+    if (!stream || !String(stream.name || '').startsWith('SKTOnline • ')) return stream;
+    try {
+      const url = new URL(String(stream.url || ''));
+      const host = url.hostname.toLowerCase();
+      const isSktCdn = host === 'sktorrent.eu' || host.endsWith('.sktorrent.eu');
+      if (url.protocol !== 'https:' || !isSktCdn || !/\.mp4$/i.test(url.pathname)) return stream;
+    } catch (_) {
+      return stream;
+    }
+
+    const behaviorHints = { ...(stream.behaviorHints || {}) };
+    delete behaviorHints.proxyHeaders;
+    behaviorHints.notWebReady = false;
+    return { ...stream, behaviorHints };
+  });
+}
+
 app.post('/api/config-token', async (req, res) => {
   noCache(res);
   const cfg = normalizeConfig(req.body || {});
@@ -213,12 +233,12 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
     const titles = titleCandidates(meta, req.params.type);
     if (!titles.length) return res.json({ streams: [], cacheMaxAge: 0 });
 
-    const streams = await resolveWithin(findOnlineStreams({
+    const streams = normalizePlaybackStreams(await resolveWithin(findOnlineStreams({
       titles,
       type: req.params.type,
       season: parsed.season,
       episode: parsed.episode
-    }), 12000, 'direct-detail');
+    }), 12000, 'direct-detail'));
 
     streamCache.set(cacheKey, streams, streams.length ? 5 * 60 : 60);
     return res.json({ streams, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
