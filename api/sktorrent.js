@@ -43,8 +43,15 @@ function candidateYearMatches(candidate, wantedTitles) {
   const wantedYears = [...new Set((wantedTitles || []).flatMap(yearsInText))];
   if (!wantedYears.length) return true;
   const candidateYears = yearsInText(candidate);
-  if (!candidateYears.length) return true;
+  if (!candidateYears.length) return false;
   return candidateYears.some(year => wantedYears.includes(year));
+}
+
+function candidateHasConflictingYears(candidate, wantedTitles) {
+  const wantedYears = [...new Set((wantedTitles || []).flatMap(yearsInText))];
+  if (wantedYears.length !== 1) return false;
+  const candidateYears = yearsInText(candidate);
+  return candidateYears.some(year => year !== wantedYears[0]);
 }
 
 function titleMatchScore(candidate, wantedTitles) {
@@ -256,7 +263,7 @@ async function searchTorrents(query, wantedTitles, maxPages = 1) {
 
         const name = String(link.attr('title') || link.find('img').attr('alt') || link.text() || '').replace(/\s+/g, ' ').trim();
         const score = titleMatchScore(name, wantedTitles);
-        if (!name || !candidateYearMatches(name, wantedTitles) || score < 0.7) return;
+        if (!name || !candidateYearMatches(name, wantedTitles) || candidateHasConflictingYears(name, wantedTitles) || score < 0.7) return;
 
         const text = cell.text().replace(/\s+/g, ' ').trim();
         const category = cell.find('b').first().text().trim();

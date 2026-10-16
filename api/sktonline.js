@@ -53,6 +53,13 @@ function candidateYearMatches(candidate, wantedTitles) {
   return candidateYears.some(year => wantedYears.includes(year));
 }
 
+function candidateHasConflictingYears(candidate, wantedTitles) {
+  const wantedYears = dedupe((wantedTitles || []).flatMap(yearsInText));
+  if (wantedYears.length !== 1) return false;
+  const candidateYears = yearsInText(candidate);
+  return candidateYears.some(year => year !== wantedYears[0]);
+}
+
 function titleMatchScore(candidate, wantedTitles) {
   const source = normalize(candidate);
   if (!source) return 0;
@@ -286,6 +293,18 @@ function nearbyTitleForOnlineEmbed($, el) {
   return '';
 }
 
+function detailAudioCodes($) {
+  const text = stripDiacritics(String($('body').text() || '')).replace(/\s+/g, ' ').toUpperCase();
+  const match = text.match(/\bJAZYK\s*:\s*([A-Z]{2,3}(?:\s*[,\/]\s*[A-Z]{2,3}){0,6})/i);
+  if (!match) return [];
+  const out = [];
+  for (const token of String(match[1] || '').split(/[,\/]+/)) {
+    const def = languageDefForAlias(token.trim());
+    if (def) out.push(def.code);
+  }
+  return dedupe(out);
+}
+
 function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle) {
   const entries = [];
   const seen = new Set();
@@ -296,13 +315,21 @@ function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle) {
     entries.push({ url, title: nearbyTitleForOnlineEmbed($, el) });
   });
 
-  const explicitCodes = dedupe(entries.flatMap(entry => releaseLanguageCodesInText(entry.title)));
-  const releaseCodes = releaseLanguageCodesInText(releaseTitle);
-  const remainingCodes = releaseCodes.filter(code => !explicitCodes.includes(code));
-  if (remainingCodes.length === 1) {
-    for (const entry of entries) {
-      if (!releaseLanguageCodesInText(entry.title).length) {
-        entry.title = `${entry.title || releaseTitle} (${remainingCodes[0]})`;
+  const unlabeled = entries.filter(entry => !releaseLanguageCodesInText(entry.title).length);
+  const pageCodes = detailAudioCodes($);
+  if (pageCodes.length && pageCodes.length === unlabeled.length) {
+    unlabeled.forEach((entry, index) => {
+      entry.title = `${entry.title || releaseTitle} (${pageCodes[index]})`;
+    });
+  } else {
+    const explicitCodes = dedupe(entries.flatMap(entry => releaseLanguageCodesInText(entry.title)));
+    const releaseCodes = releaseLanguageCodesInText(releaseTitle);
+    const remainingCodes = releaseCodes.filter(code => !explicitCodes.includes(code));
+    if (remainingCodes.length === 1) {
+      for (const entry of entries) {
+        if (!releaseLanguageCodesInText(entry.title).length) {
+          entry.title = `${entry.title || releaseTitle} (${remainingCodes[0]})`;
+        }
       }
     }
   }
@@ -345,14 +372,18 @@ async function searchSktorrentDetails(query, wantedTitles) {
       const name = String(link.attr('title') || link.find('img').attr('alt') || link.text() || card.text() || '')
         .replace(/\s+/g, ' ').trim();
       const score = titleMatchScore(name, wantedTitles);
-      if (!name || !candidateYearMatches(name, wantedTitles) || score < 0.7) return;
+      const category = String(card.find('b').first().text() || '').trim();
+      if (!name || !candidateYearMatches(name, wantedTitles) || candidateHasConflictingYears(name, wantedTitles) || score < 0.7) return;
+      if (category && !/(film|seri|dokum|tv)/i.test(category)) return;
       const detailsUrl = absoluteUrl(href, SKTORRENT_SEARCH_URL);
       if (!detailsUrl) return;
       seen.add(idMatch[1]);
-      items.push({ id: idMatch[1], name, detailsUrl });
+      items.push({ id: idMatch[1], name, detailsUrl, score, category });
     });
 
-    const result = items.slice(0, 8);
+    const result = items
+      .sort((a, b) => (b.score - a.score) || (candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name)))
+      .slice(0, 8);
     cache.set(key, result, result.length ? 5 * 60 : 60);
     return result;
   } catch (error) {
@@ -637,10 +668,10 @@ async function findFromSktorrentDetails(queries, titles) {
   }
   if (!candidates.size) return [];
   const rankedCandidates = [...candidates.values()].sort((a, b) => {
-  const languageDiff = candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
-  if (languageDiff) return languageDiff;
-  return titleMatchScore(b.name, titles) - titleMatchScore(a.name, titles);
-});
+    const scoreDiff = (b.score || titleMatchScore(b.name, titles)) - (a.score || titleMatchScore(a.name, titles));
+    if (scoreDiff) return scoreDiff;
+    return candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
+  });
 const batches = await Promise.all(rankedCandidates.slice(0, 6).map(streamsFromSktorrentDetail));
   return dedupeStreams(batches.flat()).slice(0, 12);
 }
