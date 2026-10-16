@@ -22,16 +22,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
       - name: Validate addon
         run: |
           set -euo pipefail
-          npm ci --omit=dev --no-audit --no-fund
+          npm install --omit=dev --no-audit --no-fund
           npm run version:check
           node --check addon.js
           node --check api/cinemeta.js
