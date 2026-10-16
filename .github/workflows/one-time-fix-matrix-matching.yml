@@ -1,0 +1,33 @@
+name: One-time improve SKTOnline discovery
+
+on:
+  push:
+    branches: [Master]
+    paths:
+      - '.github/workflows/one-time-fix-matrix-matching.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: Master
+          fetch-depth: 0
+
+      - name: Patch SKTOnline direct discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c "import base64,zlib;exec(zlib.decompress(base64.b64decode('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')))"
+          node --check api/sktonline.js
+          node --check api/sktorrent.js
+          node --check addon.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add api/sktonline.js api/sktorrent.js addon.js
+          git commit -m 'Improve SKTOnline discovery and title fallback'
+          git push origin Master
