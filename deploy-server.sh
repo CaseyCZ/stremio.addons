@@ -48,6 +48,19 @@ fi
 
 pm2 startOrReload ecosystem.config.js --only stremio-sktonline --update-env
 pm2 save
-curl --retry 15 --retry-delay 1 --retry-connrefused -fsS http://127.0.0.1:7003/health >/dev/null
+
+healthy=0
+for _ in $(seq 1 30); do
+  if curl -fsS http://127.0.0.1:7003/health >/dev/null 2>&1; then
+    healthy=1
+    break
+  fi
+  sleep 1
+done
+if [[ "$healthy" != "1" ]]; then
+  echo "SKTOnline health check failed on 127.0.0.1:7003."
+  pm2 logs stremio-sktonline --lines 40 --nostream || true
+  exit 1
+fi
 
 echo "stremio-sktonline deployed successfully from Master."
