@@ -63,4 +63,29 @@ if [[ "$healthy" != "1" ]]; then
   exit 1
 fi
 
+# The public IP used to proxy this addon to port 7002. The PM2 service now
+# listens on 7003, so migrate only nginx proxy_pass directives that still
+# target the old local SKTOnline port. This fixes the public /configure page
+# continuing to serve the stale 0.1.0 instance.
+if command -v nginx >/dev/null 2>&1; then
+  mapfile -t nginx_files < <(sudo grep -RIlE 'proxy_pass[[:space:]]+http://(127\.0\.0\.1|localhost):7002' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true)
+  if (( ${#nginx_files[@]} > 0 )); then
+    echo "Updating nginx SKTOnline proxy from port 7002 to 7003: ${nginx_files[*]}"
+    for nginx_file in "${nginx_files[@]}"; do
+      sudo sed -i -E 's#proxy_pass[[:space:]]+http://(127\.0\.0\.1|localhost):7002#proxy_pass http://127.0.0.1:7003#g' "$nginx_file"
+    done
+    sudo nginx -t
+    sudo systemctl reload nginx
+  fi
+fi
+
+# Verify the public/local reverse proxy no longer exposes the stale service.
+if curl -fsS http://127.0.0.1/health >/tmp/stremio-sktonline-public-health 2>/dev/null; then
+  public_version="$(node -e "try{const x=JSON.parse(require('fs').readFileSync('/tmp/stremio-sktonline-public-health','utf8'));process.stdout.write(String(x.version||''))}catch(_){}")"
+  if [[ -n "$public_version" && "$public_version" != "$(node -p "require('./package.json').version")" ]]; then
+    echo "Public nginx route is still serving SKTOnline version $public_version instead of $(node -p "require('./package.json').version")."
+    exit 1
+  fi
+fi
+
 echo "stremio-sktonline deployed successfully from Master."
