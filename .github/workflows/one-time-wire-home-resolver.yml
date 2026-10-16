@@ -1,0 +1,157 @@
+name: One-time wire home SKTOnline resolver
+
+on:
+  push:
+    branches: [Master]
+    paths:
+      - '.github/workflows/one-time-wire-home-resolver.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: Master
+          fetch-depth: 0
+
+      - name: Wire optional home resolver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('api/sktonline.js')
+          s = p.read_text()
+
+          old = "const SLEDUJTETO_BASE_URL = 'https://www.sledujteto.cz';\nconst USER_AGENT ="
+          new = "const SLEDUJTETO_BASE_URL = 'https://www.sledujteto.cz';\nconst RESOLVER_BASE_URL = String(process.env.SKTONLINE_RESOLVER_URL || '').replace(/\\/+$/, '');\nconst RESOLVER_TOKEN = String(process.env.SKTONLINE_RESOLVER_TOKEN || '').trim();\nconst USER_AGENT ="
+          if old not in s:
+              raise SystemExit('resolver constants insertion point not found')
+          s = s.replace(old, new, 1)
+
+          old = "const sledujtetoHttp = makeHttp(SLEDUJTETO_BASE_URL, 9000);\n\nfunction dedupe(values)"
+          new = """const sledujtetoHttp = makeHttp(SLEDUJTETO_BASE_URL, 9000);
+const resolverHttp = RESOLVER_BASE_URL ? makeHttp(RESOLVER_BASE_URL, 12000) : null;
+
+async function resolverPost(path, body) {
+  if (!resolverHttp) throw new Error('SKTOnline resolver is not configured');
+  const response = await resolverHttp.post(path, body, {
+    headers: RESOLVER_TOKEN ? { Authorization: `Bearer ${RESOLVER_TOKEN}` } : {}
+  });
+  return response.data || {};
+}
+
+function dedupe(values)"""
+          if old not in s:
+              raise SystemExit('resolver client insertion point not found')
+          s = s.replace(old, new, 1)
+
+          old = """async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
+  const key = `linked-online:${pageUrl}:${normalize(sourceTitle)}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  try {
+    const response = await onlineHttp.get(pageUrl, { headers: { Referer: referer || `${SKTORRENT_BASE_URL}/` } });"""
+          new = """async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
+  const key = `linked-online:${pageUrl}:${normalize(sourceTitle)}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+
+  if (resolverHttp && isSktOnlineUrl(pageUrl)) {
+    try {
+      const payload = await resolverPost('/v1/resolve', {
+        url: pageUrl,
+        referer: referer || `${SKTORRENT_BASE_URL}/`
+      });
+      const pageTitle = sourceTitle || String(payload.title || '').trim() || 'SKTOnline';
+      const sources = Array.isArray(payload.sources) ? payload.sources : [];
+      const result = dedupeStreams(sources.map(item => makeStream(
+        'SKTOnline',
+        pageTitle,
+        String(item && item.url || ''),
+        String(item && item.label || ''),
+        pageUrl
+      ))).slice(0, 8);
+      cache.set(key, result, result.length ? 10 * 60 : 60);
+      return result;
+    } catch (error) {
+      console.warn(`[resolver] page ${pageUrl}: ${error.message}`);
+    }
+  }
+
+  try {
+    const response = await onlineHttp.get(pageUrl, { headers: { Referer: referer || `${SKTORRENT_BASE_URL}/` } });"""
+          if old not in s:
+              raise SystemExit('streamsForOnlinePage block not found')
+          s = s.replace(old, new, 1)
+
+          old = """async function searchDirectOnlineVideos(query, wantedTitles) {
+  const key = `online-title-search:${normalize(query)}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+
+  try {
+    const response = await onlineHttp.get('/search/videos', {"""
+          new = """async function searchDirectOnlineVideos(query, wantedTitles) {
+  const key = `online-title-search:${normalize(query)}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+
+  if (resolverHttp) {
+    try {
+      const payload = await resolverPost('/v1/search', { query });
+      const wantedNames = dedupe((wantedTitles || []).map(stripYearTokens).filter(Boolean));
+      const items = (Array.isArray(payload.items) ? payload.items : []).filter(item => {
+        const context = String(item && item.title || '').replace(/\\s+/g, ' ').trim();
+        if (!item || !/^\\d+$/.test(String(item.id || ''))) return false;
+        if (!context) return true;
+        if (candidateHasConflictingYears(context, wantedTitles)) return false;
+        return titleMatchScore(context, wantedNames) >= 0.55;
+      }).map(item => ({
+        id: String(item.id),
+        title: String(item.title || '').replace(/\\s+/g, ' ').trim()
+      }));
+      cache.set(key, items, items.length ? 5 * 60 : 60);
+      return items;
+    } catch (error) {
+      console.warn(`[resolver] search "${query}": ${error.message}`);
+    }
+  }
+
+  try {
+    const response = await onlineHttp.get('/search/videos', {"""
+          if old not in s:
+              raise SystemExit('searchDirectOnlineVideos block not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+
+          p = Path('addon.js')
+          s = p.read_text()
+          s = s.replace('combined-v6:', 'combined-v7:', 1)
+          s = s.replace("        }), 12000, 'direct-detail')", "        }), 18000, 'direct-detail')", 1)
+          old = "    torrentClients: activeClientCount(),\n    providers: ['SKTOnline via SKTorrent detail', 'SledujTo', 'SKTorrent P2P'],"
+          new = "    torrentClients: activeClientCount(),\n    resolverConfigured: Boolean(process.env.SKTONLINE_RESOLVER_URL),\n    providers: ['SKTOnline direct search', 'SKTOnline players from SKTorrent details', 'SledujTo', 'SKTorrent P2P'],"
+          if old not in s:
+              raise SystemExit('health providers block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+
+          node --check resolver/server.js
+          node --check api/sktonline.js
+          node --check api/sktorrent.js
+          node --check addon.js
+          git diff --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add api/sktonline.js addon.js resolver
+          git diff --cached --quiet && exit 0
+          git commit -m 'Wire optional home SKTOnline metadata resolver'
+          git push origin Master
