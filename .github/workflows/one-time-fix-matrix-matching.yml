@@ -1,4 +1,4 @@
-name: One-time restore independent SKTorrent source pipelines
+name: One-time patch stream dedupe identities
 
 on:
   push:
@@ -17,11 +17,117 @@ jobs:
         with:
           ref: Master
           fetch-depth: 0
-      - name: Keep torrent direct and detail-player discovery separate
+      - name: Dedupe players by source identity and torrents by infohash
         shell: bash
         run: |
           set -euo pipefail
-          python3 -c "import base64,zlib;exec(zlib.decompress(base64.b64decode('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')))"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('api/sktonline.js')
+          s = p.read_text()
+          old = r'''function streamVariantKey(stream) {
+  const name = String(stream && stream.name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const title = String(stream && stream.title || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return `${name}|${title}`;
+}
+
+function dedupeStreams(streams) {
+  const seenUrls = new Set();
+  const seenVariants = new Set();
+  return streams.filter(stream => {
+    if (!stream || !stream.url || seenUrls.has(stream.url)) return false;
+    const variant = streamVariantKey(stream);
+    if (variant && seenVariants.has(variant)) return false;
+    seenUrls.add(stream.url);
+    if (variant) seenVariants.add(variant);
+    return true;
+  });
+}'''
+          new = r'''function canonicalDirectIdentity(stream) {
+  const raw = String(stream && stream.url || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    const path = decodeURIComponent(parsed.pathname || '');
+    const skt = path.match(/\/h264\/(\d+)_((?:2160|1440|1080|720|480|360|240)p)\.mp4$/i);
+    if (skt) return `sktvideo:${skt[1]}:${skt[2].toLowerCase()}`;
+    return `url:${parsed.protocol.toLowerCase()}//${parsed.hostname.toLowerCase()}${parsed.pathname}${parsed.search}`;
+  } catch (_) {
+    return `url:${raw}`;
+  }
+}
+
+function dedupeStreams(streams) {
+  const seen = new Set();
+  return (streams || []).filter(stream => {
+    if (!stream || !stream.url) return false;
+    const identity = canonicalDirectIdentity(stream);
+    if (!identity || seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}'''
+          if old not in s:
+              raise SystemExit('dedupeStreams block not found')
+          s = s.replace(old, new, 1)
+          s = s.replace('if (candidates.size >= 8) break;', 'if (candidates.size >= 10) break;', 1)
+          s = s.replace('rankedCandidates.slice(0, 8).map(streamsFromSktorrentDetail)', 'rankedCandidates.slice(0, 10).map(streamsFromSktorrentDetail)', 1)
+          p.write_text(s)
+
+          p = Path('addon.js')
+          s = p.read_text()
+          old = r'''function dedupeCombinedStreams(streams) {
+  const seen = new Set();
+  return (streams || []).filter(stream => {
+    if (!stream) return false;
+    const key = stream.url
+      ? `url:${stream.url}`
+      : stream.infoHash
+        ? `torrent:${String(stream.infoHash).toLowerCase()}:${Number(stream.fileIdx || 0)}`
+        : `other:${stream.name || ''}:${stream.title || ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}'''
+          new = r'''function combinedStreamIdentity(stream) {
+  if (!stream) return '';
+  if (stream.infoHash) {
+    return `torrent:${String(stream.infoHash).toLowerCase()}:${Number(stream.fileIdx || 0)}`;
+  }
+  if (stream.url) {
+    const raw = String(stream.url).trim();
+    try {
+      const parsed = new URL(raw);
+      const path = decodeURIComponent(parsed.pathname || '');
+      const skt = path.match(/\/h264\/(\d+)_((?:2160|1440|1080|720|480|360|240)p)\.mp4$/i);
+      if (skt) return `sktvideo:${skt[1]}:${skt[2].toLowerCase()}`;
+      return `url:${parsed.protocol.toLowerCase()}//${parsed.hostname.toLowerCase()}${parsed.pathname}${parsed.search}`;
+    } catch (_) {
+      return `url:${raw}`;
+    }
+  }
+  return `other:${stream.name || ''}:${stream.title || ''}`;
+}
+
+function dedupeCombinedStreams(streams) {
+  const seen = new Set();
+  return (streams || []).filter(stream => {
+    const key = combinedStreamIdentity(stream);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}'''
+          if old not in s:
+              raise SystemExit('dedupeCombinedStreams block not found')
+          s = s.replace(old, new, 1)
+          s = s.replace('combined-v5:', 'combined-v6:', 1)
+          s = s.replace('          limit: 8\n', '          limit: 10\n', 1)
+          p.write_text(s)
+          PY
+
           node --check api/sktonline.js
           node --check api/sktorrent.js
           node --check addon.js
@@ -30,5 +136,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add api/sktonline.js addon.js
           git diff --cached --quiet && exit 0
-          git commit -m 'Keep torrent direct and detail-player discovery separate'
+          git commit -m 'Dedupe direct players by source identity'
           git push origin Master
