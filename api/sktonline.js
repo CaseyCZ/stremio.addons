@@ -141,13 +141,14 @@ function releaseLanguageCodesInText(text) {
 
 function candidateLanguagePriority(text) {
   const codes = releaseLanguageCodesInText(text);
-  if (codes.length === 1 && codes[0] === 'CZ') return 0;
-  if (codes.includes('CZ')) return 1;
-  if (codes.length === 1 && codes[0] === 'SK') return 2;
-  if (codes.includes('SK')) return 3;
-  if (!codes.length) return 4;
-  if (codes.includes('EN')) return 5;
-  return 6;
+  if (codes.includes('CZ') && codes.includes('EN')) return 0;
+  if (codes.length === 1 && codes[0] === 'CZ') return 1;
+  if (codes.includes('CZ')) return 2;
+  if (codes.length === 1 && codes[0] === 'SK') return 3;
+  if (codes.includes('SK')) return 4;
+  if (!codes.length) return 5;
+  if (codes.includes('EN')) return 6;
+  return 7;
 }
 
 function subtitleCodesInText(text) {
@@ -273,6 +274,40 @@ function urlsFromHtml($, html, pageUrl) {
   const raw = cleanUrlText(html);
   for (const match of raw.match(/https?:\/\/[^\s"'<>\])}]+/gi) || []) add(match);
   return dedupe(urls);
+}
+
+function nearbyTitleForOnlineEmbed($, el) {
+  const container = $(el).closest('[itemscope]');
+  let cursor = container.length ? container.prev() : $(el).prev();
+  for (let i = 0; cursor.length && i < 12; i += 1, cursor = cursor.prev()) {
+    const text = String(cursor.text() || '').replace(/\s+/g, ' ').trim();
+    if (text && !/^ONLINE$/i.test(text)) return text;
+  }
+  return '';
+}
+
+function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle) {
+  const entries = [];
+  const seen = new Set();
+  $('iframe[src], frame[src]').each((_, el) => {
+    const url = absoluteUrl($(el).attr('src'), pageUrl);
+    if (!url || !isSktOnlineUrl(url) || !/\/embed\//i.test(url) || seen.has(url)) return;
+    seen.add(url);
+    entries.push({ url, title: nearbyTitleForOnlineEmbed($, el) });
+  });
+
+  const explicitCodes = dedupe(entries.flatMap(entry => releaseLanguageCodesInText(entry.title)));
+  const releaseCodes = releaseLanguageCodesInText(releaseTitle);
+  const remainingCodes = releaseCodes.filter(code => !explicitCodes.includes(code));
+  if (remainingCodes.length === 1) {
+    for (const entry of entries) {
+      if (!releaseLanguageCodesInText(entry.title).length) {
+        entry.title = `${entry.title || releaseTitle} (${remainingCodes[0]})`;
+      }
+    }
+  }
+
+  return entries.sort((a, b) => candidateLanguagePriority(a.title) - candidateLanguagePriority(b.title));
 }
 
 function hostOf(url) {
@@ -572,14 +607,15 @@ async function streamsFromSktorrentDetail(candidate) {
 
     const links = urlsFromHtml($, response.data, finalUrl);
     const sledujLinks = links.filter(url => isSledujToUrl(url) && /\/file\/\d+/i.test(url));
-    const onlineLinks = links.filter(url => isSktOnlineUrl(url));
+    const onlineEntries = onlineEmbedEntriesFromDetail($, finalUrl, title);
+  const onlineDirectLinks = links.filter(url => isSktOnlineUrl(url) && isPlayableMediaUrl(url));
 
     const [sledujBatches, onlineBatches] = await Promise.all([
       Promise.all(sledujLinks.slice(0, 4).map(url => streamsForSledujteto(url, finalUrl))),
-      Promise.all(onlineLinks.slice(0, 4).map(async url => {
-        if (isPlayableMediaUrl(url)) return [makeStream('SKTOnline', title, url, '', finalUrl)];
-        return streamsForOnlinePage(url, finalUrl, title);
-      }))
+      Promise.all([
+      ...onlineEntries.slice(0, 6).map(entry => streamsForOnlinePage(entry.url, finalUrl, entry.title || title)),
+      ...onlineDirectLinks.slice(0, 4).map(url => Promise.resolve([makeStream('SKTOnline', title, url, '', finalUrl)]))
+    ])
     ]);
 
     streams.push(...sledujBatches.flat(), ...onlineBatches.flat());
