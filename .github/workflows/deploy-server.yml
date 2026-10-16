@@ -75,3 +75,5 @@ jobs:
             echo "- PM2 process: \`stremio-sktonline\`"
             echo "- Result: deployment completed successfully"
           } >> "$GITHUB_STEP_SUMMARY"
+
+# Trigger deployment for the Play Video priority patch.
