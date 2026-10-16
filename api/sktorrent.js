@@ -83,6 +83,7 @@ class SktorrentClient {
     this.password = password;
     this.cookies = null;
     this.loginPromise = null;
+    this.cacheKey = crypto.createHash('sha256').update(`${username}\0${password}`).digest('hex');
     this.http = axios.create({
       timeout: 12000,
       maxContentLength: 8 * 1024 * 1024,
@@ -248,8 +249,6 @@ function parseTorrent(buffer) {
   const trackers = [];
   const addTracker = value => {
     const tracker = stringValue(value).trim();
-    // Preserve all tracker schemes Stremio/WebTorrent may understand. SKTorrent
-    // torrents can contain UDP announces; dropping them leaves Stremio at 0 peers.
     if (/^(?:https?|udp|wss?):\/\//i.test(tracker)) trackers.push(tracker);
   };
   addTracker(torrent.announce);
@@ -269,11 +268,19 @@ function parseTorrent(buffer) {
       length: Number(torrent.info.length || 0)
     }];
   }
-  return { infoHash, trackers: [...new Set(trackers)], files };
+  return {
+    infoHash,
+    trackers: [...new Set(trackers)],
+    files,
+    private: Number(torrent.info.private || 0) === 1
+  };
 }
 
 async function downloadTorrentData(client, candidate) {
-  const cached = torrentCache.get(candidate.downloadUrl);
+  // Tracker URLs can contain a user-specific PID/passkey, so never share parsed
+  // torrent metadata across different configured SKTorrent accounts.
+  const cacheKey = `${client.cacheKey}:${candidate.downloadUrl}`;
+  const cached = torrentCache.get(cacheKey);
   if (cached !== undefined) return cached || null;
   try {
     let response = await client.authenticatedGet(candidate.downloadUrl, { responseType: 'arraybuffer', maxContentLength: 4 * 1024 * 1024 });
@@ -287,7 +294,7 @@ async function downloadTorrentData(client, candidate) {
       if (prefix.includes('<html') || prefix.includes('<!doctype')) throw new Error('SKTorrent vrátil HTML místo .torrent souboru.');
     }
     const parsed = parseTorrent(buffer);
-    torrentCache.set(candidate.downloadUrl, parsed);
+    torrentCache.set(cacheKey, parsed);
     return parsed;
   } catch (error) {
     console.warn(`[sktorrent] torrent ${candidate.id}: ${error.message}`);
@@ -349,12 +356,16 @@ async function findTorrentStreams({ username, password, titles, type, season, ep
     const tags = codecTags(`${candidate.name} ${file.path}`);
     const size = candidate.size !== '?' ? candidate.size : humanBytes(file.length);
     const detail = [size, `${candidate.seeds} seed`, ...tags].filter(Boolean).join(' • ');
+    const sources = [
+      ...torrent.trackers.map(tracker => `tracker:${tracker}`),
+      ...(torrent.private ? [] : [`dht:${torrent.infoHash}`])
+    ];
     return {
       name: `SKTorrent • ${quality}`,
       title: `${candidate.name}\n${detail}`,
       infoHash: torrent.infoHash,
       fileIdx: file.index,
-      sources: torrent.trackers.map(tracker => `tracker:${tracker}`),
+      sources: [...new Set(sources)],
       behaviorHints: { bingeGroup: `caseycz-skt:${torrent.infoHash}` }
     };
   }));
