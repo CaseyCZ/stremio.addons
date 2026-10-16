@@ -283,7 +283,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const parsed = parseStremioId(req.params.id);
   if (!parsed) return res.json({ streams: [], cacheMaxAge: 0 });
 
-  const cacheKey = `combined-v6:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
+  const cacheKey = `combined-v7:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
   const cached = streamCache.get(cacheKey);
   if (cached !== undefined) return res.json({ streams: cached, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
 
@@ -298,7 +298,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
           type: req.params.type,
           season: parsed.season,
           episode: parsed.episode
-        }), 12000, 'direct-detail')
+        }), 18000, 'direct-detail')
       : Promise.resolve([]);
 
     const torrentPromise = cfg.enableTorrents
@@ -340,7 +340,8 @@ app.get('/health', (req, res) => {
     mode: 'direct-plus-p2p',
     torrentsEnabled: true,
     torrentClients: activeClientCount(),
-    providers: ['SKTOnline via SKTorrent detail', 'SledujTo', 'SKTorrent P2P'],
+    resolverConfigured: Boolean(process.env.SKTONLINE_RESOLVER_URL),
+    providers: ['SKTOnline direct search', 'SKTOnline players from SKTorrent details', 'SledujTo', 'SKTorrent P2P'],
     streamCacheKeys: streamCache.keys().length
   });
 });

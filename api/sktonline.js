@@ -6,6 +6,8 @@ const SKTORRENT_BASE_URL = 'https://sktorrent.eu';
 const SKTORRENT_SEARCH_URL = `${SKTORRENT_BASE_URL}/torrent/torrents_v2.php`;
 const ONLINE_BASE_URL = 'https://online.sktorrent.eu';
 const SLEDUJTETO_BASE_URL = 'https://www.sledujteto.cz';
+const RESOLVER_BASE_URL = String(process.env.SKTONLINE_RESOLVER_URL || '').replace(/\/+$/, '');
+const RESOLVER_TOKEN = String(process.env.SKTONLINE_RESOLVER_TOKEN || '').trim();
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36';
 const cache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60, maxKeys: 1800 });
 
@@ -34,6 +36,15 @@ function makeHttp(baseURL, timeout = 9000) {
 const sktorrentHttp = makeHttp(SKTORRENT_BASE_URL, 9000);
 const onlineHttp = makeHttp(ONLINE_BASE_URL, 9000);
 const sledujtetoHttp = makeHttp(SLEDUJTETO_BASE_URL, 9000);
+const resolverHttp = RESOLVER_BASE_URL ? makeHttp(RESOLVER_BASE_URL, 12000) : null;
+
+async function resolverPost(path, body) {
+  if (!resolverHttp) throw new Error('SKTOnline resolver is not configured');
+  const response = await resolverHttp.post(path, body, {
+    headers: RESOLVER_TOKEN ? { Authorization: `Bearer ${RESOLVER_TOKEN}` } : {}
+  });
+  return response.data || {};
+}
 
 function dedupe(values) { return [...new Set(values.filter(Boolean))]; }
 function stripDiacritics(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
@@ -404,6 +415,29 @@ async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
   const key = `linked-online:${pageUrl}:${normalize(sourceTitle)}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
+
+  if (resolverHttp && isSktOnlineUrl(pageUrl)) {
+    try {
+      const payload = await resolverPost('/v1/resolve', {
+        url: pageUrl,
+        referer: referer || `${SKTORRENT_BASE_URL}/`
+      });
+      const pageTitle = sourceTitle || String(payload.title || '').trim() || 'SKTOnline';
+      const sources = Array.isArray(payload.sources) ? payload.sources : [];
+      const result = dedupeStreams(sources.map(item => makeStream(
+        'SKTOnline',
+        pageTitle,
+        String(item && item.url || ''),
+        String(item && item.label || ''),
+        pageUrl
+      ))).slice(0, 8);
+      cache.set(key, result, result.length ? 10 * 60 : 60);
+      return result;
+    } catch (error) {
+      console.warn(`[resolver] page ${pageUrl}: ${error.message}`);
+    }
+  }
+
   try {
     const response = await onlineHttp.get(pageUrl, { headers: { Referer: referer || `${SKTORRENT_BASE_URL}/` } });
     const finalUrl = absoluteUrl(response.request?.res?.responseUrl || pageUrl, ONLINE_BASE_URL) || pageUrl;
@@ -633,6 +667,27 @@ async function searchDirectOnlineVideos(query, wantedTitles) {
   const key = `online-title-search:${normalize(query)}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
+
+  if (resolverHttp) {
+    try {
+      const payload = await resolverPost('/v1/search', { query });
+      const wantedNames = dedupe((wantedTitles || []).map(stripYearTokens).filter(Boolean));
+      const items = (Array.isArray(payload.items) ? payload.items : []).filter(item => {
+        const context = String(item && item.title || '').replace(/\s+/g, ' ').trim();
+        if (!item || !/^\d+$/.test(String(item.id || ''))) return false;
+        if (!context) return true;
+        if (candidateHasConflictingYears(context, wantedTitles)) return false;
+        return titleMatchScore(context, wantedNames) >= 0.55;
+      }).map(item => ({
+        id: String(item.id),
+        title: String(item.title || '').replace(/\s+/g, ' ').trim()
+      }));
+      cache.set(key, items, items.length ? 5 * 60 : 60);
+      return items;
+    } catch (error) {
+      console.warn(`[resolver] search "${query}": ${error.message}`);
+    }
+  }
 
   try {
     const response = await onlineHttp.get('/search/videos', {
