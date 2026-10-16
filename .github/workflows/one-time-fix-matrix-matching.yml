@@ -1,4 +1,4 @@
-name: One-time add SKTOnline metadata resolver
+name: One-time restore independent SKTorrent source pipelines
 
 on:
   push:
@@ -18,17 +18,162 @@ jobs:
           ref: Master
           fetch-depth: 0
 
-      - name: Add public metadata catalog resolver
+      - name: Keep torrent, direct-online and detail-player discovery separate
         shell: bash
         run: |
           set -euo pipefail
-          python3 -c "import base64,zlib;exec(zlib.decompress(base64.b64decode('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')))"
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('api/sktonline.js')
+          s = p.read_text()
+
+          # Remove the temporary external metadata-catalog path. It collapsed
+          # multiple SKTorrent language players into one unrelated video id.
+          s = re.sub(r"^const METADATA_BASE_URL = .*\n", "", s, flags=re.M)
+          s = re.sub(r"^const metadataHttp = .*\n", "", s, flags=re.M)
+          s = re.sub(
+              r"\nconst CDN_EDGES = Array\.from\(\{ length: 30 \}, \(_, index\) => index \+ 1\);.*?(?=\nasync function streamsFromSktorrentDetail\(candidate\) \{)",
+              "\n",
+              s,
+              flags=re.S,
+          )
+
+          old_host = """function isSktOnlineUrl(url) {
+            return hostOf(url) === 'online.sktorrent.eu';
+          }"""
+          new_host = """function isSktOnlineUrl(url) {
+            const host = hostOf(url);
+            return host === 'online.sktorrent.eu' || /^online\\d+\\.sktorrent\\.eu$/i.test(host);
+          }"""
+          if old_host in s:
+              s = s.replace(old_host, new_host, 1)
+
+          helpers = r'''
+async function searchDirectOnlineVideos(query, wantedTitles) {
+  const key = `online-title-search:${normalize(query)}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+
+  try {
+    const response = await onlineHttp.get('/search/videos', {
+      params: { search_query: query },
+      headers: { Referer: `${ONLINE_BASE_URL}/` }
+    });
+    const $ = cheerio.load(response.data);
+    const wantedNames = dedupe((wantedTitles || []).map(stripYearTokens).filter(Boolean));
+    const items = [];
+    const seen = new Set();
+
+    $("a[href^='/video/'], a[href*='online.sktorrent.eu/video/']").each((_, el) => {
+      const link = $(el);
+      const href = String(link.attr('href') || '');
+      const match = href.match(/\/video\/(\d+)/i);
+      if (!match || seen.has(match[1])) return;
+
+      const context = String(
+        link.attr('title') ||
+        link.find('img').attr('alt') ||
+        link.text() ||
+        link.closest('article,li,div,tr,td').text() || ''
+      ).replace(/\s+/g, ' ').trim();
+
+      if (context) {
+        if (candidateHasConflictingYears(context, wantedTitles)) return;
+        if (titleMatchScore(context, wantedNames) < 0.55) return;
+      }
+
+      seen.add(match[1]);
+      items.push({ id: match[1], title: context });
+    });
+
+    cache.set(key, items, items.length ? 5 * 60 : 60);
+    return items;
+  } catch (error) {
+    console.warn(`[direct-online] search "${query}": ${error.message}`);
+    return [];
+  }
+}
+
+async function streamsForDirectOnlineVideo(item) {
+  const pageUrl = `${ONLINE_BASE_URL}/video/${encodeURIComponent(item.id)}`;
+  return streamsForOnlinePage(pageUrl, `${ONLINE_BASE_URL}/`, item.title || '');
+}
+
+async function findDirectOnlineByTitle(queries, titles) {
+  const found = new Map();
+  for (const query of queries.slice(0, 6)) {
+    const items = await searchDirectOnlineVideos(query, titles);
+    for (const item of items) if (!found.has(item.id)) found.set(item.id, item);
+    if (found.size >= 8) break;
+  }
+  if (!found.size) return [];
+  const batches = await Promise.all([...found.values()].slice(0, 8).map(streamsForDirectOnlineVideo));
+  return dedupeStreams(batches.flat()).slice(0, 12);
+}
+'''
+
+          anchor = 'async function streamsFromSktorrentDetail(candidate) {'
+          if 'async function findDirectOnlineByTitle(' not in s:
+              if anchor not in s:
+                  raise SystemExit('streamsFromSktorrentDetail anchor not found')
+              s = s.replace(anchor, helpers + '\n' + anchor, 1)
+
+          s = s.replace('if (candidates.size >= 6) break;', 'if (candidates.size >= 8) break;')
+          s = s.replace('rankedCandidates.slice(0, 6).map(streamsFromSktorrentDetail)', 'rankedCandidates.slice(0, 8).map(streamsFromSktorrentDetail)')
+
+          old = re.compile(
+              r"async function findOnlineStreams\(\{ titles, type, season, episode \}\) \{.*?\n\}\n\nmodule\.exports = \{ findOnlineStreams \};",
+              re.S,
+          )
+          new = '''async function findOnlineStreams({ titles, type, season, episode }) {
+            const queries = buildQueries(titles, type, season, episode);
+
+            // Two independent direct-video paths, both driven only by the
+            // Stremio movie/episode title:
+            // 1) online.sktorrent.eu title search -> /video/<id> -> direct MP4
+            // 2) SKTorrent title search -> every matching torrent detail page ->
+            //    every embedded language player on that page -> direct MP4
+            // SledujTo remains an independent direct provider and never replaces
+            // either SKTorrent path.
+            const [fromDirectOnline, fromTorrentDetails, sledujToByTitle] = await Promise.all([
+              findDirectOnlineByTitle(queries, titles),
+              findFromSktorrentDetails(queries, titles),
+              findSledujtetoByTitle(queries, titles)
+            ]);
+
+            return dedupeStreams([
+              ...fromDirectOnline,
+              ...fromTorrentDetails,
+              ...sledujToByTitle
+            ]).slice(0, 24);
+          }
+
+          module.exports = {
+            findOnlineStreams,
+            findDirectOnlineByTitle,
+            findFromSktorrentDetails
+          };'''
+          s, count = old.subn(new, s, count=1)
+          if count != 1:
+              raise SystemExit('findOnlineStreams block not replaced')
+
+          p.write_text(s)
+
+          addon = Path('addon.js')
+          a = addon.read_text()
+          a = a.replace('combined-v4:', 'combined-v5:')
+          addon.write_text(a)
+          PY
+
           node --check api/sktonline.js
+          node --check api/sktorrent.js
           node --check addon.js
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add api/sktonline.js addon.js
           git diff --cached --quiet && exit 0
-          git commit -m 'Resolve SKTOnline through metadata catalog and CDN edges'
+          git commit -m 'Keep torrent direct and detail-player discovery separate'
           git push origin Master
