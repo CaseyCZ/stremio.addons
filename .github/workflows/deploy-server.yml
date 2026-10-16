@@ -19,19 +19,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check deployment configuration
-        id: config
         env:
           DEPLOY_KEY_B64: ${{ secrets.SKTONLINE_DEPLOY_SSH_KEY_B64 }}
         run: |
+          set -euo pipefail
           if [[ -z "$DEPLOY_KEY_B64" ]]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Automatic deployment is not configured yet. Add SKTONLINE_DEPLOY_SSH_KEY_B64."
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "::error::Automatic deployment is not configured. Missing repository secret SKTONLINE_DEPLOY_SSH_KEY_B64."
+            exit 1
           fi
 
       - name: Configure SSH
-        if: steps.config.outputs.ready == 'true'
         env:
           DEPLOY_KEY_B64: ${{ secrets.SKTONLINE_DEPLOY_SSH_KEY_B64 }}
         run: |
@@ -49,7 +46,6 @@ jobs:
           ssh-keyscan -T 10 -p 22 -H 130.61.49.108 >> ~/.ssh/known_hosts
 
       - name: Bootstrap and deploy
-        if: steps.config.outputs.ready == 'true'
         run: |
           ssh -i ~/.ssh/deploy-key -o BatchMode=yes -o ConnectTimeout=15 ubuntu@130.61.49.108 '
             set -euo pipefail
@@ -60,7 +56,6 @@ jobs:
           '
 
       - name: Deployment summary
-        if: steps.config.outputs.ready == 'true'
         run: |
           {
             echo "### Deploy SKTOnline to server"
@@ -68,6 +63,6 @@ jobs:
             echo "- GitHub commit: \`${GITHUB_SHA}\`"
             echo "- Server: \`130.61.49.108\`"
             echo "- PM2 process: \`stremio-sktonline\`"
-            echo "- Local port: \`7002\`"
+            echo "- Local port: \`7003\`"
             echo "- Result: deployment completed successfully"
           } >> "$GITHUB_STEP_SUMMARY"
