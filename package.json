@@ -1,8 +1,8 @@
 {
   "name": "stremio-sktonline",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
-  "description": "Stremio addon for SKTOnline direct streams and SKTorrent torrent sources with automatic login renewal.",
+  "description": "Stremio addon for direct SKTOnline and SledujTo streams.",
   "main": "addon.js",
   "scripts": {
     "start": "node addon.js",
