@@ -248,7 +248,9 @@ function parseTorrent(buffer) {
   const trackers = [];
   const addTracker = value => {
     const tracker = stringValue(value).trim();
-    if (/^https?:\/\//i.test(tracker)) trackers.push(tracker);
+    // Preserve all tracker schemes Stremio/WebTorrent may understand. SKTorrent
+    // torrents can contain UDP announces; dropping them leaves Stremio at 0 peers.
+    if (/^(?:https?|udp|wss?):\/\//i.test(tracker)) trackers.push(tracker);
   };
   addTracker(torrent.announce);
   if (Array.isArray(torrent['announce-list'])) torrent['announce-list'].flat(Infinity).forEach(addTracker);
