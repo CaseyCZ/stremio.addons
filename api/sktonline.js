@@ -111,6 +111,30 @@ function languageCodesInText(text) {
   return out;
 }
 
+function releaseLanguageCodesInText(text) {
+  const source = stripDiacritics(String(text || '')).toUpperCase();
+  const out = [];
+  const groups = source.matchAll(/[\[(]\s*([A-Z]{2,3}(?:\s*[\/+ ,]\s*[A-Z]{2,3}){0,4})\s*[\])]/g);
+  for (const match of groups) {
+    for (const token of String(match[1] || '').split(/[\/+ ,]+/)) {
+      const def = languageDefForAlias(token);
+      if (def) out.push(def.code);
+    }
+  }
+  return dedupe(out);
+}
+
+function candidateLanguagePriority(text) {
+  const codes = releaseLanguageCodesInText(text);
+  if (codes.length === 1 && codes[0] === 'CZ') return 0;
+  if (codes.includes('CZ')) return 1;
+  if (codes.length === 1 && codes[0] === 'SK') return 2;
+  if (codes.includes('SK')) return 3;
+  if (!codes.length) return 4;
+  if (codes.includes('EN')) return 5;
+  return 6;
+}
+
 function subtitleCodesInText(text) {
   const source = stripDiacritics(String(text || '')).toUpperCase();
   const found = [];
@@ -129,8 +153,9 @@ function subtitleCodesInText(text) {
 }
 
 function streamLanguages(text) {
-  const all = languageCodesInText(text);
   const subtitles = subtitleCodesInText(text);
+  const releaseLanguages = releaseLanguageCodesInText(text);
+  const all = releaseLanguages.length ? releaseLanguages : languageCodesInText(text);
   const audio = all.filter(code => !subtitles.includes(code));
   return { audio, subtitles };
 }
@@ -285,15 +310,15 @@ async function searchSktorrentDetails(query, wantedTitles) {
   }
 }
 
-async function streamsForOnlinePage(pageUrl, referer) {
-  const key = `linked-online:${pageUrl}`;
+async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
+  const key = `linked-online:${pageUrl}:${normalize(sourceTitle)}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
   try {
     const response = await onlineHttp.get(pageUrl, { headers: { Referer: referer || `${SKTORRENT_BASE_URL}/` } });
     const finalUrl = absoluteUrl(response.request?.res?.responseUrl || pageUrl, ONLINE_BASE_URL) || pageUrl;
     const $ = cheerio.load(response.data);
-    const title = $('title').text().replace(/\s+/g, ' ').trim() || 'SKTOnline';
+    const title = sourceTitle || $('title').text().replace(/\s+/g, ' ').trim() || 'SKTOnline';
     const streams = mediaUrlsFromHtml($, response.data, finalUrl)
       .map(item => makeStream('SKTOnline', title, item.url, item.label, referer || finalUrl));
     const result = dedupeStreams(streams);
@@ -537,7 +562,7 @@ async function streamsFromSktorrentDetail(candidate) {
       Promise.all(sledujLinks.slice(0, 4).map(url => streamsForSledujteto(url, finalUrl))),
       Promise.all(onlineLinks.slice(0, 4).map(async url => {
         if (isPlayableMediaUrl(url)) return [makeStream('SKTOnline', title, url, '', finalUrl)];
-        return streamsForOnlinePage(url, finalUrl);
+        return streamsForOnlinePage(url, finalUrl, title);
       }))
     ]);
 
@@ -559,7 +584,10 @@ async function findFromSktorrentDetails(queries, titles) {
     if (candidates.size >= 6) break;
   }
   if (!candidates.size) return [];
-  const batches = await Promise.all([...candidates.values()].slice(0, 6).map(streamsFromSktorrentDetail));
+  const rankedCandidates = [...candidates.values()].sort((a, b) =>
+  candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name)
+);
+const batches = await Promise.all(rankedCandidates.slice(0, 6).map(streamsFromSktorrentDetail));
   return dedupeStreams(batches.flat()).slice(0, 12);
 }
 
