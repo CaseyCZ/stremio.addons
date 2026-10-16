@@ -9,6 +9,15 @@ const SLEDUJTETO_BASE_URL = 'https://www.sledujteto.cz';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36';
 const cache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60, maxKeys: 1800 });
 
+const LANGUAGE_DEFS = [
+  { code: 'CZ', flag: '🇨🇿', aliases: ['CZ', 'CS', 'CZE', 'CES'] },
+  { code: 'SK', flag: '🇸🇰', aliases: ['SK', 'SLK', 'SLO'] },
+  { code: 'EN', flag: '🇬🇧', aliases: ['EN', 'ENG'] },
+  { code: 'PL', flag: '🇵🇱', aliases: ['PL', 'POL'] },
+  { code: 'DE', flag: '🇩🇪', aliases: ['DE', 'GER', 'DEU'] },
+  { code: 'HU', flag: '🇭🇺', aliases: ['HU', 'HUN'] }
+];
+
 function makeHttp(baseURL, timeout = 9000) {
   return axios.create({
     baseURL,
@@ -88,11 +97,50 @@ function absoluteUrl(value, baseUrl) {
 function isHttpUrl(url) { return /^https?:\/\//i.test(String(url || '')); }
 function isPlayableMediaUrl(url) { return /\.(?:mp4|m3u8|webm|m4v|mov|ts)(?:$|[?#])/i.test(String(url || '')); }
 
-function languageFlags(text) {
-  const flags = [];
-  const pairs = [['CZ', '🇨🇿'], ['SK', '🇸🇰'], ['EN', '🇬🇧'], ['PL', '🇵🇱'], ['DE', '🇩🇪'], ['HU', '🇭🇺']];
-  for (const [code, icon] of pairs) if (new RegExp(`\\b${code}\\b`, 'i').test(text)) flags.push(icon);
-  return flags.join(' ');
+function languageDefForAlias(alias) {
+  const upper = String(alias || '').toUpperCase();
+  return LANGUAGE_DEFS.find(def => def.aliases.includes(upper)) || null;
+}
+
+function languageCodesInText(text) {
+  const source = String(text || '').toUpperCase();
+  const out = [];
+  for (const def of LANGUAGE_DEFS) {
+    if (def.aliases.some(alias => new RegExp(`\\b${alias}\\b`, 'i').test(source))) out.push(def.code);
+  }
+  return out;
+}
+
+function subtitleCodesInText(text) {
+  const source = stripDiacritics(String(text || '')).toUpperCase();
+  const found = [];
+  const subtitleWord = '(?:TITULKY|TITULKU|TITULKYMI|TIT|SUBS?|SUBTITLE[S]?)';
+  for (const def of LANGUAGE_DEFS) {
+    for (const alias of def.aliases) {
+      const before = new RegExp(`\\b${alias}\\b[^\\n\\r,;|]{0,12}\\b${subtitleWord}\\b`, 'i');
+      const after = new RegExp(`\\b${subtitleWord}\\b[^\\n\\r,;|]{0,12}\\b${alias}\\b`, 'i');
+      if (before.test(source) || after.test(source)) {
+        found.push(def.code);
+        break;
+      }
+    }
+  }
+  return dedupe(found);
+}
+
+function streamLanguages(text) {
+  const all = languageCodesInText(text);
+  const subtitles = subtitleCodesInText(text);
+  const audio = all.filter(code => !subtitles.includes(code));
+  return { audio, subtitles };
+}
+
+function formatLanguages(codes) {
+  if (!codes.length) return '🌐 ?';
+  return codes.map(code => {
+    const def = languageDefForAlias(code);
+    return `${def ? def.flag : '🌐'} ${code}`;
+  }).join(' • ');
 }
 
 function qualityLabel(label, src) {
@@ -119,20 +167,30 @@ function proxyHints(referer) {
 
 function makeStream(provider, pageTitle, url, label, referer) {
   const quality = qualityLabel(label, url);
-  const flags = languageFlags(`${pageTitle} ${label || ''}`);
+  const languages = streamLanguages(`${pageTitle || ''} ${label || ''}`);
   return {
     name: `${provider} • ${quality}`,
-    title: `${pageTitle || provider}${flags ? `\n${flags}` : ''}`,
+    title: `🎧 ${formatLanguages(languages.audio)}\n💬 ${languages.subtitles.length ? formatLanguages(languages.subtitles) : 'Bez titulků'}\n🎬 ${quality}`,
     url,
     behaviorHints: proxyHints(referer)
   };
 }
 
+function streamVariantKey(stream) {
+  const name = String(stream && stream.name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const title = String(stream && stream.title || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return `${name}|${title}`;
+}
+
 function dedupeStreams(streams) {
-  const seen = new Set();
+  const seenUrls = new Set();
+  const seenVariants = new Set();
   return streams.filter(stream => {
-    if (!stream || !stream.url || seen.has(stream.url)) return false;
-    seen.add(stream.url);
+    if (!stream || !stream.url || seenUrls.has(stream.url)) return false;
+    const variant = streamVariantKey(stream);
+    if (variant && seenVariants.has(variant)) return false;
+    seenUrls.add(stream.url);
+    if (variant) seenVariants.add(variant);
     return true;
   });
 }
