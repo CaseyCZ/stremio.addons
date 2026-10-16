@@ -10,8 +10,8 @@ const SEARCH_URL = `${BASE_URL}/torrent/torrents_v2.php`;
 const INDEX_URL = `${BASE_URL}/torrent/index.php`;
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36';
 
-const searchCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 60, maxKeys: 1200 });
-const torrentCache = new NodeCache({ stdTTL: 24 * 60 * 60, checkperiod: 10 * 60, maxKeys: 3000 });
+const searchCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 60, maxKeys: 1600 });
+const torrentCache = new NodeCache({ stdTTL: 24 * 60 * 60, checkperiod: 10 * 60, maxKeys: 4000 });
 const clients = new Map();
 
 function parseSetCookies(values) {
@@ -26,18 +26,37 @@ function parseSetCookies(values) {
 }
 
 function normalize(value) {
-  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function yearsInText(value) {
+  return [...new Set(String(value || '').match(/\b(?:19|20)\d{2}\b/g) || [])];
+}
+
+function candidateYearMatches(candidate, wantedTitles) {
+  const wantedYears = [...new Set((wantedTitles || []).flatMap(yearsInText))];
+  if (!wantedYears.length) return true;
+  const candidateYears = yearsInText(candidate);
+  if (!candidateYears.length) return true;
+  return candidateYears.some(year => wantedYears.includes(year));
 }
 
 function titleMatchScore(candidate, wantedTitles) {
   const source = normalize(candidate);
   if (!source) return 0;
   let best = 0;
-  for (const wanted of wantedTitles) {
+  for (const wanted of wantedTitles || []) {
     const target = normalize(wanted);
     if (!target) continue;
     if (source === target) best = Math.max(best, 1);
-    else if (source.includes(target)) best = Math.max(best, 0.95);
+    else if (source.includes(target)) best = Math.max(best, 0.98);
+    else if (target.includes(source) && source.length >= 4) best = Math.max(best, 0.85);
     else {
       const words = target.split(' ').filter(word => word.length > 1);
       if (!words.length) continue;
@@ -54,7 +73,7 @@ function humanBytes(value) {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let size = bytes;
   let i = 0;
-  while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+  while (size >= 1024 && i < units.length - 1) { size /= 1024; i += 1; }
   return `${size >= 10 || i === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[i]}`;
 }
 
@@ -64,6 +83,7 @@ function qualityFromText(value) {
   if (/\b1080p\b/i.test(text)) return '1080p';
   if (/\b720p\b/i.test(text)) return '720p';
   if (/\b480p\b/i.test(text)) return '480p';
+  if (/\b360p\b/i.test(text)) return '360p';
   return 'Torrent';
 }
 
@@ -72,22 +92,38 @@ function codecTags(value) {
   const tags = [];
   if (/\b(hevc|h\.?265|x265)\b/i.test(text)) tags.push('HEVC');
   else if (/\b(h\.?264|x264|avc)\b/i.test(text)) tags.push('H264');
-  if (/\b(dolby[ ._-]?vision|dv)\b/i.test(text)) tags.push('DV');
+  if (/\b(dolby[ ._-]?vision|dolbyvision|dv)\b/i.test(text)) tags.push('DV');
   else if (/\bhdr10\+?\b|\bhdr\b/i.test(text)) tags.push('HDR');
   return tags;
+}
+
+function languageLabel(value) {
+  const text = String(value || '');
+  const langs = [];
+  if (/\b(CZ|CS|CZE|CES)\b/i.test(text)) langs.push('🇨🇿 CZ');
+  if (/\b(SK|SLK|SLO)\b/i.test(text)) langs.push('🇸🇰 SK');
+  if (/\b(EN|ENG)\b/i.test(text)) langs.push('🇬🇧 EN');
+  if (/\b(PL|POL)\b/i.test(text)) langs.push('🇵🇱 PL');
+  if (/\b(DE|GER|DEU)\b/i.test(text)) langs.push('🇩🇪 DE');
+  if (/\b(HU|HUN)\b/i.test(text)) langs.push('🇭🇺 HU');
+  return [...new Set(langs)].join(' • ');
 }
 
 class SktorrentClient {
   constructor(username, password) {
     this.username = username;
     this.password = password;
+    this.clientKey = crypto.createHash('sha256').update(`${username}\0${password}`).digest('hex');
     this.cookies = null;
     this.loginPromise = null;
-    this.cacheKey = crypto.createHash('sha256').update(`${username}\0${password}`).digest('hex');
     this.http = axios.create({
       timeout: 12000,
       maxContentLength: 8 * 1024 * 1024,
-      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml,*/*' }
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept-Encoding': 'identity',
+        Accept: 'text/html,application/xhtml+xml,*/*'
+      }
     });
   }
 
@@ -116,9 +152,11 @@ class SktorrentClient {
             Origin: BASE_URL
           }
         });
+
         const parsed = parseSetCookies(response.headers['set-cookie']);
         if (!parsed.uid || !parsed.pass) throw new Error('SKTorrent nevrátil přihlašovací cookies uid/pass.');
         this.cookies = { uid: parsed.uid, pass: parsed.pass };
+
         if (!await this.isAuthenticated()) {
           this.cookies = null;
           throw new Error('SKTorrent odmítl uživatelské jméno nebo heslo.');
@@ -153,7 +191,11 @@ class SktorrentClient {
     await this.login(false);
     const request = () => this.http.get(url, {
       ...options,
-      headers: { ...(options.headers || {}), Cookie: this.cookieHeader(), Referer: BASE_URL }
+      headers: {
+        ...(options.headers || {}),
+        Cookie: this.cookieHeader(),
+        Referer: BASE_URL
+      }
     });
 
     let response = await request();
@@ -162,20 +204,23 @@ class SktorrentClient {
       if (!prefix.includes('<html') && !prefix.includes('<!doctype')) return response;
     } else {
       const $ = cheerio.load(response.data);
-      if ($('a[href^="usercp.php"]').length || !String(response.request?.res?.responseUrl || '').includes('login.php')) return response;
+      const finalUrl = String(response.request?.res?.responseUrl || '');
+      if ($('a[href^="usercp.php"]').length || !finalUrl.includes('login.php')) return response;
     }
 
     await this.login(true);
-    response = await request();
-    return response;
+    return request();
   }
 }
 
 function getClient(username, password) {
-  const key = crypto.createHash('sha256').update(`${username}\0${password}`).digest('hex');
+  const user = String(username || '').trim();
+  const pass = String(password || '');
+  if (!user || !pass) throw new Error('Chybí SKTorrent uživatelské jméno nebo heslo.');
+  const key = crypto.createHash('sha256').update(`${user}\0${pass}`).digest('hex');
   let client = clients.get(key);
   if (!client) {
-    client = new SktorrentClient(username, password);
+    client = new SktorrentClient(user, pass);
     clients.set(key, client);
     if (clients.size > 100) clients.delete(clients.keys().next().value);
   }
@@ -183,36 +228,42 @@ function getClient(username, password) {
 }
 
 async function searchTorrents(query, wantedTitles, maxPages = 1) {
-  const cacheKey = `${query.toLowerCase()}:${maxPages}`;
+  const wantedKey = (wantedTitles || []).map(normalize).sort().join('|');
+  const cacheKey = `${normalize(query)}:${maxPages}:${wantedKey}`;
   const cached = searchCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
   const results = [];
   const seen = new Set();
-  for (let page = 0; page < maxPages; page++) {
+  for (let page = 0; page < maxPages; page += 1) {
     try {
       const response = await axios.get(SEARCH_URL, {
         timeout: 10000,
         maxContentLength: 5 * 1024 * 1024,
-        headers: { 'User-Agent': USER_AGENT, Accept: 'text/html' },
+        headers: { 'User-Agent': USER_AGENT, 'Accept-Encoding': 'identity', Accept: 'text/html' },
         params: { search: query, category: 0, active: 0, order: 'data', by: 'DESC', page }
       });
       const $ = cheerio.load(response.data);
       let found = 0;
-      $('a[href^="details.php"] img').each((_, img) => {
+
+      $('a[href^="details.php"] img, a[href*="details.php"] img').each((_, img) => {
         const link = $(img).closest('a');
         const cell = link.closest('td');
         const href = String(link.attr('href') || '');
         const idMatch = href.match(/[?&]id=([^&]+)/i);
         const id = idMatch ? idMatch[1] : href.split('id=').pop();
         if (!id || seen.has(id)) return;
-        const name = String(link.attr('title') || link.text() || '').trim();
-        if (!name || titleMatchScore(name, wantedTitles) < 0.55) return;
+
+        const name = String(link.attr('title') || link.find('img').attr('alt') || link.text() || '').replace(/\s+/g, ' ').trim();
+        const score = titleMatchScore(name, wantedTitles);
+        if (!name || !candidateYearMatches(name, wantedTitles) || score < 0.7) return;
+
         const text = cell.text().replace(/\s+/g, ' ').trim();
         const category = cell.find('b').first().text().trim();
         if (category && !/(film|seri|dokum|tv)/i.test(category)) return;
         const sizeMatch = text.match(/Velkost\s*([^|]+)/i);
         const seedMatch = text.match(/Odosielaju\s*:\s*(\d+)/i);
+
         seen.add(id);
         results.push({
           id,
@@ -220,10 +271,12 @@ async function searchTorrents(query, wantedTitles, maxPages = 1) {
           category,
           size: sizeMatch ? sizeMatch[1].trim() : '?',
           seeds: seedMatch ? Number(seedMatch[1]) : 0,
+          score,
           downloadUrl: `${BASE_URL}/torrent/download.php?id=${encodeURIComponent(id)}`
         });
-        found++;
+        found += 1;
       });
+
       if (found < 10) break;
     } catch (error) {
       console.warn(`[sktorrent] search "${query}" page ${page}: ${error.message}`);
@@ -231,7 +284,7 @@ async function searchTorrents(query, wantedTitles, maxPages = 1) {
     }
   }
 
-  results.sort((a, b) => b.seeds - a.seeds);
+  results.sort((a, b) => (b.score - a.score) || (b.seeds - a.seeds));
   searchCache.set(cacheKey, results);
   return results;
 }
@@ -245,6 +298,7 @@ function stringValue(value) {
 function parseTorrent(buffer) {
   const torrent = bencode.decode(buffer);
   if (!torrent || !torrent.info) throw new Error('Neplatný .torrent soubor.');
+
   const infoHash = crypto.createHash('sha1').update(bencode.encode(torrent.info)).digest('hex');
   const trackers = [];
   const addTracker = value => {
@@ -268,6 +322,7 @@ function parseTorrent(buffer) {
       length: Number(torrent.info.length || 0)
     }];
   }
+
   return {
     infoHash,
     trackers: [...new Set(trackers)],
@@ -277,22 +332,29 @@ function parseTorrent(buffer) {
 }
 
 async function downloadTorrentData(client, candidate) {
-  // Tracker URLs can contain a user-specific PID/passkey, so never share parsed
-  // torrent metadata across different configured SKTorrent accounts.
-  const cacheKey = `${client.cacheKey}:${candidate.downloadUrl}`;
+  const cacheKey = `${client.clientKey}:${candidate.downloadUrl}`;
   const cached = torrentCache.get(cacheKey);
   if (cached !== undefined) return cached || null;
+
   try {
-    let response = await client.authenticatedGet(candidate.downloadUrl, { responseType: 'arraybuffer', maxContentLength: 4 * 1024 * 1024 });
+    let response = await client.authenticatedGet(candidate.downloadUrl, {
+      responseType: 'arraybuffer',
+      maxContentLength: 4 * 1024 * 1024
+    });
     let buffer = Buffer.from(response.data);
     let prefix = buffer.subarray(0, 200).toString('utf8').toLowerCase();
+
     if (prefix.includes('<html') || prefix.includes('<!doctype')) {
       await client.login(true);
-      response = await client.authenticatedGet(candidate.downloadUrl, { responseType: 'arraybuffer', maxContentLength: 4 * 1024 * 1024 });
+      response = await client.authenticatedGet(candidate.downloadUrl, {
+        responseType: 'arraybuffer',
+        maxContentLength: 4 * 1024 * 1024
+      });
       buffer = Buffer.from(response.data);
       prefix = buffer.subarray(0, 200).toString('utf8').toLowerCase();
       if (prefix.includes('<html') || prefix.includes('<!doctype')) throw new Error('SKTorrent vrátil HTML místo .torrent souboru.');
     }
+
     const parsed = parseTorrent(buffer);
     torrentCache.set(cacheKey, parsed);
     return parsed;
@@ -303,9 +365,11 @@ async function downloadTorrentData(client, candidate) {
 }
 
 const VIDEO_EXT = /\.(mkv|mp4|avi|m4v|mov|ts|webm)$/i;
+
 function chooseVideoFile(files, type, season, episode) {
   const videos = (files || []).filter(file => VIDEO_EXT.test(file.path));
   if (!videos.length) return null;
+
   if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {
     const s = String(season).padStart(2, '0');
     const e = String(episode).padStart(2, '0');
@@ -318,12 +382,13 @@ function chooseVideoFile(files, type, season, episode) {
     if (matched.length) return matched.sort((a, b) => b.length - a.length)[0];
     return null;
   }
+
   return videos.sort((a, b) => b.length - a.length)[0];
 }
 
 function queryVariants(titles, type, season, episode) {
   const out = [];
-  for (const title of titles) {
+  for (const title of titles || []) {
     const base = String(title || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
     if (!base) continue;
     if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {
@@ -334,41 +399,53 @@ function queryVariants(titles, type, season, episode) {
       out.push(base);
     }
   }
-  return [...new Set(out)].slice(0, 5);
+  return [...new Set(out)].slice(0, 6);
 }
 
 async function findTorrentStreams({ username, password, titles, type, season, episode, limit = 8 }) {
   const client = getClient(username, password);
   const queries = queryVariants(titles, type, season, episode);
   const found = new Map();
+
   for (const query of queries) {
     const results = await searchTorrents(query, titles, 1);
     for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
     if (found.size >= limit * 2) break;
   }
-  const candidates = [...found.values()].sort((a, b) => b.seeds - a.seeds).slice(0, limit * 2);
+
+  const candidates = [...found.values()]
+    .sort((a, b) => (b.score - a.score) || (b.seeds - a.seeds))
+    .slice(0, Math.min(limit * 2, 12));
+
   const resolved = await Promise.all(candidates.map(async candidate => {
     const torrent = await downloadTorrentData(client, candidate);
     if (!torrent) return null;
     const file = chooseVideoFile(torrent.files, type, season, episode);
     if (!file) return null;
-    const quality = qualityFromText(`${candidate.name} ${file.path}`);
-    const tags = codecTags(`${candidate.name} ${file.path}`);
+
+    const combined = `${candidate.name} ${file.path}`;
+    const quality = qualityFromText(combined);
+    const tags = codecTags(combined);
+    const language = languageLabel(combined);
     const size = candidate.size !== '?' ? candidate.size : humanBytes(file.length);
-    const detail = [size, `${candidate.seeds} seed`, ...tags].filter(Boolean).join(' • ');
-    const sources = [
-      ...torrent.trackers.map(tracker => `tracker:${tracker}`),
-      ...(torrent.private ? [] : [`dht:${torrent.infoHash}`])
-    ];
+    const details = [`👥 ${candidate.seeds} seed`, `📦 ${size}`, ...tags].filter(Boolean).join(' • ');
+    const titleLines = [
+      language ? `🎧 ${language}` : null,
+      `🗂️ ${candidate.name}`,
+      details
+    ].filter(Boolean);
+
     return {
       name: `SKTorrent • ${quality}`,
-      title: `${candidate.name}\n${detail}`,
+      title: titleLines.join('\n'),
       infoHash: torrent.infoHash,
       fileIdx: file.index,
-      sources: [...new Set(sources)],
+      fileName: String(file.path || '').split('/').pop(),
+      sources: torrent.trackers.map(tracker => `tracker:${tracker}`),
       behaviorHints: { bingeGroup: `caseycz-skt:${torrent.infoHash}` }
     };
   }));
+
   return resolved.filter(Boolean).slice(0, limit);
 }
 
