@@ -413,77 +413,6 @@ async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
   }
 }
 
-async function searchOnlineVideoPages(query, wantedTitles) {
-  const cleanQuery = stripYearTokens(query);
-  if (!cleanQuery) return [];
-  const key = `online-search:${normalize(cleanQuery)}`;
-  const cached = cache.get(key);
-  if (cached !== undefined) return cached;
-
-  try {
-    const response = await onlineHttp.get('/search/videos', {
-      params: { search_query: cleanQuery },
-      headers: { Referer: `${ONLINE_BASE_URL}/` }
-    });
-    const $ = cheerio.load(response.data);
-    const wantedBase = dedupe((wantedTitles || []).map(stripYearTokens));
-    const items = [];
-    const seen = new Set();
-
-    $("a[href^='/video/'], a[href*='/video/']").each((_, el) => {
-      const link = $(el);
-      const href = String(link.attr('href') || '');
-      if (!/\/video\/\d+/i.test(href)) return;
-      const url = absoluteUrl(href, ONLINE_BASE_URL);
-      if (!url || seen.has(url)) return;
-
-      const card = link.closest('article, li, .video, .video-item, .card, div');
-      const title = String(
-        link.attr('title') ||
-        link.find('img').attr('alt') ||
-        link.text() ||
-        card.text() ||
-        ''
-      ).replace(/\s+/g, ' ').trim();
-
-      const score = title ? titleMatchScore(title, wantedBase) : 0.8;
-      if (title && score < 0.65) return;
-      if (title && yearsInText(title).length) {
-        if (!candidateYearMatches(title, wantedTitles) || candidateHasConflictingYears(title, wantedTitles)) return;
-      }
-
-      seen.add(url);
-      items.push({ url, title, score });
-    });
-
-    const result = items.sort((a, b) => b.score - a.score).slice(0, 10);
-    cache.set(key, result, result.length ? 300 : 60);
-    return result;
-  } catch (error) {
-    console.warn(`[direct] SKTOnline search "${cleanQuery}": ${error.message}`);
-    return [];
-  }
-}
-
-async function findDirectOnlineByTitle(queries, titles) {
-  const directQueries = dedupe([
-    ...(titles || []).map(stripYearTokens),
-    ...(queries || []).map(stripYearTokens)
-  ]).filter(Boolean).slice(0, 6);
-
-  for (const query of directQueries) {
-    const pages = await searchOnlineVideoPages(query, titles);
-    if (!pages.length) continue;
-
-    const batches = await Promise.all(
-      pages.slice(0, 8).map(item => streamsForOnlinePage(item.url, `${ONLINE_BASE_URL}/`, ''))
-    );
-    const all = dedupeStreams(batches.flat());
-    if (all.length) return all.slice(0, 12);
-  }
-  return [];
-}
-
 function sledujtetoFileId(pageUrl, $, html) {
   try {
     const match = new URL(pageUrl).pathname.match(/\/file\/(\d+)/i);
@@ -750,16 +679,16 @@ const batches = await Promise.all(rankedCandidates.slice(0, 6).map(streamsFromSk
 
 async function findOnlineStreams({ titles, type, season, episode }) {
   const queries = buildQueries(titles, type, season, episode);
-  const [fromOnlineSearch, fromDetails, sledujToByTitle] = await Promise.all([
-    findDirectOnlineByTitle(queries, titles),
+  const [fromDetails, sledujToByTitle] = await Promise.all([
     findFromSktorrentDetails(queries, titles),
     findSledujtetoByTitle(queries, titles)
   ]);
 
-  // Prefer the dedicated online.sktorrent.eu index for discovery. The SKTorrent
-  // detail-page resolver remains as a fallback and SledujTo stays independent.
-  // All returned video URLs are still direct CDN/source URLs; no media proxying.
-  return dedupeStreams([...fromOnlineSearch, ...fromDetails, ...sledujToByTitle]).slice(0, 18);
+  // Discover SKTOnline through SKTorrent detail pages. The central
+  // online.sktorrent.eu search/video pages can return empty bodies to datacenter
+  // clients, while the actual per-release onlineN embeds/CDN URLs still work.
+  // Returned media stays direct from the source; there is no video proxy.
+  return dedupeStreams([...fromDetails, ...sledujToByTitle]).slice(0, 18);
 }
 
 module.exports = { findOnlineStreams };
