@@ -1,4 +1,4 @@
-name: One-time fix Matrix matching
+name: One-time refine Matrix SKTOnline languages
 
 on:
   push:
@@ -18,16 +18,14 @@ jobs:
           ref: Master
           fetch-depth: 0
 
-      - name: Patch direct and torrent matching
+      - name: Patch per-embed Matrix languages
         shell: bash
         run: |
           set -euo pipefail
-          python3 -c "import base64,zlib;exec(zlib.decompress(base64.b64decode('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')))"
+          python3 -c "import base64,zlib;exec(zlib.decompress(base64.b64decode('eNrtVU1r4zAUvOtXvIbQShDc9hy8UJYeCi3sobdStqr9nGhXkYQlk5TU/30l+UvJwmZ36bEXG8nPo5k381BV6w0Y7tZSvILYGF07+OaXxOThRS+4EZf2p9NKCoXZD3vBiM1NViMvvzvcOcqIlmU+m80ACq2sg0ZJ/ooSS8gBlasF2qwS0mFNw/IN8i9wVvsCbvGeq1XDV/hVl2jv1GMAjEWZE04iyySqlVuzJRnQzVDt0Ut0XMibphQ6btF5LBQV0LGsR4Dzc/htL8/zie1wFOw9BCT7la5vebGmHbEFCFXijgUVXSVAwtizepnv0433d+jFPoZ1C3S+H5k8RbDnlr0sI1YbBbSA0mIP38nGnZGiEG6SXjYG6dhfyd0DN1OD/7K/jC2TQ/qfhjP+gJEqOoLYcKGEWh2BdH3vY1D4RUzBgapMqEI2wcbwfWAWzDwETd27ZqMJ3iagfbNiF3Q1xG8q6vD+NX3J7/9h9iH7p6vJ7eg4Sd/h2RI/TEThNh2qj479EJxDhWOcTka+Y1WcTkraz0F1YFqkjM46K49a+zkon4NyelC4tegvLX8J+ZiCJSbb1sJhdzlZf1EZyQuk/vvCz9TimjHyC+s+TBY=')))"
           node --check api/sktonline.js
-          node --check api/sktorrent.js
-          node --check addon.js
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add api/sktonline.js api/sktorrent.js addon.js
-          git commit -m 'Fix exact movie matching and Matrix online variants'
+          git add api/sktonline.js
+          git commit -m 'Map SKTOnline embeds to page language order'
           git push origin Master
