@@ -6,7 +6,6 @@ const crypto = require('crypto');
 const NodeCache = require('node-cache');
 const { CinemetaApi, uniqueStrings } = require('./api/cinemeta');
 const { findOnlineStreams } = require('./api/sktonline');
-const { getClient, findTorrentStreams, activeClientCount } = require('./api/sktorrent');
 
 const app = express();
 const PORT = Number(process.env.PORT || 7002);
@@ -71,18 +70,13 @@ function decryptConfig(token) {
 
 function normalizeConfig(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const cfg = {
+  // Direct-only test mode. Old installed tokens remain valid, but torrents are
+  // deliberately ignored until direct SKTOnline + SledujTo lookup is proven.
+  return {
     uiLanguage: ['cs', 'sk', 'en'].includes(value.uiLanguage) ? value.uiLanguage : 'cs',
-    sktUser: String(value.sktUser || '').trim(),
-    sktPass: String(value.sktPass || ''),
-    enableOnline: value.enableOnline !== false,
-    enableTorrents: value.enableTorrents !== false
+    enableOnline: true,
+    enableTorrents: false
   };
-  if (!cfg.enableOnline && !cfg.enableTorrents) return null;
-  if (cfg.enableTorrents && (!cfg.sktUser || !cfg.sktPass)) return null;
-  if (cfg.sktUser.length > 128 || cfg.sktPass.length > 512) return null;
-  if ([cfg.sktUser, cfg.sktPass].some(item => /[\0\r\n]/.test(item))) return null;
-  return cfg;
 }
 
 function getHost(req) {
@@ -95,9 +89,9 @@ function getHost(req) {
 
 function labels(language) {
   return {
-    cs: { name: 'SKTOnline + SKTorrent', description: 'Přímé SKTOnline streamy a SKTorrent zdroje s automatickým obnovením přihlášení.' },
-    sk: { name: 'SKTOnline + SKTorrent', description: 'Priame SKTOnline streamy a SKTorrent zdroje s automatickým obnovením prihlásenia.' },
-    en: { name: 'SKTOnline + SKTorrent', description: 'Direct SKTOnline streams and SKTorrent sources with automatic login renewal.' }
+    cs: { name: 'SKTOnline + SledujTo', description: 'Přímé streamy ze SKTOnline a SledujTo, hledané přímo podle názvu.' },
+    sk: { name: 'SKTOnline + SledujTo', description: 'Priame streamy zo SKTOnline a SledujTo, hľadané priamo podľa názvu.' },
+    en: { name: 'SKTOnline + SledujTo', description: 'Direct SKTOnline and SledujTo streams searched directly by title.' }
   }[language] || null;
 }
 
@@ -152,20 +146,11 @@ function resolveWithin(promise, timeoutMs, label) {
 
 app.post('/api/config-token', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  const cfg = normalizeConfig(req.body);
+  const cfg = normalizeConfig(req.body || {});
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
 
-  if (cfg.enableTorrents) {
-    try {
-      await getClient(cfg.sktUser, cfg.sktPass).login(true);
-    } catch (error) {
-      console.warn(`[config] SKTorrent login failed: ${error.message}`);
-      return res.status(401).json({ error: 'SKTorrent login failed', message: 'SKTorrent odmítl přihlášení. Zkontroluj jméno a heslo.' });
-    }
-  }
-
   try {
-    return res.json({ format: 'enc1', token: encryptConfig(cfg), loginVerified: cfg.enableTorrents });
+    return res.json({ format: 'enc1', token: encryptConfig(cfg), loginVerified: false, directOnly: true });
   } catch (error) {
     if (error.code === 'CONFIG_KEY_MISSING') return res.status(503).json({ error: 'Encrypted configuration is not available' });
     console.error(`[config] ${error.message}`);
@@ -184,7 +169,7 @@ app.get('/manifest.json', (req, res) => {
   res.json({
     id: 'cz.caseycz.stremio.sktonline.configure',
     version: VERSION,
-    name: 'SKTOnline + SKTorrent',
+    name: 'SKTOnline + SledujTo',
     description: `Configure at ${getHost(req)}/configure`,
     types: [], resources: [], catalogs: [],
     behaviorHints: { configurable: true, configurationRequired: true }
@@ -205,8 +190,9 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const parsed = parseStremioId(req.params.id);
   if (!parsed) return res.json({ streams: [] });
 
-  const configFingerprint = crypto.createHash('sha1').update(`${cfg.sktUser}\0${cfg.enableOnline}\0${cfg.enableTorrents}`).digest('hex').slice(0, 12);
-  const cacheKey = `${configFingerprint}:${req.params.type}:${req.params.id}`;
+  // Version the cache key so previously cached torrent results can never leak
+  // into this direct-only test mode after deploy.
+  const cacheKey = `direct-title-v1:${req.params.type}:${req.params.id}`;
   const cached = streamCache.get(cacheKey);
   if (cached !== undefined) return res.json({ streams: cached });
 
@@ -215,25 +201,14 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
     const titles = titleCandidates(meta);
     if (!titles.length) return res.json({ streams: [] });
 
-    const onlineJob = cfg.enableOnline
-      ? resolveWithin(findOnlineStreams({ titles, type: req.params.type, season: parsed.season, episode: parsed.episode }), 4500, 'online')
-      : Promise.resolve([]);
+    const streams = await resolveWithin(findOnlineStreams({
+      titles,
+      type: req.params.type,
+      season: parsed.season,
+      episode: parsed.episode
+    }), 12000, 'direct-title');
 
-    const torrentJob = cfg.enableTorrents
-      ? resolveWithin(findTorrentStreams({
-          username: cfg.sktUser,
-          password: cfg.sktPass,
-          titles,
-          type: req.params.type,
-          season: parsed.season,
-          episode: parsed.episode,
-          limit: 8
-        }), 7000, 'torrent')
-      : Promise.resolve([]);
-
-    const [online, torrents] = await Promise.all([onlineJob, torrentJob]);
-    const streams = [...online, ...torrents];
-    streamCache.set(cacheKey, streams, streams.length ? 5 * 60 : 90);
+    streamCache.set(cacheKey, streams, streams.length ? 5 * 60 : 60);
     return res.json({ streams });
   } catch (error) {
     console.error(`[stream] ${req.params.type}/${req.params.id}: ${error.message}`);
@@ -246,11 +221,13 @@ app.get('/health', (req, res) => res.json({
   ok: true,
   version: VERSION,
   encryption: Boolean(CONFIG_ENCRYPTION_KEY),
-  activeSktorrentClients: activeClientCount(),
+  mode: 'direct-title-only',
+  torrentsEnabled: false,
+  providers: ['SKTOnline', 'SledujTo'],
   streamCacheKeys: streamCache.keys().length
 }));
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`stremio-sktonline v${VERSION} listening on :${PORT}`);
+  console.log(`stremio-sktonline v${VERSION} listening on :${PORT} (direct title search only)`);
   if (!CONFIG_ENCRYPTION_KEY) console.warn(`[config] Missing encryption key: ${CONFIG_KEY_FILE}`);
 });
