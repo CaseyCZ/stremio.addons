@@ -14,17 +14,12 @@ permissions:
 
 jobs:
   probe:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, ARM64, dashboard]
     timeout-minutes: 10
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
 
       - name: Install dependencies
         run: npm install --omit=dev --no-audit --no-fund
