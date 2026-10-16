@@ -13,6 +13,7 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   exit 1
 fi
 
+before_sha="$(git rev-parse HEAD)"
 git fetch origin "Master"
 read -r ahead behind < <(git rev-list --left-right --count HEAD...origin/Master)
 if [[ "$ahead" != "0" ]]; then
@@ -20,6 +21,15 @@ if [[ "$ahead" != "0" ]]; then
   exit 1
 fi
 git merge --ff-only "origin/Master"
+after_sha="$(git rev-parse HEAD)"
+
+# If this deploy script changed in the pulled commits, restart it from the
+# freshly checked-out version so the rest of the deployment cannot continue
+# with stale commands (for example an old health-check port).
+if [[ "$before_sha" != "$after_sha" ]] && git diff --name-only "$before_sha" "$after_sha" -- deploy-server.sh | grep -Fxq 'deploy-server.sh'; then
+  echo "deploy-server.sh was updated; restarting with the new version."
+  exec bash "$0"
+fi
 
 npm install --omit=dev --no-audit --no-fund
 npm run version:check
