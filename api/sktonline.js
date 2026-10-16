@@ -41,6 +41,18 @@ function shortTitle(value, words = 3) { return String(value || '').split(/\s+/).
 function normalize(value) { return stripDiacritics(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim(); }
 function slugify(value) { return normalize(value).replace(/\s+/g, '-'); }
 
+function yearsInText(value) {
+  return dedupe((String(value || '').match(/\b(?:19|20)\d{2}\b/g) || []));
+}
+
+function candidateYearMatches(candidate, wantedTitles) {
+  const wantedYears = dedupe((wantedTitles || []).flatMap(yearsInText));
+  if (!wantedYears.length) return true;
+  const candidateYears = yearsInText(candidate);
+  if (!candidateYears.length) return false;
+  return candidateYears.some(year => wantedYears.includes(year));
+}
+
 function titleMatchScore(candidate, wantedTitles) {
   const source = normalize(candidate);
   if (!source) return 0;
@@ -66,7 +78,10 @@ function buildQueries(titles, type, season, episode) {
   for (const raw of titles) {
     const base = String(raw || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
     if (!base) continue;
-    const variants = dedupe([base, stripDiacritics(base), shortTitle(stripDiacritics(base), 3)]);
+    const plain = stripDiacritics(base);
+  const variants = type === 'movie'
+    ? dedupe([base, plain])
+    : dedupe([base, plain, shortTitle(plain, 3)]);
     if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {
       const sxxexx = `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
       const x = `${season}x${String(episode).padStart(2, '0')}`;
@@ -294,7 +309,8 @@ async function searchSktorrentDetails(query, wantedTitles) {
       const card = link.closest('td, tr, article, div');
       const name = String(link.attr('title') || link.find('img').attr('alt') || link.text() || card.text() || '')
         .replace(/\s+/g, ' ').trim();
-      if (!name || titleMatchScore(name, wantedTitles) < 0.45) return;
+      const score = titleMatchScore(name, wantedTitles);
+      if (!name || !candidateYearMatches(name, wantedTitles) || score < 0.7) return;
       const detailsUrl = absoluteUrl(href, SKTORRENT_SEARCH_URL);
       if (!detailsUrl) return;
       seen.add(idMatch[1]);
@@ -584,9 +600,11 @@ async function findFromSktorrentDetails(queries, titles) {
     if (candidates.size >= 6) break;
   }
   if (!candidates.size) return [];
-  const rankedCandidates = [...candidates.values()].sort((a, b) =>
-  candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name)
-);
+  const rankedCandidates = [...candidates.values()].sort((a, b) => {
+  const languageDiff = candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
+  if (languageDiff) return languageDiff;
+  return titleMatchScore(b.name, titles) - titleMatchScore(a.name, titles);
+});
 const batches = await Promise.all(rankedCandidates.slice(0, 6).map(streamsFromSktorrentDetail));
   return dedupeStreams(batches.flat()).slice(0, 12);
 }
