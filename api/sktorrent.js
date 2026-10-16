@@ -404,9 +404,11 @@ function queryVariants(titles, type, season, episode) {
       out.push(base);
     } else {
       out.push(base);
+      const withoutYear = base.replace(/\b(?:19|20)\d{2}\b/g, ' ').replace(/\s+/g, ' ').trim();
+      if (withoutYear && withoutYear !== base) out.push(withoutYear);
     }
   }
-  return [...new Set(out)].slice(0, 6);
+  return [...new Set(out)].slice(0, 8);
 }
 
 async function findTorrentStreams({ username, password, titles, type, season, episode, limit = 8 }) {
