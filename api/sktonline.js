@@ -155,7 +155,7 @@ function qualityLabel(label, src) {
 
 function proxyHints(referer) {
   return {
-    notWebReady: false,
+    notWebReady: true,
     proxyHeaders: {
       request: {
         Referer: referer,
