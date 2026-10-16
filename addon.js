@@ -133,6 +133,23 @@ function titleCandidates(meta) {
   ]).slice(0, 5);
 }
 
+function resolveWithin(promise, timeoutMs, label) {
+  let timer;
+  const timeout = new Promise(resolve => {
+    timer = setTimeout(() => {
+      console.warn(`[stream] ${label} lookup timed out after ${timeoutMs}ms`);
+      resolve([]);
+    }, timeoutMs);
+  });
+  return Promise.race([
+    Promise.resolve(promise).catch(error => {
+      console.warn(`[stream] ${label} lookup failed: ${error.message}`);
+      return [];
+    }),
+    timeout
+  ]).finally(() => clearTimeout(timer));
+}
+
 app.post('/api/config-token', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const cfg = normalizeConfig(req.body);
@@ -198,21 +215,23 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
     const titles = titleCandidates(meta);
     if (!titles.length) return res.json({ streams: [] });
 
-    const jobs = [];
-    if (cfg.enableOnline) jobs.push(findOnlineStreams({ titles, type: req.params.type, season: parsed.season, episode: parsed.episode }));
-    else jobs.push(Promise.resolve([]));
-    if (cfg.enableTorrents) jobs.push(findTorrentStreams({
-      username: cfg.sktUser,
-      password: cfg.sktPass,
-      titles,
-      type: req.params.type,
-      season: parsed.season,
-      episode: parsed.episode,
-      limit: 8
-    }));
-    else jobs.push(Promise.resolve([]));
+    const onlineJob = cfg.enableOnline
+      ? resolveWithin(findOnlineStreams({ titles, type: req.params.type, season: parsed.season, episode: parsed.episode }), 4500, 'online')
+      : Promise.resolve([]);
 
-    const [online, torrents] = await Promise.all(jobs);
+    const torrentJob = cfg.enableTorrents
+      ? resolveWithin(findTorrentStreams({
+          username: cfg.sktUser,
+          password: cfg.sktPass,
+          titles,
+          type: req.params.type,
+          season: parsed.season,
+          episode: parsed.episode,
+          limit: 8
+        }), 7000, 'torrent')
+      : Promise.resolve([]);
+
+    const [online, torrents] = await Promise.all([onlineJob, torrentJob]);
     const streams = [...online, ...torrents];
     streamCache.set(cacheKey, streams, streams.length ? 5 * 60 : 90);
     return res.json({ streams });
