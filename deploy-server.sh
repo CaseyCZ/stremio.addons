@@ -38,6 +38,6 @@ fi
 
 pm2 startOrReload ecosystem.config.js --only stremio-sktonline --update-env
 pm2 save
-curl --retry 15 --retry-delay 1 --retry-connrefused -fsS http://127.0.0.1:7002/health >/dev/null
+curl --retry 15 --retry-delay 1 --retry-connrefused -fsS http://127.0.0.1:7003/health >/dev/null
 
 echo "stremio-sktonline deployed successfully from Master."
