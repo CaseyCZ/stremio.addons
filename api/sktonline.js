@@ -315,11 +315,11 @@ function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle) {
     entries.push({ url, title: nearbyTitleForOnlineEmbed($, el) });
   });
 
-  const unlabeled = entries.filter(entry => !releaseLanguageCodesInText(entry.title).length);
   const pageCodes = detailAudioCodes($);
-  if (pageCodes.length && pageCodes.length === unlabeled.length) {
-    unlabeled.forEach((entry, index) => {
-      entry.title = `${entry.title || releaseTitle} (${pageCodes[index]})`;
+  if (pageCodes.length && pageCodes.length === entries.length) {
+    entries.forEach((entry, index) => {
+      const codes = releaseLanguageCodesInText(entry.title);
+      if (codes.length !== 1) entry.title = `(${pageCodes[index]})`;
     });
   } else {
     const explicitCodes = dedupe(entries.flatMap(entry => releaseLanguageCodesInText(entry.title)));
