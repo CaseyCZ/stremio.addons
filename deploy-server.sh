@@ -35,6 +35,7 @@ npm install --omit=dev --no-audit --no-fund
 npm run version:check
 node --check addon.js
 node --check api/cinemeta.js
+node --check api/csfd.js
 node --check api/sktonline.js
 node --check api/sktorrent.js
 

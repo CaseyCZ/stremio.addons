@@ -437,21 +437,22 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
   const client = getClient(username, password);
   const queries = queryVariants(titles, type, season, episode);
   const csfdUrl = await getCsfdUrl(imdbId);
-  const priorityQueries = csfdUrl ? [csfdUrl, ...queries] : queries;
   const found = new Map();
 
-  // Search several title variants in parallel, but keep the batch small so
-  // we improve coverage without hammering SKTorrent.
-  for (let offset = 0; offset < priorityQueries.length; offset += 4) {
-    const batch = priorityQueries.slice(offset, offset + 4);
-    const batches = await Promise.all(batch.map(query => {
-      const trustedReference = Boolean(csfdUrl && query === csfdUrl);
-      return searchTorrents(query, titles, trustedReference ? 6 : 1, trustedReference);
-    }));
+  // Exact CSFD reference is the highest-confidence path. One page is normally
+  // enough and avoids spending most of the Stremio timeout walking pagination.
+  if (csfdUrl) {
+    const exact = await searchTorrents(csfdUrl, titles, 1, true);
+    for (const item of exact) if (!found.has(item.id)) found.set(item.id, item);
+  }
+
+  // Fill any remaining slots from broader text variants in small parallel batches.
+  for (let offset = 0; offset < queries.length && found.size < limit * 2; offset += 4) {
+    const batch = queries.slice(offset, offset + 4);
+    const batches = await Promise.all(batch.map(query => searchTorrents(query, titles, 1, false)));
     for (const results of batches) {
       for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
     }
-    if (found.size >= limit * 2) break;
   }
 
   const candidates = [...found.values()]

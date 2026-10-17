@@ -808,10 +808,14 @@ async function findFromSktorrentDetails(queries, titles, imdbId, client = null) 
     const exact = await searchSktorrentDetails(csfdUrl, titles, true);
     for (const item of exact) if (!candidates.has(item.id)) candidates.set(item.id, item);
   }
-  for (const query of queries.slice(0, 6)) {
-    const found = await searchSktorrentDetails(query, titles);
-    for (const item of found) if (!candidates.has(item.id)) candidates.set(item.id, item);
-    if (candidates.size >= 12) break;
+
+  const fallbacks = queries.slice(0, 6);
+  for (let offset = 0; offset < fallbacks.length && candidates.size < 10; offset += 3) {
+    const batch = fallbacks.slice(offset, offset + 3);
+    const groups = await Promise.all(batch.map(query => searchSktorrentDetails(query, titles)));
+    for (const found of groups) {
+      for (const item of found) if (!candidates.has(item.id)) candidates.set(item.id, item);
+    }
   }
   if (!candidates.size) return [];
   const rankedCandidates = [...candidates.values()].sort((a, b) => {
