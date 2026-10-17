@@ -9,6 +9,8 @@ Stremio addon z rodiny CaseyCZ apps. Kombinuje přímé streamy z `online.sktorr
 - automatické získání a obnovení `uid` + `pass` session cookies
 - AES-256-GCM šifrovaná instalační konfigurace
 - SKTOnline přímé MP4 streamy
+- SKTOnline VTT titulky (CZ/SK) přes Stremio `subtitles` resource
+- Sosáč katalogová ID (`sosac_m_*`, `sosac_s_*`, `sosac_ep_*`) umí vlastní overlay převést na IMDb/Cinemeta bez změny Sosáč addonu
 - SKTorrent `.torrent` metadata převede na `infoHash`, `fileIdx` a trackery pro Stremio
 - video ani torrentový datový provoz neproxyuje přes server addonu
 - `/health` a `/version` pro dashboard
@@ -41,6 +43,7 @@ Přihlašovací údaje se nikdy nelogují. Instalační URL obsahuje šifrovanou
 - `/manifest.json`
 - `/:cfg/manifest.json`
 - `/:cfg/stream/:type/:id.json`
+- `/:cfg/subtitles/:type/:id.json`
 - `/health`
 - `/version`
 
