@@ -834,7 +834,7 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
 async function findFromSktorrentDetails(queries, titles, imdbId, client = null) {
   const candidates = new Map();
   // Search SKTorrent by the plain title, then inspect matching results.
-  const query = String(queries.find(value => value && !/\b(?:19|20)\b{2}\b/.test(value)) || queries[0] || '').trim();
+  const query = String(queries.find(value => value && !/\b(?:19|20)\d{2}\b/.test(value)) || queries[0] || '').trim();
   if (query) {
     const results = await searchSktorrentDetails(query, titles);
     for (const item of results) candidates.set(item.id, item);
