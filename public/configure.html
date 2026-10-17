@@ -91,7 +91,7 @@ const stremioBtn=document.getElementById('stremioBtn');
 const enableTorrents=document.getElementById('enableTorrents');
 const torrentAuth=document.getElementById('torrentAuth');
 let requestId=0;
-function getBasePath(){return location.pathname.replace(/\/configure\/?$/,'').replace(/\/$/,'')}
+function getBasePath(){return location.pathname.replace(/\/configure\/?$/,'').replace(/\/enc1\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2}$/,'').replace(/\/$/,'')}
 function setStatus(text,error=false){status.textContent=text;status.classList.toggle('error',error)}
 function syncTorrentUi(){torrentAuth.hidden=!enableTorrents.checked}
 enableTorrents.addEventListener('change',syncTorrentUi);syncTorrentUi();
