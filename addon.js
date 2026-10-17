@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const NodeCache = require('node-cache');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 const { CinemetaApi, uniqueStrings } = require('./api/cinemeta');
 const { findOnlineStreams, findOnlineSourceBundle } = require('./api/sktonline');
 const { SosacOverlay } = require('./api/sosac-overlay');
@@ -19,6 +20,14 @@ const subtitleCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 60, maxKeys:
 const subtitleProbeCache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 5 * 60, maxKeys: 4000 });
 const sourceIdentityCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 60, maxKeys: 2000 });
 const cinemeta = new CinemetaApi();
+const SKTONLINE_PROXY_URL = String(process.env.SKTONLINE_PROXY_URL || '').trim();
+const sktOnlineSubtitleProxyAgent = SKTONLINE_PROXY_URL ? new SocksProxyAgent(SKTONLINE_PROXY_URL) : null;
+
+function subtitleProxyConfig() {
+  return sktOnlineSubtitleProxyAgent
+    ? { httpAgent: sktOnlineSubtitleProxyAgent, httpsAgent: sktOnlineSubtitleProxyAgent, proxy: false }
+    : {};
+}
 
 function readConfigEncryptionKey() {
   const candidates = [String(process.env.CONFIG_ENCRYPTION_KEY || '').trim()];
@@ -283,6 +292,7 @@ async function subtitleUrlExists(url) {
   try {
     const response = await require('axios').get(url, {
       timeout: 7000,
+      ...subtitleProxyConfig(),
       responseType: 'text',
       transformResponse: [data => data],
       maxContentLength: 2 * 1024 * 1024,

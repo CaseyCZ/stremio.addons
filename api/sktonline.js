@@ -1310,6 +1310,57 @@ function cleanResolvedStream(stream) {
   return clean;
 }
 
+function sktDisplayVariantKey(stream) {
+  const videoId = videoIdFromResolvedStream(stream);
+  if (!videoId || !String(stream && stream.name || '').startsWith('SKTOnline • ')) return null;
+  const title = String(stream && stream.title || '');
+  const audio = (title.match(/^🎧\s*(.+)$/m) || [])[1] || '?';
+  const subtitles = (title.match(/^💬\s*(.+)$/m) || [])[1] || 'Bez titulků';
+  return `${normalize(audio)}|${normalize(subtitles)}`;
+}
+
+function streamQualityNumber(stream) {
+  const text = `${String(stream && stream.name || '')} ${String(stream && stream.url || '')}`;
+  const match = text.match(/\b(2160|1440|1080|720|480|360|240)p\b/i);
+  return match ? Number(match[1]) : 0;
+}
+
+function selectBestSktDisplayStreams(streams) {
+  const groups = new Map();
+  (streams || []).forEach((stream, index) => {
+    const variant = sktDisplayVariantKey(stream);
+    const videoId = videoIdFromResolvedStream(stream);
+    if (!variant || !videoId) return;
+    const key = `${variant}|${videoId}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, variant, videoId, firstIndex: index, count: 0, maxQuality: 0 };
+      groups.set(key, group);
+    }
+    group.count += 1;
+    group.maxQuality = Math.max(group.maxQuality, streamQualityNumber(stream));
+  });
+
+  const winnerByVariant = new Map();
+  for (const group of groups.values()) {
+    const current = winnerByVariant.get(group.variant);
+    if (!current ||
+        group.maxQuality > current.maxQuality ||
+        (group.maxQuality === current.maxQuality && group.count > current.count) ||
+        (group.maxQuality === current.maxQuality && group.count === current.count && group.firstIndex < current.firstIndex)) {
+      winnerByVariant.set(group.variant, group);
+    }
+  }
+
+  const selected = new Set([...winnerByVariant.values()].map(group => group.key));
+  return (streams || []).filter(stream => {
+    const variant = sktDisplayVariantKey(stream);
+    const videoId = videoIdFromResolvedStream(stream);
+    if (!variant || !videoId) return true;
+    return selected.has(`${variant}|${videoId}`);
+  });
+}
+
 async function findOnlineSourceBundle({ imdbId, titles, type, season, episode, sktUsername = '', sktPassword = '' }) {
   const queries = buildQueries(titles, type, season, episode);
   let sktClient = null;
@@ -1323,13 +1374,16 @@ async function findOnlineSourceBundle({ imdbId, titles, type, season, episode, s
     directProviderWithin(findSledujtetoByTitle(queries, titles), 12000, 'SledujTo title search')
   ]);
 
-  const resolved = dedupeStreams([
+  const resolvedAll = dedupeStreams([
     ...fromDirectOnline,
     ...fromTorrentDetails,
     ...sledujToByTitle
   ]).slice(0, 48);
 
-  const videoIds = dedupe(resolved.map(videoIdFromResolvedStream).filter(Boolean));
+  // Keep every healthy SKTOnline videoId internally for subtitles and future
+  // rediscovery, but show only the best source for each audio/subtitle variant.
+  const videoIds = dedupe(resolvedAll.map(videoIdFromResolvedStream).filter(Boolean));
+  const resolved = selectBestSktDisplayStreams(resolvedAll);
   return {
     streams: resolved.map(cleanResolvedStream),
     videoIds
