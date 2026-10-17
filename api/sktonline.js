@@ -2,6 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const NodeCache = require('node-cache');
 const { getCsfdUrl } = require('./csfd');
+const { getClient } = require('./sktorrent');
 
 const SKTORRENT_BASE_URL = 'https://sktorrent.eu';
 const SKTORRENT_SEARCH_URL = `${SKTORRENT_BASE_URL}/torrent/torrents_v2.php`;
@@ -757,12 +758,14 @@ async function findDirectOnlineByTitle(queries, titles) {
   return [];
 }
 
-async function streamsFromSktorrentDetail(candidate) {
-  const key = `skt-detail-direct:${candidate.id}`;
+async function streamsFromSktorrentDetail(candidate, client = null) {
+  const key = `skt-detail-direct:${client ? client.clientKey : 'anon'}:${candidate.id}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
   try {
-    const response = await sktorrentHttp.get(candidate.detailsUrl, { headers: { Referer: SKTORRENT_SEARCH_URL } });
+    const response = client
+      ? await client.authenticatedGet(candidate.detailsUrl, { headers: { Referer: SKTORRENT_SEARCH_URL } })
+      : await sktorrentHttp.get(candidate.detailsUrl, { headers: { Referer: SKTORRENT_SEARCH_URL } });
     const finalUrl = absoluteUrl(response.request?.res?.responseUrl || candidate.detailsUrl, SKTORRENT_BASE_URL) || candidate.detailsUrl;
     const $ = cheerio.load(response.data);
     const title = candidate.name || $('title').text().replace(/\s+/g, ' ').trim() || 'SKTOnline';
@@ -798,7 +801,7 @@ async function streamsFromSktorrentDetail(candidate) {
   }
 }
 
-async function findFromSktorrentDetails(queries, titles, imdbId) {
+async function findFromSktorrentDetails(queries, titles, imdbId, client = null) {
   const candidates = new Map();
   const csfdUrl = await getCsfdUrl(imdbId);
   if (csfdUrl) {
@@ -818,7 +821,7 @@ async function findFromSktorrentDetails(queries, titles, imdbId) {
     if (scoreDiff) return scoreDiff;
     return candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
   });
-  const batches = await Promise.all(rankedCandidates.slice(0, 10).map(streamsFromSktorrentDetail));
+  const batches = await Promise.all(rankedCandidates.slice(0, 10).map(candidate => streamsFromSktorrentDetail(candidate, client)));
   return dedupeStreams(batches.flat()).slice(0, 12);
 }
 
@@ -839,12 +842,16 @@ function directProviderWithin(promise, timeoutMs, label) {
   ]).finally(() => clearTimeout(timer));
 }
 
-async function findOnlineStreams({ imdbId, titles, type, season, episode }) {
+async function findOnlineStreams({ imdbId, titles, type, season, episode, sktUsername = '', sktPassword = '' }) {
   const queries = buildQueries(titles, type, season, episode);
+  let sktClient = null;
+  if (sktUsername && sktPassword) {
+    try { sktClient = getClient(sktUsername, sktPassword); } catch (_) {}
+  }
 
   const [fromDirectOnline, fromTorrentDetails, sledujToByTitle] = await Promise.all([
     directProviderWithin(findDirectOnlineByTitle(queries, titles), 13000, 'SKTOnline title search'),
-    directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId), 16000, 'SKTorrent detail players'),
+    directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 20000, 'SKTorrent detail players'),
     directProviderWithin(findSledujtetoByTitle(queries, titles), 12000, 'SledujTo title search')
   ]);
 
