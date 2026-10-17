@@ -20,39 +20,45 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --omit=dev --no-audit --no-fund
-      - name: Test SKTOnline detail requests
+      - name: Inspect SKTorrent player links
         run: |
           node <<'NODE'
-          const axios = require('axios');
-          const cheerio = require('cheerio');
+          const axios=require('axios');
+          const cheerio=require('cheerio');
           const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
-          const base='https://online.sktorrent.eu';
-          const cookieMap=new Map();
-          const absorb=r=>{for(const c of (r.headers['set-cookie']||[])){const p=String(c).split(';')[0];const i=p.indexOf('=');if(i>0)cookieMap.set(p.slice(0,i),p.slice(i+1));}};
-          const cookie=()=>[...cookieMap].map(([k,v])=>`${k}=${v}`).join('; ');
-          const baseHeaders=(referer)=>({'User-Agent':UA,'Accept-Encoding':'identity','Accept':'text/html,application/xhtml+xml,application/json,*/*','Accept-Language':'cs-CZ,cs;q=0.9,en;q=0.8',Referer:referer,...(cookie()?{Cookie:cookie()}: {})});
-          const describe=(name,r)=>{const text=String(r.data||'');const $=cheerio.load(text);const src=$('video#video source[src],video source[src],video[src],source[src]').map((_,e)=>$(e).attr('src')).get();console.log(name,JSON.stringify({status:r.status,final:r.request?.res?.responseUrl,bytes:text.length,contentType:r.headers['content-type'],contentLength:r.headers['content-length'],setCookie:(r.headers['set-cookie']||[]).length,title:$('title').text().trim(),video:$('video').length,sources:src.slice(0,6),start:text.slice(0,180)}));};
+          const base='https://sktorrent.eu';
+          const headers={'User-Agent':UA,'Accept-Encoding':'identity',Accept:'text/html,application/xhtml+xml,*/*',Referer:base+'/torrent/torrents_v2.php'};
           (async()=>{
-            const home=await axios.get(base+'/',{timeout:15000,headers:baseHeaders(base+'/')}); absorb(home); describe('HOME',home);
-            const search=await axios.get(base+'/search/videos',{timeout:15000,params:{type:'public',t:'a',o:'mr',search_query:'Barbie',page:1},headers:baseHeaders(base+'/')}); absorb(search); describe('SEARCH',search);
-            const $=cheerio.load(search.data);
-            const links=$("a[href*='/video/']").map((_,e)=>$(e).attr('href')).get();
-            console.log('COOKIE_NAMES',JSON.stringify([...cookieMap.keys()]));
-            console.log('VIDEO_LINKS',JSON.stringify(links.slice(0,6)));
-            const target=links.find(x=>/barbie/i.test(x))||links[0];
-            const exact=new URL(target,base).toString();
-            const id=(target.match(/\/video\/(\d+)/)||[])[1];
-            const searchRef=search.request?.res?.responseUrl||base+'/search/videos';
-            for(const [name,url,ref,extra] of [
-              ['EXACT_HOME_REF',exact,base+'/',{}],
-              ['EXACT_SEARCH_REF',exact,searchRef,{}],
-              ['ID_ONLY_SEARCH_REF',base+'/video/'+id,searchRef,{}],
-              ['EXACT_XHR',exact,searchRef,{'X-Requested-With':'XMLHttpRequest'}],
-              ['EXACT_BROWSER',exact,searchRef,{'Sec-Fetch-Dest':'document','Sec-Fetch-Mode':'navigate','Sec-Fetch-Site':'same-origin','Upgrade-Insecure-Requests':'1'}]
-            ]){
-              try{const r=await axios.get(url,{timeout:15000,headers:{...baseHeaders(ref),...extra},maxRedirects:5,validateStatus:s=>s>=200&&s<500}); absorb(r); describe(name,r);}catch(e){console.log(name,'ERR',e.message,e.response?.status||'');}
+            const r=await axios.get(base+'/torrent/torrents_v2.php',{timeout:15000,params:{search:'Barbie',category:0,active:0,order:'data',by:'DESC',page:0},headers});
+            const $=cheerio.load(r.data);
+            console.log('SEARCH',r.status,'bytes',String(r.data||'').length,'title',$('title').text().trim());
+            const rows=[];
+            $('a[href*="details.php"]').each((_,e)=>{
+              if(rows.length>=12)return;
+              const a=$(e), row=a.closest('tr');
+              const href=a.attr('href');
+              const html=String(row.html()||'').replace(/\s+/g,' ');
+              const text=row.text().replace(/\s+/g,' ').trim();
+              if(/barbie/i.test(text)) rows.push({href,text:text.slice(0,260),html:html.slice(0,5000)});
+            });
+            console.log('ROWS',JSON.stringify(rows.map(x=>({href:x.href,text:x.text,hasPlay:/play|online\.sktorrent|sledujteto/i.test(x.html)}))));
+            for(const item of rows.slice(0,5)) {
+              console.log('ROW_HTML',item.html);
+              const url=new URL(item.href,base+'/torrent/').toString();
+              try {
+                const d=await axios.get(url,{timeout:15000,headers,maxRedirects:5,validateStatus:s=>s>=200&&s<500});
+                const p=cheerio.load(d.data), text=String(d.data||'');
+                const interesting=[];
+                p('a[href],iframe[src],frame[src],video[src],source[src],[data-src],[data-url],[data-file],[onclick]').each((_,el)=>{
+                  const n=p(el); for(const attr of ['href','src','data-src','data-url','data-file','onclick']){const v=n.attr(attr);if(v&&/(online|sleduj|\.mp4|embed|play)/i.test(v))interesting.push({tag:el.tagName,attr,val:String(v).slice(0,500)});}
+                });
+                const online=[...text.matchAll(/https?:\/\/[^\s"'<>]+/gi)].map(m=>m[0].replace(/&amp;/g,'&')).filter(u=>/online\d*\.sktorrent\.eu|online\.sktorrent\.eu|sledujteto/i.test(u));
+                console.log('DETAIL',JSON.stringify({url,final:d.request?.res?.responseUrl,status:d.status,bytes:text.length,title:p('title').text().trim(),interesting:interesting.slice(0,30),online:[...new Set(online)].slice(0,30)}));
+              } catch(e){console.log('DETAIL_ERR',url,e.message,e.response?.status||'');}
             }
-            const card=$("a[href*='/video/']").filter((_,e)=>$(e).attr('href')===target).first().closest('div.well');
-            console.log('CARD_HTML',String(card.html()||'').replace(/\s+/g,' ').slice(0,2500));
-          })().catch(e=>{console.error('DIAG_ERROR',e.message,e.response?.status,e.response?.headers?.location||'');process.exitCode=1;});
+            // A known public embed from a current indexed repo: check whether embed pages are server-readable.
+            for(const url of ['https://online.sktorrent.eu/embed/04bc593ad9dcf2ec88dd','https://online.sktorrent.eu/embed/a421d5ce262b093bdab2']) {
+              try {const e=await axios.get(url,{timeout:15000,headers:{'User-Agent':UA,'Accept-Encoding':'identity',Referer:base+'/'},validateStatus:s=>s>=200&&s<500});const p=cheerio.load(e.data);console.log('EMBED',JSON.stringify({url,status:e.status,bytes:String(e.data||'').length,final:e.request?.res?.responseUrl,title:p('title').text().trim(),sources:p('source[src],video[src]').map((_,x)=>p(x).attr('src')).get().slice(0,8),start:String(e.data||'').slice(0,200)}));}catch(err){console.log('EMBED_ERR',url,err.message,err.response?.status||'');}
+            }
+          })().catch(e=>{console.error('DIAG_ERROR',e.message,e.response?.status||'');process.exitCode=1;});
           NODE
