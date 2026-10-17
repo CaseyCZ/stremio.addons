@@ -1,0 +1,56 @@
+name: One-time Play Video link diagnostic
+
+on:
+  push:
+    branches: [Master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Inspect SKTorrent result rows for direct links
+        shell: bash
+        run: |
+          python - <<'PY'
+          import re, urllib.parse, urllib.request
+
+          UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36'
+          base = 'https://sktorrent.eu/torrent/torrents_v2.php'
+          for query in ['https://www.csfd.cz/film/252669', 'https://www.csfd.cz/film/8852', 'The Dark Knight Rises', 'Pulp Fiction']:
+              url = base + '?' + urllib.parse.urlencode({'search': query, 'category': 0, 'active': 0, 'order': 'data', 'by': 'DESC', 'page': 0})
+              req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept-Encoding': 'identity'})
+              with urllib.request.urlopen(req, timeout=12) as r:
+                  body = r.read().decode('utf-8', 'replace')
+              rows = re.findall(r'<tr\b[^>]*>.*?</tr>', body, flags=re.I|re.S)
+              candidates = []
+              for row in rows:
+                  m = re.search(r'href=["\']([^"\']*details\.php\?[^"\']*\bid=([a-f0-9]{40})[^"\']*)["\']', row, flags=re.I)
+                  if not m: continue
+                  links = re.findall(r'href=["\']([^"\']+)["\']', row, flags=re.I)
+                  direct = [x for x in links if re.search(r'(online\d*\.sktorrent\.eu|online\.sktorrent\.eu|sledujteto\.cz|play.?video)', x, flags=re.I)]
+                  has_play = bool(re.search(r'play[\s_-]*video|fa-play|glyphicon-play|online\d*\.sktorrent\.eu|online\.sktorrent\.eu|sledujteto\.cz', row, flags=re.I))
+                  if has_play or direct:
+                      candidates.append((m.group(2), direct[:6]))
+              print(f'QUERY {query!r}: rows={len(rows)} play_rows={len(candidates)}')
+              for item in candidates[:10]: print('  ', item)
+          PY
+
+      - name: Remove one-time workflow
+        if: always()
+        shell: bash
+        run: |
+          rm -f .github/workflows/one-time-play-link-diagnostic.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/one-time-play-link-diagnostic.yml
+          git commit -m "Remove one-time Play Video link diagnostic"
+          git push
