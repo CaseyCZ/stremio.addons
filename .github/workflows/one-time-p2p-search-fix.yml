@@ -1,0 +1,147 @@
+name: One-time P2P search coverage fix
+
+on:
+  push:
+    branches: [Master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Improve torrent search coverage
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          addon = Path('addon.js')
+          text = addon.read_text()
+          new_title_candidates = r'''function titleCandidates(meta, type) {
+            const titles = uniqueStrings([
+              meta && meta.name,
+              meta && meta.originalName,
+              ...(Array.isArray(meta && meta.nameTranslations) ? meta.nameTranslations : [])
+            ]).slice(0, 5);
+            const year = type === 'movie' ? metaYear(meta) : null;
+            return year
+              ? uniqueStrings([...titles, ...titles.map(title => `${title} ${year}`)]).slice(0, 10)
+              : titles;
+          }
+
+          function resolveWithin'''
+          text, count = re.subn(r'function titleCandidates\(meta, type\) \{.*?\n\}\n\nfunction resolveWithin', new_title_candidates, text, count=1, flags=re.S)
+          if count != 1:
+            raise SystemExit('titleCandidates replacement failed')
+          text = text.replace('combined-v9:', 'combined-v10:')
+          text = text.replace("}), 15000, 'sktorrent-p2p')", "}), 22000, 'sktorrent-p2p')")
+          addon.write_text(text)
+
+          skt = Path('api/sktorrent.js')
+          text = skt.read_text()
+
+          old_year = '''function candidateYearMatches(candidate, wantedTitles) {
+            const wantedYears = [...new Set((wantedTitles || []).flatMap(yearsInText))];
+            if (!wantedYears.length) return true;
+            const candidateYears = yearsInText(candidate);
+            if (!candidateYears.length) return false;
+            return candidateYears.some(year => wantedYears.includes(year));
+          }'''
+          new_year = '''function candidateYearMatches(candidate, wantedTitles) {
+            const wantedYears = [...new Set((wantedTitles || []).flatMap(yearsInText))];
+            if (!wantedYears.length) return true;
+            const candidateYears = yearsInText(candidate);
+            // SKTorrent release names often omit the year entirely. Missing year is
+            // not a mismatch; only an explicit conflicting year should reject it.
+            if (!candidateYears.length) return true;
+            return candidateYears.some(year => wantedYears.includes(year));
+          }'''
+          if old_year not in text:
+            raise SystemExit('candidateYearMatches source not found')
+          text = text.replace(old_year, new_year, 1)
+          text = text.replace('score < 0.7', 'score < 0.55', 1)
+
+          new_queries = r'''function searchTextVariants(value) {
+            const base = String(value || '')
+              .replace(/\s*\([^)]*\)\s*/g, ' ')
+              .replace(/TV (Mini )?Series/gi, ' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+            if (!base) return [];
+            const noDia = base.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const noPunct = noDia.replace(/[\':]/g, '').replace(/\s+/g, ' ').trim();
+            const withoutYear = noPunct.replace(/\b(?:19|20)\d{2}\b/g, ' ').replace(/\s+/g, ' ').trim();
+            const short = withoutYear.split(/\s+/).slice(0, 3).join(' ');
+            const dotted = withoutYear.replace(/\s+/g, '.');
+            return [...new Set([base, noDia, noPunct, withoutYear, short, dotted].filter(value => value && value.length >= 2))];
+          }
+
+          function queryVariants(titles, type, season, episode) {
+            const out = [];
+            for (const title of titles || []) {
+              const variants = searchTextVariants(title);
+              for (const variant of variants) {
+                if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {
+                  const s = String(season).padStart(2, '0');
+                  const e = String(episode).padStart(2, '0');
+                  out.push(`${variant} S${s}E${e}`);
+                  out.push(`${variant} ${season}x${e}`);
+                  out.push(`${variant} S${s}`);
+                  out.push(`${variant} ${season}. série`);
+                  out.push(variant);
+                } else {
+                  out.push(variant);
+                }
+              }
+            }
+            return [...new Set(out)].slice(0, 16);
+          }
+
+          async function findTorrentStreams'''
+          text, count = re.subn(r'function queryVariants\(titles, type, season, episode\) \{.*?\n\}\n\nasync function findTorrentStreams', new_queries, text, count=1, flags=re.S)
+          if count != 1:
+            raise SystemExit('queryVariants replacement failed')
+
+          old_loop = '''  for (const query of queries) {
+            const results = await searchTorrents(query, titles, 1);
+            for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
+            if (found.size >= limit * 2) break;
+          }'''
+          new_loop = '''  // Search several title variants in parallel, but keep the batch small so
+            // we improve coverage without hammering SKTorrent.
+            for (let offset = 0; offset < queries.length; offset += 4) {
+              const batch = queries.slice(offset, offset + 4);
+              const batches = await Promise.all(batch.map(query => searchTorrents(query, titles, 1)));
+              for (const results of batches) {
+                for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
+              }
+              if (found.size >= limit * 2) break;
+            }'''
+          if old_loop not in text:
+            raise SystemExit('findTorrentStreams loop source not found')
+          text = text.replace(old_loop, new_loop, 1)
+          skt.write_text(text)
+          PY
+
+      - name: Syntax check
+        run: |
+          node --check addon.js
+          node --check api/sktorrent.js
+
+      - name: Commit patch and remove one-time workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/one-time-p2p-search-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add addon.js api/sktorrent.js .github/workflows/one-time-p2p-search-fix.yml
+          git commit -m "Improve SKTorrent P2P search coverage"
+          git push
