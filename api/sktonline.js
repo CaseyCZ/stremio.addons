@@ -9,7 +9,7 @@ const ONLINE_BASE_URL = 'https://online.sktorrent.eu';
 const SLEDUJTETO_BASE_URL = 'https://www.sledujteto.cz';
 const RESOLVER_BASE_URL = String(process.env.SKTONLINE_RESOLVER_URL || '').replace(/\/+$/, '');
 const RESOLVER_TOKEN = String(process.env.SKTONLINE_RESOLVER_TOKEN || '').trim();
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36';
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
 const cache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60, maxKeys: 1800 });
 
 const LANGUAGE_DEFS = [
@@ -38,6 +38,67 @@ const sktorrentHttp = makeHttp(SKTORRENT_BASE_URL, 9000);
 const onlineHttp = makeHttp(ONLINE_BASE_URL, 9000);
 const sledujtetoHttp = makeHttp(SLEDUJTETO_BASE_URL, 9000);
 const resolverHttp = RESOLVER_BASE_URL ? makeHttp(RESOLVER_BASE_URL, 12000) : null;
+
+let onlineCookieHeader = '';
+let onlinePrimePromise = null;
+
+function normalizeOnlineSetCookies(values) {
+  return (Array.isArray(values) ? values : values ? [values] : [])
+    .map(value => String(value || '').split(';', 1)[0].trim())
+    .filter(Boolean)
+    .join('; ');
+}
+
+function captureOnlineCookies(response) {
+  const value = normalizeOnlineSetCookies(response && response.headers && response.headers['set-cookie']);
+  if (value) onlineCookieHeader = value;
+}
+
+async function primeOnlineSession(force = false) {
+  if (onlineCookieHeader && !force) return;
+  if (onlinePrimePromise) return onlinePrimePromise;
+  onlinePrimePromise = (async () => {
+    try {
+      const response = await onlineHttp.get('/', {
+        headers: { Referer: ONLINE_BASE_URL },
+        validateStatus: status => status >= 200 && status < 400
+      });
+      captureOnlineCookies(response);
+    } finally {
+      onlinePrimePromise = null;
+    }
+  })();
+  return onlinePrimePromise;
+}
+
+async function onlineGet(url, options = {}) {
+  if (!onlineCookieHeader) {
+    try { await primeOnlineSession(false); } catch (_) {}
+  }
+
+  const request = () => onlineHttp.get(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Referer: (options.headers && options.headers.Referer) || ONLINE_BASE_URL,
+      ...(onlineCookieHeader ? { Cookie: onlineCookieHeader } : {})
+    }
+  });
+
+  try {
+    const response = await request();
+    captureOnlineCookies(response);
+    return response;
+  } catch (error) {
+    const status = Number(error && error.response && error.response.status || 0);
+    if (status !== 401 && status !== 403) throw error;
+    onlineCookieHeader = '';
+    await primeOnlineSession(true);
+    const response = await request();
+    captureOnlineCookies(response);
+    return response;
+  }
+}
 
 async function resolverPost(path, body) {
   if (!resolverHttp) throw new Error('SKTOnline resolver is not configured');
@@ -453,7 +514,7 @@ async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
   }
 
   try {
-    const response = await onlineHttp.get(pageUrl, { headers: { Referer: referer || `${SKTORRENT_BASE_URL}/` } });
+    const response = await onlineGet(pageUrl, { headers: { Referer: referer || `${SKTORRENT_BASE_URL}/` } });
     const finalUrl = absoluteUrl(response.request?.res?.responseUrl || pageUrl, ONLINE_BASE_URL) || pageUrl;
     const $ = cheerio.load(response.data);
     const title = sourceTitle || $('title').text().replace(/\s+/g, ' ').trim() || 'SKTOnline';
@@ -677,8 +738,62 @@ async function findSledujtetoByTitle(queries, titles) {
 
 
 
+function onlineSearchItemsFromHtml($, wantedTitles) {
+  let cards = $('div.well.well-sm').toArray();
+  if (!cards.length) cards = $('div.well-sm').toArray();
+  if (!cards.length) cards = $('div.well').toArray();
+  if (!cards.length) cards = $('article, .post, .item, .card').toArray();
+
+  const items = [];
+  const seen = new Set();
+  const collect = (link, contextNode) => {
+    const href = String(link.attr('href') || '').trim();
+    const pageUrl = absoluteUrl(href, ONLINE_BASE_URL);
+    if (!pageUrl || seen.has(pageUrl)) return;
+
+    let parsed;
+    try { parsed = new URL(pageUrl); } catch (_) { return; }
+    if (parsed.hostname.toLowerCase() !== 'online.sktorrent.eu') return;
+    const pathname = parsed.pathname || '/';
+    if (/^\/(?:search|login|register|users?|categories?)(?:\/|$)/i.test(pathname)) return;
+    if (pathname === '/' || pathname === '/videos') return;
+
+    const title = String(
+      link.attr('title') ||
+      link.find('img').attr('alt') ||
+      contextNode.find('span').first().text() ||
+      contextNode.find('h1,h2,h3,h4').first().text() ||
+      link.text() ||
+      contextNode.text() || ''
+    ).replace(/\s+/g, ' ').trim();
+
+    // Do not hard-reject cards here: current SKTOnline cards can contain dates,
+    // metadata and localized titles. The search itself already narrows results.
+    const score = title ? titleMatchScore(title, wantedTitles) : 0;
+    seen.add(pageUrl);
+    items.push({ href: pageUrl, title, score });
+  };
+
+  if (cards.length) {
+    for (const card of cards) {
+      const node = $(card);
+      const link = node.find('a[href]').first();
+      if (link.length) collect(link, node);
+    }
+  } else {
+    $('a[href]').each((_, element) => {
+      const link = $(element);
+      collect(link, link.closest('article,li,div,tr,td'));
+    });
+  }
+
+  return items
+    .sort((a, b) => (b.score - a.score))
+    .slice(0, 20);
+}
+
 async function searchDirectOnlineVideos(query, wantedTitles) {
-  const key = `online-title-search-v3:${normalize(query)}`;
+  const key = `online-title-search-v4:${normalize(query)}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
@@ -687,48 +802,35 @@ async function searchDirectOnlineVideos(query, wantedTitles) {
       const payload = await resolverPost('/v1/search', { query });
       const items = (Array.isArray(payload.items) ? payload.items : [])
         .filter(item => item && /^\d+$/.test(String(item.id || '')))
-        .filter(item => {
-          const context = String(item.title || '').replace(/\s+/g, ' ').trim();
-          return !context || !candidateHasConflictingYears(context, wantedTitles);
-        })
         .map(item => ({
           id: String(item.id),
-          title: String(item.title || '').replace(/\s+/g, ' ').trim()
+          href: `${ONLINE_BASE_URL}/video/${encodeURIComponent(String(item.id))}`,
+          title: String(item.title || '').replace(/\s+/g, ' ').trim(),
+          score: titleMatchScore(String(item.title || ''), wantedTitles)
         }));
-      cache.set(key, items, items.length ? 5 * 60 : 60);
-      return items;
+      if (items.length) {
+        cache.set(key, items, 5 * 60);
+        return items;
+      }
     } catch (error) {
       console.warn(`[resolver] search "${query}": ${error.message}`);
     }
   }
 
   try {
-    const response = await onlineHttp.get('/search/videos', {
-      params: { search_query: query },
+    const response = await onlineGet('/search/videos', {
+      params: {
+        type: 'public',
+        t: 'a',
+        o: 'mr',
+        search_query: query,
+        page: 1
+      },
       headers: { Referer: `${ONLINE_BASE_URL}/` }
     });
     const $ = cheerio.load(response.data);
-    const items = [];
-    const seen = new Set();
-
-    $("a[href^='/video/'], a[href*='online.sktorrent.eu/video/']").each((_, el) => {
-      const link = $(el);
-      const href = String(link.attr('href') || '');
-      const match = href.match(/\/video\/(\d+)/i);
-      if (!match || seen.has(match[1])) return;
-
-      const context = String(
-        link.attr('title') ||
-        link.find('img').attr('alt') ||
-        link.text() ||
-        link.closest('article,li,div,tr,td').text() || ''
-      ).replace(/\s+/g, ' ').trim();
-
-      seen.add(match[1]);
-      items.push({ id: match[1], title: context });
-    });
-
-    cache.set(key, items, items.length ? 5 * 60 : 60);
+    const items = onlineSearchItemsFromHtml($, wantedTitles);
+    cache.set(key, items, items.length ? 5 * 60 : 45);
     return items;
   } catch (error) {
     console.warn(`[direct-online] search "${query}": ${error.message}`);
@@ -737,13 +839,14 @@ async function searchDirectOnlineVideos(query, wantedTitles) {
 }
 
 async function streamsForDirectOnlineVideo(item) {
-  const pageUrl = `${ONLINE_BASE_URL}/video/${encodeURIComponent(item.id)}`;
-  const key = `direct-online-video-v3:${item.id}`;
+  const pageUrl = absoluteUrl(item && (item.href || (item.id ? `/video/${item.id}` : '')), ONLINE_BASE_URL);
+  if (!pageUrl) return [];
+  const key = `direct-online-video-v4:${pageUrl}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
   try {
-    const response = await onlineHttp.get(pageUrl, { headers: { Referer: `${ONLINE_BASE_URL}/` } });
+    const response = await onlineGet(pageUrl, { headers: { Referer: `${ONLINE_BASE_URL}/` } });
     const finalUrl = absoluteUrl(response.request?.res?.responseUrl || pageUrl, ONLINE_BASE_URL) || pageUrl;
     const $ = cheerio.load(response.data);
     const pageTitle = $('title').text().replace(/\s+/g, ' ').trim() || item.title || 'SKTOnline';
@@ -751,46 +854,53 @@ async function streamsForDirectOnlineVideo(item) {
 
     const add = (raw, label = '') => {
       const url = absoluteUrl(raw, finalUrl);
-      if (!url || !/\.mp4(?:$|[?#])/i.test(url)) return;
-      const quality = qualityLabel(label, url);
-      const languages = streamLanguages(`${pageTitle} ${label}`);
-      streams.push({
-        name: `SKTOnline • ${quality}`,
-        title: `🎧 ${formatLanguages(languages.audio)}\n💬 ${languages.subtitles.length ? formatLanguages(languages.subtitles) : 'Bez titulků'}\n🎬 ${quality}`,
-        url
-      });
+      if (!url || !isPlayableMediaUrl(url)) return;
+      const stream = makeStream('SKTOnline', pageTitle, url, label, finalUrl);
+      // Direct CDN files from SKTOnline do not need Stremio to replay the
+      // website cookie; the server only needs the cookie to discover them.
+      if (/\.mp4(?:$|[?#])/i.test(url)) stream.behaviorHints = { notWebReady: false };
+      streams.push(stream);
     };
 
-    $('video source[src], video[src]').each((_, el) => {
+    $('video#video source[src], video source[src], video[src], source[src]').each((_, el) => {
       add(
         $(el).attr('src'),
         $(el).attr('label') || $(el).attr('res') || $(el).attr('data-res') || ''
       );
     });
 
-    // Fallback for minor markup changes while preserving the direct MP4 path.
     if (!streams.length) {
       for (const media of mediaUrlsFromHtml($, response.data, finalUrl)) add(media.url, media.label);
     }
 
     const result = dedupeStreams(streams).slice(0, 8);
-    cache.set(key, result, result.length ? 10 * 60 : 60);
+    cache.set(key, result, result.length ? 10 * 60 : 45);
     return result;
   } catch (error) {
-    console.warn(`[direct-online] video ${item.id}: ${error.message}`);
+    console.warn(`[direct-online] page ${pageUrl}: ${error.message}`);
     return [];
   }
 }
 
 async function findDirectOnlineByTitle(queries, titles) {
-  const seenIds = new Set();
-  for (const query of queries.slice(0, 10)) {
-    const items = await searchDirectOnlineVideos(query, titles);
-    const fresh = items.filter(item => !seenIds.has(item.id)).slice(0, 10);
-    fresh.forEach(item => seenIds.add(item.id));
+  const seenPages = new Set();
+  const searchQueries = dedupe(queries || []).slice(0, 9);
+
+  for (let offset = 0; offset < searchQueries.length; offset += 3) {
+    const group = searchQueries.slice(offset, offset + 3);
+    const resultGroups = await Promise.all(group.map(query => searchDirectOnlineVideos(query, titles)));
+    const fresh = [];
+    for (const items of resultGroups) {
+      for (const item of items) {
+        const key = String(item.href || item.id || '');
+        if (!key || seenPages.has(key)) continue;
+        seenPages.add(key);
+        fresh.push(item);
+      }
+    }
     if (!fresh.length) continue;
 
-    const batches = await Promise.all(fresh.map(streamsForDirectOnlineVideo));
+    const batches = await Promise.all(fresh.slice(0, 12).map(streamsForDirectOnlineVideo));
     const streams = dedupeStreams(batches.flat());
     if (streams.length) return streams.slice(0, 12);
   }
@@ -917,7 +1027,7 @@ async function findOnlineStreams({ imdbId, titles, type, season, episode, sktUse
   }
 
   const [fromDirectOnline, fromTorrentDetails, sledujToByTitle] = await Promise.all([
-    directProviderWithin(findDirectOnlineByTitle(queries, titles), 13000, 'SKTOnline title search'),
+    directProviderWithin(findDirectOnlineByTitle(queries, titles), 18000, 'SKTOnline title search'),
     directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 20000, 'SKTorrent detail players'),
     directProviderWithin(findSledujtetoByTitle(queries, titles), 12000, 'SledujTo title search')
   ]);
