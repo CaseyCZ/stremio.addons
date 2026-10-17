@@ -757,6 +757,33 @@ async function findDirectOnlineByTitle(queries, titles) {
   return [];
 }
 
+async function streamsFromSledujSearch(searchUrl, titles, referer) {
+  const key = 'sleduj-linked-search:' + searchUrl;
+  let pages = cache.get(key);
+  if (pages === undefined) {
+    try {
+      const response = await sledujtetoHttp.get(searchUrl, { headers: { Referer: referer } });
+      const $ = cheerio.load(response.data);
+      pages = [];
+      $('a[href*="/file/"]').each((_, el) => {
+        const link = $(el);
+        const url = absoluteUrl(link.attr('href'), searchUrl);
+        if (!url || !isSledujToUrl(url) || !/\/file\/\d+/i.test(url)) return;
+        const title = String(link.attr('title') || link.text() || link.closest('article,li,div').text() || '').trim();
+        if (title && titleMatchScore(title, titles) < 0.45) return;
+        pages.push(url);
+      });
+      pages = dedupe(pages).slice(0, 8);
+      cache.set(key, pages, pages.length ? 300 : 60);
+    } catch (error) {
+      console.warn('[sledujteto] linked search failed: ' + error.message);
+      return [];
+    }
+  }
+  const streams = await Promise.all(pages.map(url => streamsForSledujteto(url, searchUrl)));
+  return dedupeStreams(streams.flat());
+}
+
 async function streamsFromSktorrentDetail(candidate, client = null) {
   const key = `skt-detail-direct:${client ? client.clientKey : 'anon'}:${candidate.id}`;
   const cached = cache.get(key);
@@ -779,11 +806,15 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
 
     const links = urlsFromHtml($, response.data, finalUrl);
     const sledujLinks = links.filter(url => isSledujToUrl(url) && /\/file\/\d+/i.test(url));
+    const sledujSearchLinks = links.filter(url => isSledujToUrl(url) && /\/vyhledat\//i.test(url));
     const onlineEntries = onlineEmbedEntriesFromDetail($, finalUrl, title);
   const onlineDirectLinks = links.filter(url => isSktOnlineUrl(url) && isPlayableMediaUrl(url));
 
     const [sledujBatches, onlineBatches] = await Promise.all([
-      Promise.all(sledujLinks.slice(0, 4).map(url => streamsForSledujteto(url, finalUrl))),
+      Promise.all([
+        ...sledujLinks.slice(0, 4).map(url => streamsForSledujteto(url, finalUrl)),
+        ...sledujSearchLinks.slice(0, 2).map(url => streamsFromSledujSearch(url, [title], finalUrl))
+      ]),
       Promise.all([
       ...onlineEntries.slice(0, 6).map(entry => streamsForOnlinePage(entry.url, finalUrl, entry.title || title)),
       ...onlineDirectLinks.slice(0, 4).map(url => Promise.resolve([makeStream('SKTOnline', title, url, '', finalUrl)]))
