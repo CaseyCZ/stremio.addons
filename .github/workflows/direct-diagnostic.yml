@@ -20,39 +20,39 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --omit=dev --no-audit --no-fund
-      - name: Inspect SKTOnline markup
+      - name: Test SKTOnline detail requests
         run: |
           node <<'NODE'
           const axios = require('axios');
           const cheerio = require('cheerio');
           const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
           const base='https://online.sktorrent.eu';
+          const cookieMap=new Map();
+          const absorb=r=>{for(const c of (r.headers['set-cookie']||[])){const p=String(c).split(';')[0];const i=p.indexOf('=');if(i>0)cookieMap.set(p.slice(0,i),p.slice(i+1));}};
+          const cookie=()=>[...cookieMap].map(([k,v])=>`${k}=${v}`).join('; ');
+          const baseHeaders=(referer)=>({'User-Agent':UA,'Accept-Encoding':'identity','Accept':'text/html,application/xhtml+xml,application/json,*/*','Accept-Language':'cs-CZ,cs;q=0.9,en;q=0.8',Referer:referer,...(cookie()?{Cookie:cookie()}: {})});
+          const describe=(name,r)=>{const text=String(r.data||'');const $=cheerio.load(text);const src=$('video#video source[src],video source[src],video[src],source[src]').map((_,e)=>$(e).attr('src')).get();console.log(name,JSON.stringify({status:r.status,final:r.request?.res?.responseUrl,bytes:text.length,contentType:r.headers['content-type'],contentLength:r.headers['content-length'],setCookie:(r.headers['set-cookie']||[]).length,title:$('title').text().trim(),video:$('video').length,sources:src.slice(0,6),start:text.slice(0,180)}));};
           (async()=>{
-            const home=await axios.get(base+'/',{timeout:15000,headers:{'User-Agent':UA,'Accept-Encoding':'identity'}});
-            const cookies=(home.headers['set-cookie']||[]).map(x=>x.split(';')[0]).join('; ');
-            const headers={'User-Agent':UA,'Accept-Encoding':'identity',Referer:base+'/',...(cookies?{Cookie:cookies}:{})};
-            const search=await axios.get(base+'/search/videos',{timeout:15000,params:{type:'public',t:'a',o:'mr',search_query:'Barbie',page:1},headers});
+            const home=await axios.get(base+'/',{timeout:15000,headers:baseHeaders(base+'/')}); absorb(home); describe('HOME',home);
+            const search=await axios.get(base+'/search/videos',{timeout:15000,params:{type:'public',t:'a',o:'mr',search_query:'Barbie',page:1},headers:baseHeaders(base+'/')}); absorb(search); describe('SEARCH',search);
             const $=cheerio.load(search.data);
-            console.log('SEARCH',search.status,'bytes',String(search.data||'').length,'cards',$('div.well.well-sm').length,'videoLinks',$("a[href*='/video/']").length);
-            const cards=[];
-            $('div.well.well-sm').slice(0,8).each((i,e)=>{
-              const n=$(e); const all=n.find('a[href]').map((_,a)=>$(a).attr('href')).get();
-              cards.push({i,first:all[0],all:all.slice(0,6),text:n.text().replace(/\s+/g,' ').trim().slice(0,180)});
-            });
-            console.log('CARDS',JSON.stringify(cards));
-            const vids=[];
-            $("a[href*='/video/']").slice(0,10).each((i,e)=>{
-              const a=$(e); vids.push({href:a.attr('href'),title:String(a.attr('title')||a.find('img').attr('alt')||a.text()).replace(/\s+/g,' ').trim(),card:a.closest('div.well').text().replace(/\s+/g,' ').trim().slice(0,220)});
-            });
-            console.log('VIDS',JSON.stringify(vids));
-            for (const item of vids.slice(0,4)) {
-              const url=new URL(item.href,base).toString();
-              const r=await axios.get(url,{timeout:15000,headers});
-              const p=cheerio.load(r.data);
-              const sources=p('video#video source[src], video source[src], video[src], source[src]').map((_,e)=>({src:p(e).attr('src'),label:p(e).attr('label'),type:p(e).attr('type')})).get();
-              const mp4=[...String(r.data||'').matchAll(/https?:\/\/[^\s"'<>]+?\.mp4(?:\?[^\s"'<>]*)?/gi)].slice(0,6).map(m=>m[0]);
-              const iframes=p('iframe[src]').map((_,e)=>p(e).attr('src')).get().slice(0,6);
-              console.log('DETAIL',JSON.stringify({url,final:r.request?.res?.responseUrl,status:r.status,bytes:String(r.data||'').length,title:p('title').text().trim(),sources,mp4,iframes,video:p('video').length}));
+            const links=$("a[href*='/video/']").map((_,e)=>$(e).attr('href')).get();
+            console.log('COOKIE_NAMES',JSON.stringify([...cookieMap.keys()]));
+            console.log('VIDEO_LINKS',JSON.stringify(links.slice(0,6)));
+            const target=links.find(x=>/barbie/i.test(x))||links[0];
+            const exact=new URL(target,base).toString();
+            const id=(target.match(/\/video\/(\d+)/)||[])[1];
+            const searchRef=search.request?.res?.responseUrl||base+'/search/videos';
+            for(const [name,url,ref,extra] of [
+              ['EXACT_HOME_REF',exact,base+'/',{}],
+              ['EXACT_SEARCH_REF',exact,searchRef,{}],
+              ['ID_ONLY_SEARCH_REF',base+'/video/'+id,searchRef,{}],
+              ['EXACT_XHR',exact,searchRef,{'X-Requested-With':'XMLHttpRequest'}],
+              ['EXACT_BROWSER',exact,searchRef,{'Sec-Fetch-Dest':'document','Sec-Fetch-Mode':'navigate','Sec-Fetch-Site':'same-origin','Upgrade-Insecure-Requests':'1'}]
+            ]){
+              try{const r=await axios.get(url,{timeout:15000,headers:{...baseHeaders(ref),...extra},maxRedirects:5,validateStatus:s=>s>=200&&s<500}); absorb(r); describe(name,r);}catch(e){console.log(name,'ERR',e.message,e.response?.status||'');}
             }
+            const card=$("a[href*='/video/']").filter((_,e)=>$(e).attr('href')===target).first().closest('div.well');
+            console.log('CARD_HTML',String(card.html()||'').replace(/\s+/g,' ').slice(0,2500));
           })().catch(e=>{console.error('DIAG_ERROR',e.message,e.response?.status,e.response?.headers?.location||'');process.exitCode=1;});
           NODE
