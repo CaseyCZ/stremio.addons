@@ -267,7 +267,7 @@ function formatLanguages(codes) {
 
 function qualityLabel(label, src) {
   const text = `${label || ''} ${src || ''}`;
-  const match = text.match(/\b(2160|1440|1080|720|480|360)p?\b/i);
+  const match = text.match(/\b(2160|1440|1080|720|480|360|240)p?\b/i);
   if (match) return `${match[1]}p`;
   if (/\b4k\b/i.test(text)) return '2160p';
   if (/\bfull\s*hd\b|\bfhd\b/i.test(text)) return '1080p';
@@ -395,7 +395,7 @@ async function streamsForKnownOnlineVideoId(videoId, pageTitle = 'SKTOnline') {
     return [];
   }
 
-  const qualities = ['1080p', '720p', '480p', '360p'];
+  const qualities = ['1080p', '720p', '480p', '360p', '240p'];
   const checks = await Promise.all(qualities.map(async quality => {
     const url = `https://online${edge}.sktorrent.eu/media/videos//h264/${id}_${quality}.mp4`;
     return await probeSktCdnHead(url) ? { url, quality } : null;
@@ -604,64 +604,79 @@ function isSktOnlineUrl(url) {
 }
 
 async function searchSktorrentDetails(query, wantedTitles, trustedReference = false) {
-  // Restore the permissive search strategy that was proven working on
-  // 2026-10-16 around 20:03, while keeping today's authenticated detail
-  // resolver and improved embed parsing.
+  // Direct must inspect every relevant SKTorrent result, not only the first
+  // handful. Walk result pages until pagination ends (with a high safety cap),
+  // dedupe by torrent id and keep all title-matching candidates.
   const wantedKey = (wantedTitles || []).map(normalize).sort().join('|');
-  const key = `skt-detail-search-history-v1:${normalize(query)}:${trustedReference ? 'trusted' : 'normal'}:${wantedKey}`;
+  const key = `skt-detail-search-all-v1:${normalize(query)}:${trustedReference ? 'trusted' : 'normal'}:${wantedKey}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
+  const items = [];
+  const seen = new Set();
+  const MAX_PAGES = 12;
+  let lastPage = 0;
+
   try {
-    const response = await sktorrentHttp.get('/torrent/torrents_v2.php', {
-      params: { search: query, category: 0, active: 0, order: 'data', by: 'DESC', page: 0 },
-      headers: { Referer: `${SKTORRENT_BASE_URL}/torrent/torrents_v2.php` }
-    });
-    const $ = cheerio.load(response.data);
-    const items = [];
-    const seen = new Set();
-
-    $('a[href*="details.php"]').each((_, el) => {
-      const link = $(el);
-      const href = String(link.attr('href') || '');
-      const idMatch = href.match(/[?&]id=([a-f0-9]{40})/i);
-      if (!idMatch || seen.has(idMatch[1])) return;
-
-      const cell = link.closest('td');
-      const card = cell.length ? cell : link.closest('tr, article, div');
-      const name = String(
-        link.attr('title') ||
-        link.find('img').attr('alt') ||
-        link.text() ||
-        card.text() || ''
-      ).replace(/\s+/g, ' ').trim();
-      if (!name) return;
-
-      const score = titleMatchScore(name, wantedTitles);
-      // This 0.45 threshold and lack of hard year rejection matches the
-      // successful 20:03 code path. Explicit adult-category results are still
-      // discarded so permissive matching does not promote unrelated XXX rows.
-      if (!trustedReference && score < 0.45) return;
-
-      const category = String(card.find('b').first().text() || '').trim();
-      if (/^x{3}$/i.test(category) || /\bxxx\b/i.test(category)) return;
-
-      const detailsUrl = absoluteUrl(href, SKTORRENT_SEARCH_URL);
-      if (!detailsUrl) return;
-
-      const cardHtml = String(card.html() || '');
-      const hasPlayVideo = /play[\s_-]*video|title\s*=\s*["'][^"']*\bplay\b|alt\s*=\s*["'][^"']*\bplay\b|fa-play(?:-circle)?|glyphicon-play|online\d*\.sktorrent\.eu/i.test(cardHtml);
-
-      seen.add(idMatch[1]);
-      items.push({
-        id: idMatch[1],
-        name,
-        category,
-        score,
-        detailsUrl,
-        hasPlayVideo
+    for (let page = 0; page < MAX_PAGES && page <= lastPage; page += 1) {
+      const response = await sktorrentHttp.get('/torrent/torrents_v2.php', {
+        params: { search: query, category: 0, active: 0, order: 'data', by: 'DESC', page },
+        headers: { Referer: `${SKTORRENT_BASE_URL}/torrent/torrents_v2.php` }
       });
-    });
+      const $ = cheerio.load(response.data);
+
+      $('a[href*="page="]').each((_, el) => {
+        const href = String($(el).attr('href') || '');
+        const match = href.match(/[?&]page=(\di+)/i);
+        if (match) lastPage = Math.min(MAX_PAGES - 1, Math.max(lastPage, Number(match[1])));
+      });
+
+      let rawCount = 0;
+      let newIds = 0;
+      $('a[href*="details.php"]').each((_, el) => {
+        const link = $(el);
+        const href = String(link.attr('href') || '');
+        const idMatch = href.match(/[?&]id=([a-f0-9]{40})/i);
+        if (!idMatch) return;
+        rawCount += 1;
+        if (seen.has(idMatch[1])) return;
+
+        const cell = link.closest('td');
+        const card = cell.length ? cell : link.closest('tr, article, div');
+        const name = String(
+          link.attr('title') ||
+          link.find('img').attr('alt') ||
+          link.text() ||
+          card.text() || ''
+        ).replace(/\s+/g, ' ').trim();
+        if (!name) return;
+
+        const score = titleMatchScore(name, wantedTitles);
+        if (!trustedReference && score < 0.45) return;
+
+        const category = String(card.find('b').first().text() || '').trim();
+        if (/^x{3}$/i.test(category) || /\bxxx\b/i.test(category)) return;
+
+        const detailsUrl = absoluteUrl(href, SKTORRENT_SEARCH_URL);
+        if (!detailsUrl) return;
+
+        const cardHtml = String(card.html() || '');
+        const hasPlayVideo = /play[\s_-]*video|title\s*=\s*["'][^"']*\bplay\b|malt\s*=\s*["'][^"']*\bplay\b|fa-play(?:-circle)?|glyphicon-play|online\d*\.sktorrent\.eu/i.test(cardHtml);
+
+        seen.add(idMatch[1]);
+        newIds += 1;
+        items.push({
+          id: idMatch[1],
+          name,
+          category,
+          score,
+          detailsUrl,
+          hasPlayVideo
+        });
+      });
+
+      if (!rawCount || (page > 0 && newIds === 0)) break;
+    }
 
     const result = items.sort((a, b) => {
       const scoreDiff = (b.score || 0) - (a.score || 0);
@@ -669,13 +684,13 @@ async function searchSktorrentDetails(query, wantedTitles, trustedReference = fa
       const playVideoDiff = Number(b.hasPlayVideo) - Number(a.hasPlayVideo);
       if (playVideoDiff) return playVideoDiff;
       return candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
-    }).slice(0, 16);
+    });
 
     cache.set(key, result, result.length ? 5 * 60 : 60);
     return result;
   } catch (error) {
     console.warn(`[direct] SKTorrent search "${query}": ${error.message}`);
-    return [];
+    return items;
   }
 }
 
@@ -1209,19 +1224,20 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
 }
 
 async function findFromSktorrentDetails(queries, titles, imdbId, client = null) {
-  // The working 20:03 build tried several title variants. Later revisions
-  // collapsed this to one plain-title query, which made direct discovery much
-  // easier to miss. Restore the proven four-query collection, but keep the
-  // current authenticated detail fetcher and current embed/CDN resolver.
+  // Collect every candidate returned by all useful title variants, then inspect
+  // every candidate detail. A later torrent can be the one carrying the
+  // SKTOnline iframe, so do not stop after the first Direct hit.
   const candidates = new Map();
-  const historyQueries = dedupe((queries || []).filter(Boolean)).slice(0, 4);
+  const historyQueries = dedupe((queries || []).filter(Boolean));
 
-  for (const query of historyQueries) {
-    const found = await searchSktorrentDetails(query, titles);
-    for (const item of found) {
-      if (!candidates.has(item.id)) candidates.set(item.id, item);
+  for (let offset = 0; offset < historyQueries.length; offset += 3) {
+    const group = historyQueries.slice(offset, offset + 3);
+    const groups = await Promise.all(group.map(query => searchSktorrentDetails(query, titles)));
+    for (const found of groups) {
+      for (const item of found) {
+        if (!candidates.has(item.id)) candidates.set(item.id, item);
+      }
     }
-    if (candidates.size >= 16) break;
   }
 
   if (!candidates.size) return [];
@@ -1234,22 +1250,17 @@ async function findFromSktorrentDetails(queries, titles, imdbId, client = null) 
     return candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
   });
 
-  const firstWave = await Promise.all(
-    rankedCandidates.slice(0, 10).map(candidate => streamsFromSktorrentDetail(candidate, client))
-  );
-  let result = dedupeStreams(firstWave.flat());
-
-  // If the best title matches do not carry a direct player, inspect the next
-  // matches too. This mirrors the old behavior where multiple query variants
-  // could surface a different release containing the SKTOnline embed.
-  if (!result.length && rankedCandidates.length > 10) {
-    const secondWave = await Promise.all(
-      rankedCandidates.slice(10, 16).map(candidate => streamsFromSktorrentDetail(candidate, client))
+  let result = [];
+  const DETAIL_CONCURRENCY = 6;
+  for (let offset = 0; offset < rankedCandidates.length; offset += DETAIL_CONCURRENCY) {
+    const batch = rankedCandidates.slice(offset, offset + DETAIL_CONCURRENCY);
+    const resolved = await Promise.all(
+      batch.map(candidate => streamsFromSktorrentDetail(candidate, client))
     );
-    result = dedupeStreams(secondWave.flat());
+    result = dedupeStreams([...result, ...resolved.flat()]);
   }
 
-  return result.slice(0, 16);
+  return result;
 }
 
 function directProviderWithin(promise, timeoutMs, label) {
@@ -1278,7 +1289,7 @@ async function findOnlineStreams({ imdbId, titles, type, season, episode, sktUse
 
   const [fromDirectOnline, fromTorrentDetails, sledujToByTitle] = await Promise.all([
     directProviderWithin(findDirectOnlineByTitle(queries, titles), 18000, 'SKTOnline title search'),
-    directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 20000, 'SKTorrent detail players'),
+    directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 45000, 'SKTorrent detail players'),
     directProviderWithin(findSledujtetoByTitle(queries, titles), 12000, 'SledujTo title search')
   ]);
 
@@ -1286,7 +1297,7 @@ async function findOnlineStreams({ imdbId, titles, type, season, episode, sktUse
     ...fromDirectOnline,
     ...fromTorrentDetails,
     ...sledujToByTitle
-  ]).slice(0, 24);
+  ]).slice(0, 48);
 }
 
 module.exports = {
