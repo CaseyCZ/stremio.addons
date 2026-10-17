@@ -1,0 +1,109 @@
+name: One-time authenticated direct details
+
+on:
+  push:
+    branches: [Master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use SKTorrent login for direct detail pages
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          addon = Path('addon.js')
+          text = addon.read_text()
+          old = '''? resolveWithin(findOnlineStreams({
+                    imdbId: parsed.imdbId,
+                    titles,
+                    type: req.params.type,
+                    season: parsed.season,
+                    episode: parsed.episode
+                  }), 18000, 'direct-detail')'''
+          new = '''? resolveWithin(findOnlineStreams({
+                    imdbId: parsed.imdbId,
+                    titles,
+                    type: req.params.type,
+                    season: parsed.season,
+                    episode: parsed.episode,
+                    sktUsername: cfg.enableTorrents ? cfg.sktUsername : '',
+                    sktPassword: cfg.enableTorrents ? cfg.sktPassword : ''
+                  }), 22000, 'direct-detail')'''
+          if old not in text:
+            raise SystemExit('addon direct call block not found')
+          text = text.replace(old, new, 1)
+          text = text.replace('combined-v11:', 'combined-v12:', 1)
+          addon.write_text(text)
+
+          online = Path('api/sktonline.js')
+          text = online.read_text()
+          if "require('./sktorrent')" not in text:
+            marker = "const { getCsfdUrl } = require('./csfd');\n"
+            if marker not in text:
+              raise SystemExit('sktonline import marker not found')
+            text = text.replace(marker, marker + "const { getClient } = require('./sktorrent');\n", 1)
+
+          old = "async function streamsFromSktorrentDetail(candidate) {\n  const key = `skt-detail-direct:${candidate.id}`;"
+          new = "async function streamsFromSktorrentDetail(candidate, client = null) {\n  const key = `skt-detail-direct:${client ? client.clientKey : 'anon'}:${candidate.id}`;"
+          if old not in text:
+            raise SystemExit('streamsFromSktorrentDetail signature not found')
+          text = text.replace(old, new, 1)
+
+          old = "const response = await sktorrentHttp.get(candidate.detailsUrl, { headers: { Referer: SKTORRENT_SEARCH_URL } });"
+          new = "const response = client\n      ? await client.authenticatedGet(candidate.detailsUrl, { headers: { Referer: SKTORRENT_SEARCH_URL } })\n      : await sktorrentHttp.get(candidate.detailsUrl, { headers: { Referer: SKTORRENT_SEARCH_URL } });"
+          if old not in text:
+            raise SystemExit('detail GET source not found')
+          text = text.replace(old, new, 1)
+
+          old = "async function findFromSktorrentDetails(queries, titles, imdbId) {"
+          new = "async function findFromSktorrentDetails(queries, titles, imdbId, client = null) {"
+          if old not in text:
+            raise SystemExit('findFromSktorrentDetails signature not found')
+          text = text.replace(old, new, 1)
+
+          old = "const batches = await Promise.all(rankedCandidates.slice(0, 10).map(streamsFromSktorrentDetail));"
+          new = "const batches = await Promise.all(rankedCandidates.slice(0, 10).map(candidate => streamsFromSktorrentDetail(candidate, client)));"
+          if old not in text:
+            raise SystemExit('detail batches source not found')
+          text = text.replace(old, new, 1)
+
+          old = "async function findOnlineStreams({ imdbId, titles, type, season, episode }) {\n  const queries = buildQueries(titles, type, season, episode);"
+          new = "async function findOnlineStreams({ imdbId, titles, type, season, episode, sktUsername = '', sktPassword = '' }) {\n  const queries = buildQueries(titles, type, season, episode);\n  let sktClient = null;\n  if (sktUsername && sktPassword) {\n    try { sktClient = getClient(sktUsername, sktPassword); } catch (_) {}\n  }"
+          if old not in text:
+            raise SystemExit('findOnlineStreams header not found')
+          text = text.replace(old, new, 1)
+
+          old = "directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId), 16000, 'SKTorrent detail players')"
+          new = "directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 20000, 'SKTorrent detail players')"
+          if old not in text:
+            raise SystemExit('direct detail provider call not found')
+          text = text.replace(old, new, 1)
+          online.write_text(text)
+          PY
+
+      - name: Syntax check
+        run: |
+          node --check addon.js
+          node --check api/sktonline.js
+          node --check api/sktorrent.js
+
+      - name: Commit patch and remove one-time workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/one-time-auth-direct-details.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add addon.js api/sktonline.js .github/workflows/one-time-auth-direct-details.yml
+          git commit -m "Use SKTorrent login for direct detail players"
+          git push
