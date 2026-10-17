@@ -678,7 +678,7 @@ async function findSledujtetoByTitle(queries, titles) {
 
 
 async function searchDirectOnlineVideos(query, wantedTitles) {
-  const key = `online-title-search-v2:${normalize(query)}`;
+  const key = `online-title-search-v3:${normalize(query)}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
@@ -724,7 +724,6 @@ async function searchDirectOnlineVideos(query, wantedTitles) {
         link.closest('article,li,div,tr,td').text() || ''
       ).replace(/\s+/g, ' ').trim();
 
-      if (context && candidateHasConflictingYears(context, wantedTitles)) return;
       seen.add(match[1]);
       items.push({ id: match[1], title: context });
     });
@@ -739,7 +738,48 @@ async function searchDirectOnlineVideos(query, wantedTitles) {
 
 async function streamsForDirectOnlineVideo(item) {
   const pageUrl = `${ONLINE_BASE_URL}/video/${encodeURIComponent(item.id)}`;
-  return streamsForOnlinePage(pageUrl, `${ONLINE_BASE_URL}/`, item.title || '');
+  const key = `direct-online-video-v3:${item.id}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+
+  try {
+    const response = await onlineHttp.get(pageUrl, { headers: { Referer: `${ONLINE_BASE_URL}/` } });
+    const finalUrl = absoluteUrl(response.request?.res?.responseUrl || pageUrl, ONLINE_BASE_URL) || pageUrl;
+    const $ = cheerio.load(response.data);
+    const pageTitle = $('title').text().replace(/\s+/g, ' ').trim() || item.title || 'SKTOnline';
+    const streams = [];
+
+    const add = (raw, label = '') => {
+      const url = absoluteUrl(raw, finalUrl);
+      if (!url || !/\.mp4(?:$|[?#])/i.test(url)) return;
+      const quality = qualityLabel(label, url);
+      const languages = streamLanguages(`${pageTitle} ${label}`);
+      streams.push({
+        name: `SKTOnline • ${quality}`,
+        title: `🎧 ${formatLanguages(languages.audio)}\n💬 ${languages.subtitles.length ? formatLanguages(languages.subtitles) : 'Bez titulků'}\n🎬 ${quality}`,
+        url
+      });
+    };
+
+    $('video source[src], video[src]').each((_, el) => {
+      add(
+        $(el).attr('src'),
+        $(el).attr('label') || $(el).attr('res') || $(el).attr('data-res') || ''
+      );
+    });
+
+    // Fallback for minor markup changes while preserving the direct MP4 path.
+    if (!streams.length) {
+      for (const media of mediaUrlsFromHtml($, response.data, finalUrl)) add(media.url, media.label);
+    }
+
+    const result = dedupeStreams(streams).slice(0, 8);
+    cache.set(key, result, result.length ? 10 * 60 : 60);
+    return result;
+  } catch (error) {
+    console.warn(`[direct-online] video ${item.id}: ${error.message}`);
+    return [];
+  }
 }
 
 async function findDirectOnlineByTitle(queries, titles) {
