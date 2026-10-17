@@ -242,19 +242,16 @@ async function decorateSktOnlineSubtitleLabels(streams) {
       subtitleUrlExists(`https://online.sktorrent.eu/media/videos/vtt/${videoId}/cze.vtt`),
       subtitleUrlExists(`https://online.sktorrent.eu/media/videos/vtt/${videoId}/slo.vtt`)
     ]);
-    const labels = [];
-    if (hasCz) labels.push('🇨🇿 CZ');
-    if (hasSk) labels.push('🇸🇰 SK');
-    return [videoId, labels];
+    return [videoId, Boolean(hasCz || hasSk)];
   })));
 
   return streams.map(stream => {
     const videoId = sktVideoIdFromStream(stream);
     if (!videoId) return stream;
-    const labels = availability.get(videoId) || [];
+    const hasSubtitles = availability.get(videoId) === true;
     return {
       ...stream,
-      title: replaceStreamSubtitleLine(stream.title, labels.length ? labels.join(' • ') : 'Bez titulků')
+      title: replaceStreamSubtitleLine(stream.title, hasSubtitles ? 'Titulky' : 'Bez titulků')
     };
   });
 }
@@ -369,7 +366,7 @@ async function resolveSktOnlineSubtitles(cfg, type, requestId, parsed) {
   if (!cfg.enableOnline) return [];
 
   const fingerprint = configFingerprint(cfg);
-  const combinedKey = `combined-v14:${fingerprint}:${type}:${requestId}`;
+  const combinedKey = `combined-v15:${fingerprint}:${type}:${requestId}`;
   const sourceKey = `source-videoids-v1:${fingerprint}:${type}:${requestId}`;
   let videoIds = sourceIdentityCache.get(sourceKey);
 
@@ -508,7 +505,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const parsed = await resolveIncomingStremioId(cfg, req.params.type, req.params.id);
   if (!parsed) return res.json({ streams: [], cacheMaxAge: 0 });
 
-  const cacheKey = `combined-v14:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
+  const cacheKey = `combined-v15:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
   const cached = streamCache.get(cacheKey);
   if (cached !== undefined) return res.json({ streams: cached, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
 
