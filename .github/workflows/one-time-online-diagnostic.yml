@@ -1,0 +1,67 @@
+name: One-time SKTOnline diagnostic
+
+on:
+  push:
+    branches: [Master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Probe public SKTOnline search
+        shell: bash
+        run: |
+          python - <<'PY'
+          import html, re, urllib.parse, urllib.request
+
+          UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/114.0.0.0 Safari/537.36'
+          base = 'https://online.sktorrent.eu'
+
+          def get(url, referer=None):
+              headers = {'User-Agent': UA, 'Accept-Encoding': 'identity'}
+              if referer: headers['Referer'] = referer
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=12) as r:
+                  return r.geturl(), r.read().decode('utf-8', 'replace')
+
+          for query in ['The Dark Knight Rises', 'Pulp Fiction', 'Temny rytir povstal']:
+              url = base + '/search/videos?search_query=' + urllib.parse.quote(query)
+              try:
+                  final, body = get(url, base + '/')
+                  ids = []
+                  for m in re.finditer(r'(?:href=["\'](?:https?://online\.sktorrent\.eu)?/video/)(\d+)', body, re.I):
+                      if m.group(1) not in ids: ids.append(m.group(1))
+                  print(f'ONLINE SEARCH {query!r}: status=ok final={final} ids={len(ids)} sample={ids[:8]}')
+                  for vid in ids[:4]:
+                      try:
+                          vurl = f'{base}/video/{vid}'
+                          vfinal, vbody = get(vurl, url)
+                          mp4s = re.findall(r'https?://[^\s"\'<>]+?\.mp4(?:\?[^\s"\'<>]*)?', html.unescape(vbody), re.I)
+                          sources = re.findall(r'<source[^>]+src=["\']([^"\']+)', vbody, re.I)
+                          playable = list(dict.fromkeys(mp4s + sources))
+                          print(f'  VIDEO {vid}: final={vfinal} playable={len(playable)} sample={playable[:3]}')
+                      except Exception as e:
+                          print(f'  VIDEO {vid}: ERROR {type(e).__name__}: {e}')
+              except Exception as e:
+                  print(f'ONLINE SEARCH {query!r}: ERROR {type(e).__name__}: {e}')
+          PY
+
+      - name: Remove one-time workflow
+        if: always()
+        shell: bash
+        run: |
+          rm -f .github/workflows/one-time-online-diagnostic.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/one-time-online-diagnostic.yml
+          git commit -m "Remove one-time SKTOnline diagnostic"
+          git push
