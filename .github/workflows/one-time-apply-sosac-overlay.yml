@@ -1,0 +1,37 @@
+name: Apply Sosac overlay and subtitles
+
+on:
+  push:
+    branches:
+      - Master
+    paths:
+      - .github/workflows/one-time-apply-sosac-overlay.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patch
+        run: node scripts/apply-sosac-overlay-subtitles.js
+      - name: Validate JavaScript
+        run: |
+          node --check addon.js
+          node --check api/sosac-overlay.js
+          node --check api/sktonline.js
+          node --check api/sktorrent.js
+          npm run version:check
+      - name: Commit result
+        run: |
+          rm -f scripts/apply-sosac-overlay-subtitles.js
+          rm -f .github/workflows/one-time-add-sktonline-subtitles.yml
+          rm -f .github/workflows/one-time-apply-sosac-overlay.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add Sosac overlay and SKTOnline subtitles"
+          git push
