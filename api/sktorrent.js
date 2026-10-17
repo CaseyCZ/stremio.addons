@@ -43,7 +43,9 @@ function candidateYearMatches(candidate, wantedTitles) {
   const wantedYears = [...new Set((wantedTitles || []).flatMap(yearsInText))];
   if (!wantedYears.length) return true;
   const candidateYears = yearsInText(candidate);
-  if (!candidateYears.length) return false;
+  // SKTorrent release names often omit the year entirely. Missing year is
+  // not a mismatch; only an explicit conflicting year should reject it.
+  if (!candidateYears.length) return true;
   return candidateYears.some(year => wantedYears.includes(year));
 }
 
@@ -263,7 +265,7 @@ async function searchTorrents(query, wantedTitles, maxPages = 1) {
 
         const name = String(link.attr('title') || link.find('img').attr('alt') || link.text() || '').replace(/\s+/g, ' ').trim();
         const score = titleMatchScore(name, wantedTitles);
-        if (!name || !candidateYearMatches(name, wantedTitles) || candidateHasConflictingYears(name, wantedTitles) || score < 0.7) return;
+        if (!name || !candidateYearMatches(name, wantedTitles) || candidateHasConflictingYears(name, wantedTitles) || score < 0.55) return;
 
         const text = cell.text().replace(/\s+/g, ' ').trim();
         const category = cell.find('b').first().text().trim();
@@ -393,22 +395,40 @@ function chooseVideoFile(files, type, season, episode) {
   return videos.sort((a, b) => b.length - a.length)[0];
 }
 
+function searchTextVariants(value) {
+  const base = String(value || '')
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .replace(/TV (Mini )?Series/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!base) return [];
+  const noDia = base.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const noPunct = noDia.replace(/[\':]/g, '').replace(/\s+/g, ' ').trim();
+  const withoutYear = noPunct.replace(/\b(?:19|20)\d{2}\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const short = withoutYear.split(/\s+/).slice(0, 3).join(' ');
+  const dotted = withoutYear.replace(/\s+/g, '.');
+  return [...new Set([base, noDia, noPunct, withoutYear, short, dotted].filter(value => value && value.length >= 2))];
+}
+
 function queryVariants(titles, type, season, episode) {
   const out = [];
   for (const title of titles || []) {
-    const base = String(title || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-    if (!base) continue;
-    if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {
-      out.push(`${base} S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`);
-      out.push(`${base} ${season}x${String(episode).padStart(2, '0')}`);
-      out.push(base);
-    } else {
-      out.push(base);
-      const withoutYear = base.replace(/\b(?:19|20)\d{2}\b/g, ' ').replace(/\s+/g, ' ').trim();
-      if (withoutYear && withoutYear !== base) out.push(withoutYear);
+    const variants = searchTextVariants(title);
+    for (const variant of variants) {
+      if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {
+        const s = String(season).padStart(2, '0');
+        const e = String(episode).padStart(2, '0');
+        out.push(`${variant} S${s}E${e}`);
+        out.push(`${variant} ${season}x${e}`);
+        out.push(`${variant} S${s}`);
+        out.push(`${variant} ${season}. série`);
+        out.push(variant);
+      } else {
+        out.push(variant);
+      }
     }
   }
-  return [...new Set(out)].slice(0, 8);
+  return [...new Set(out)].slice(0, 16);
 }
 
 async function findTorrentStreams({ username, password, titles, type, season, episode, limit = 8 }) {
@@ -416,9 +436,14 @@ async function findTorrentStreams({ username, password, titles, type, season, ep
   const queries = queryVariants(titles, type, season, episode);
   const found = new Map();
 
-  for (const query of queries) {
-    const results = await searchTorrents(query, titles, 1);
-    for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
+  // Search several title variants in parallel, but keep the batch small so
+  // we improve coverage without hammering SKTorrent.
+  for (let offset = 0; offset < queries.length; offset += 4) {
+    const batch = queries.slice(offset, offset + 4);
+    const batches = await Promise.all(batch.map(query => searchTorrents(query, titles, 1)));
+    for (const results of batches) {
+      for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
+    }
     if (found.size >= limit * 2) break;
   }
 

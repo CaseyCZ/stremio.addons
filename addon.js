@@ -151,7 +151,9 @@ function titleCandidates(meta, type) {
     ...(Array.isArray(meta && meta.nameTranslations) ? meta.nameTranslations : [])
   ]).slice(0, 5);
   const year = type === 'movie' ? metaYear(meta) : null;
-  return year ? titles.map(title => `${title} ${year}`) : titles;
+  return year
+    ? uniqueStrings([...titles, ...titles.map(title => `${title} ${year}`)]).slice(0, 10)
+    : titles;
 }
 
 function resolveWithin(promise, timeoutMs, label) {
@@ -283,7 +285,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const parsed = parseStremioId(req.params.id);
   if (!parsed) return res.json({ streams: [], cacheMaxAge: 0 });
 
-  const cacheKey = `combined-v9:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
+  const cacheKey = `combined-v10:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
   const cached = streamCache.get(cacheKey);
   if (cached !== undefined) return res.json({ streams: cached, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
 
@@ -310,7 +312,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
           season: parsed.season,
           episode: parsed.episode,
           limit: 10
-        }), 15000, 'sktorrent-p2p')
+        }), 22000, 'sktorrent-p2p')
       : Promise.resolve([]);
 
     const [directRaw, torrents] = await Promise.all([directPromise, torrentPromise]);
