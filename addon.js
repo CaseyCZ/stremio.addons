@@ -366,7 +366,7 @@ async function resolveSktOnlineSubtitles(cfg, type, requestId, parsed) {
   if (!cfg.enableOnline) return [];
 
   const fingerprint = configFingerprint(cfg);
-  const combinedKey = `combined-v15:${fingerprint}:${type}:${requestId}`;
+  const combinedKey = `combined-v16:${fingerprint}:${type}:${requestId}`;
   const sourceKey = `source-videoids-v1:${fingerprint}:${type}:${requestId}`;
   let videoIds = sourceIdentityCache.get(sourceKey);
 
@@ -505,7 +505,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const parsed = await resolveIncomingStremioId(cfg, req.params.type, req.params.id);
   if (!parsed) return res.json({ streams: [], cacheMaxAge: 0 });
 
-  const cacheKey = `combined-v15:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
+  const cacheKey = `combined-v16:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
   const cached = streamCache.get(cacheKey);
   if (cached !== undefined) return res.json({ streams: cached, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
 

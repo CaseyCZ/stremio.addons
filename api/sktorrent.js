@@ -106,16 +106,70 @@ function codecTags(value) {
   return tags;
 }
 
-function languageLabel(value) {
+const LANGUAGE_DISPLAY = {
+  CZ: '🇨🇿 CZ',
+  SK: '🇸🇰 SK',
+  EN: '🇬🇧 EN',
+  PL: '🇵🇱 PL',
+  DE: '🇩🇪 DE',
+  HU: '🇭🇺 HU',
+  FR: '🇫🇷 FR',
+  ES: '🇪🇸 ES',
+  IT: '🇮🇹 IT',
+  RU: '🇷🇺 RU',
+  UA: '🇺🇦 UA'
+};
+
+function languageCodesFromText(value) {
   const text = String(value || '');
-  const langs = [];
-  if (/\b(CZ|CS|CZE|CES)\b/i.test(text)) langs.push('🇨🇿 CZ');
-  if (/\b(SK|SLK|SLO)\b/i.test(text)) langs.push('🇸🇰 SK');
-  if (/\b(EN|ENG)\b/i.test(text)) langs.push('🇬🇧 EN');
-  if (/\b(PL|POL)\b/i.test(text)) langs.push('🇵🇱 PL');
-  if (/\b(DE|GER|DEU)\b/i.test(text)) langs.push('🇩🇪 DE');
-  if (/\b(HU|HUN)\b/i.test(text)) langs.push('🇭🇺 HU');
-  return [...new Set(langs)].join(' • ');
+  const codes = [];
+  if (/\b(CZ|CS|CZE|CES)\b/i.test(text)) codes.push('CZ');
+  if (/\b(SK|SLK|SLO)\b/i.test(text)) codes.push('SK');
+  if (/\b(EN|ENG)\b/i.test(text)) codes.push('EN');
+  if (/\b(PL|POL)\b/i.test(text)) codes.push('PL');
+  if (/\b(DE|GER|DEU)\b/i.test(text)) codes.push('DE');
+  if (/\b(HU|HUN)\b/i.test(text)) codes.push('HU');
+  if (/\b(FR|FRE|FRA)\b/i.test(text)) codes.push('FR');
+  if (/\b(ES|SPA)\b/i.test(text)) codes.push('ES');
+  if (/\b(IT|ITA)\b/i.test(text)) codes.push('IT');
+  if (/\b(RU|RUS)\b/i.test(text)) codes.push('RU');
+  if (/\b(UA|UKR)\b/i.test(text)) codes.push('UA');
+  return [...new Set(codes)];
+}
+
+function formatLanguageCodes(codes) {
+  return [...new Set((codes || []).filter(Boolean))]
+    .map(code => LANGUAGE_DISPLAY[code] || `🌐 ${code}`)
+    .join(' • ');
+}
+
+function languageLabel(value) {
+  return formatLanguageCodes(languageCodesFromText(value));
+}
+
+function flagLanguageCode(src) {
+  const match = String(src || '').match(/\/flag\/([a-z]{2,3})\.png(?:$|[?#])/i);
+  if (!match) return null;
+  return ({
+    cz: 'CZ', cs: 'CZ', cze: 'CZ',
+    sk: 'SK', slk: 'SK', slo: 'SK',
+    gb: 'EN', en: 'EN', eng: 'EN', us: 'EN',
+    pl: 'PL', pol: 'PL',
+    de: 'DE', deu: 'DE', ger: 'DE',
+    hu: 'HU', hun: 'HU',
+    fr: 'FR', fra: 'FR', fre: 'FR',
+    es: 'ES', spa: 'ES',
+    it: 'IT', ita: 'IT',
+    ru: 'RU', rus: 'RU',
+    ua: 'UA', ukr: 'UA'
+  })[match[1].toLowerCase()] || null;
+}
+
+function subtitleHintFromCategory(category) {
+  const text = String(category || '');
+  if (/bez\s+titulk/i.test(text)) return 'Bez titulků';
+  if (/s\s+titulk/i.test(text)) return 'Titulky';
+  return '';
 }
 
 class SktorrentClient {
@@ -265,7 +319,7 @@ async function searchTorrents(query, wantedTitles, maxPages = 1, trustedReferenc
         const id = idMatch ? idMatch[1] : href.split('id=').pop();
         if (!id || seen.has(id)) return;
 
-        const name = String(link.attr('title') || link.find('img').attr('alt') || link.text() || '').replace(/\s+/g, ' ').trim();
+        const name = String(link.text() || link.attr('title') || link.find('img').attr('alt') || '').replace(/\s+/g, ' ').trim();
         const score = titleMatchScore(name, wantedTitles);
         if (!name || candidateHasConflictingYears(name, wantedTitles)) return;
         if (!trustedReference && (!candidateYearMatches(name, wantedTitles) || score < 0.55)) return;
@@ -273,6 +327,9 @@ async function searchTorrents(query, wantedTitles, maxPages = 1, trustedReferenc
         const text = cell.text().replace(/\s+/g, ' ').trim();
         const category = cell.find('b').first().text().trim();
         if (category && !/(film|seri|dokum|tv)/i.test(category)) return;
+        const flagLanguages = [...new Set(cell.find('img[src*="/flag/"]').map((_, flag) =>
+          flagLanguageCode($(flag).attr('src'))
+        ).get().filter(Boolean))];
         const sizeMatch = text.match(/Velkost\s*([^|]+)/i);
         const seedMatch = text.match(/Odosielaju\s*:\s*(\d+)/i);
 
@@ -281,6 +338,7 @@ async function searchTorrents(query, wantedTitles, maxPages = 1, trustedReferenc
           id,
           name,
           category,
+          flagLanguages,
           size: sizeMatch ? sizeMatch[1].trim() : '?',
           seeds: seedMatch ? Number(seedMatch[1]) : 0,
           score,
@@ -676,7 +734,8 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
     const combined = `${candidate.name} ${file.path}`;
     const quality = qualityFromText(combined);
     const tags = codecTags(combined);
-    const language = languageLabel(combined);
+    const language = formatLanguageCodes(candidate.flagLanguages) || languageLabel(combined);
+    const subtitleHint = subtitleHintFromCategory(candidate.category);
     const size = candidate.size !== '?' ? candidate.size : humanBytes(file.length);
     const fileName = String(file.path || '').split('/').pop();
     const releaseName = fileName
@@ -686,6 +745,7 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
     const details = [`👥 ${candidate.seeds} seed`, `📦 ${size}`, ...tags].filter(Boolean).join(' • ');
     const titleLines = [
       language ? `🎧 ${language}` : null,
+      subtitleHint ? `💬 ${subtitleHint}` : null,
       releaseName ? `🎞 ${releaseName}` : null,
       details
     ].filter(Boolean);
