@@ -110,11 +110,6 @@ jobs:
           if count != 1:
             raise SystemExit('queryVariants replacement failed')
 
-          old_loop = '''  for (const query of queries) {
-            const results = await searchTorrents(query, titles, 1);
-            for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
-            if (found.size >= limit * 2) break;
-          }'''
           new_loop = '''  // Search several title variants in parallel, but keep the batch small so
             // we improve coverage without hammering SKTorrent.
             for (let offset = 0; offset < queries.length; offset += 4) {
@@ -125,9 +120,10 @@ jobs:
               }
               if (found.size >= limit * 2) break;
             }'''
-          if old_loop not in text:
-            raise SystemExit('findTorrentStreams loop source not found')
-          text = text.replace(old_loop, new_loop, 1)
+          loop_pattern = r'  for \(const query of queries\) \{\n\s+const results = await searchTorrents\(query, titles, 1\);\n\s+for \(const item of results\) if \(!found\.has\(item\.id\)\) found\.set\(item\.id, item\);\n\s+if \(found\.size >= limit \* 2\) break;\n\s+\}'
+          text, count = re.subn(loop_pattern, lambda _: new_loop, text, count=1)
+          if count != 1:
+            raise SystemExit('findTorrentStreams loop replacement failed')
           skt.write_text(text)
           PY
 
