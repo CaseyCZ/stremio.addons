@@ -20,30 +20,29 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --omit=dev --no-audit --no-fund
-      - name: Locate SKTorrent Play Video controls
+      - name: Test canonical SKTOnline paths
         run: |
           node <<'NODE'
           const axios=require('axios');
           const cheerio=require('cheerio');
           const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
-          const base='https://sktorrent.eu';
+          const base='https://online.sktorrent.eu';
+          const cookies={};
+          const absorb=r=>{for(const x of (r.headers['set-cookie']||[])){const p=String(x).split(';')[0],i=p.indexOf('=');if(i>0)cookies[p.slice(0,i)]=p.slice(i+1);}};
+          const cookie=()=>Object.entries(cookies).map(([k,v])=>`${k}=${v}`).join('; ');
+          const h=ref=>({'User-Agent':UA,'Accept-Encoding':'identity',Accept:'text/html,application/xhtml+xml,*/*',Referer:ref,...(cookie()?{Cookie:cookie()}: {})});
+          const show=(name,r)=>{const text=String(r.data||''),$=cheerio.load(text);console.log(name,JSON.stringify({status:r.status,final:r.request?.res?.responseUrl,bytes:text.length,title:$('title').text().trim(),video:$('video').length,sources:$('video source[src],source[src],video[src]').map((_,e)=>$(e).attr('src')).get().slice(0,8),location:r.headers.location||''}));};
           (async()=>{
-            const r=await axios.get(base+'/torrent/torrents_v2.php',{timeout:15000,params:{search:'Barbie',category:0,active:0,order:'data',by:'DESC',page:0},headers:{'User-Agent':UA,'Accept-Encoding':'identity',Referer:base+'/torrent/torrents_v2.php'}});
-            const html=String(r.data||''); const $=cheerio.load(html);
-            console.log('SEARCH',r.status,'bytes',html.length);
-            const controls=[];
-            $('a,button,img,input,[onclick],[data-url],[data-href]').each((_,el)=>{
-              const n=$(el); const attrs={};
-              for(const a of ['href','src','title','alt','onclick','data-url','data-href','class','id']){const v=n.attr(a);if(v)attrs[a]=String(v).slice(0,500);}
-              const text=n.text().replace(/\s+/g,' ').trim().slice(0,250);
-              const blob=JSON.stringify(attrs)+' '+text;
-              if(/play\s*video|fa-play|glyphicon-play|online\d*\.sktorrent|online\.sktorrent|sledujteto|stream|embed/i.test(blob)) controls.push({tag:el.tagName,text,attrs});
-            });
-            console.log('CONTROLS',JSON.stringify(controls.slice(0,80)));
-            for(const needle of ['Play Video','play_video','fa-play','online.sktorrent','embed']) {
-              let pos=0,count=0;
-              while((pos=html.toLowerCase().indexOf(needle.toLowerCase(),pos))>=0 && count<12){console.log('AROUND',needle,html.slice(Math.max(0,pos-450),Math.min(html.length,pos+900)).replace(/\s+/g,' '));pos+=needle.length;count++;}
-              console.log('COUNT',needle,count);
-            }
+            const home=await axios.get(base+'/',{timeout:15000,headers:h(base+'/')});absorb(home);
+            const s=await axios.get(base+'/search/videos',{timeout:15000,params:{type:'public',t:'a',o:'mr',search_query:'Barbie',page:1},headers:h(base+'/')});absorb(s);
+            const $=cheerio.load(s.data); const a=$("a[href*='/video/']").filter((_,e)=>/barbie/i.test($(e).attr('href')||'')).first();
+            const href=a.attr('href'); const id=(href.match(/\/video\/(\d+)/)||[])[1]; const exact=new URL(href,base).toString(); const ref=s.request?.res?.responseUrl||base+'/search/videos';
+            console.log('TARGET',id,href);
+            for(const [name,url] of [
+              ['EXACT',exact],
+              ['ID_NO_SLASH',base+'/video/'+id],
+              ['ID_SLASH',base+'/video/'+id+'/'],
+              ['ID_DOUBLE_SLASH',base+'/video/'+id+'//']
+            ]){try{const r=await axios.get(url,{timeout:15000,headers:h(ref),maxRedirects:5,validateStatus:x=>x>=200&&x<500});absorb(r);show(name,r);}catch(e){console.log(name,'ERR',e.message,e.response?.status||'');}}
           })().catch(e=>{console.error('DIAG_ERROR',e.message,e.response?.status||'');process.exitCode=1;});
           NODE
