@@ -1,0 +1,67 @@
+name: One-time direct smoke
+
+on:
+  push:
+    branches: [Master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Test direct providers
+        continue-on-error: true
+        run: |
+          node - <<'NODE'
+          const { findOnlineStreams } = require('./api/sktonline');
+          const cases = [
+            {
+              imdbId: 'tt1345836',
+              titles: ['Temný rytíř povstal', 'The Dark Knight Rises', 'Temny rytir povstal'],
+              type: 'movie'
+            },
+            {
+              imdbId: 'tt0110912',
+              titles: ['Pulp Fiction: Historky z podsvětí', 'Pulp Fiction', 'Pulp Fiction Historky z podsveti'],
+              type: 'movie'
+            }
+          ];
+
+          (async () => {
+            for (const item of cases) {
+              const start = Date.now();
+              const streams = await findOnlineStreams(item);
+              const counts = {};
+              for (const stream of streams) {
+                const provider = String(stream.name || '').split(' • ')[0] || 'unknown';
+                counts[provider] = (counts[provider] || 0) + 1;
+              }
+              console.log(`DIRECT ${item.imdbId}: ${streams.length} streams in ${Date.now() - start}ms`, counts);
+            }
+          })().catch(error => {
+            console.error('DIRECT SMOKE ERROR', error.message);
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Remove one-time workflow
+        if: always()
+        shell: bash
+        run: |
+          rm -f .github/workflows/one-time-direct-smoke.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/one-time-direct-smoke.yml
+          git commit -m "Remove one-time direct stream smoke test"
+          git push
