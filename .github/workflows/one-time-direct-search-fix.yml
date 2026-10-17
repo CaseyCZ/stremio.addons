@@ -1,0 +1,203 @@
+name: One-time direct stream search fix
+
+on:
+  push:
+    branches: [Master]
+    paths:
+      - '.github/workflows/one-time-direct-search-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: Master
+          fetch-depth: 0
+
+      - name: Patch direct stream lookup
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('api/sktonline.js')
+          s = path.read_text()
+
+          # Match the working JohnnyK007 strategy more closely for series fallbacks.
+          s = s.replace(
+              ": dedupe([base, plain, shortTitle(plain, 3)]);",
+              ": dedupe([base, plain, shortTitle(plain, 3), shortTitle(plain, 1)]);"
+          )
+
+          search_fn = r'''async function searchDirectOnlineVideos(query, wantedTitles) {
+            const key = `online-title-search-v2:${normalize(query)}`;
+            const cached = cache.get(key);
+            if (cached !== undefined) return cached;
+
+            // JohnnyK007's working addon deliberately trusts the site's own search
+            // result and does not reject /video/<id> links by scraping surrounding text.
+            // Keep only an obvious conflicting year as a safety check.
+            if (resolverHttp) {
+              try {
+                const payload = await resolverPost('/v1/search', { query });
+                const items = (Array.isArray(payload.items) ? payload.items : [])
+                  .filter(item => item && /^\d+$/.test(String(item.id || '')))
+                  .filter(item => {
+                    const context = String(item.title || '').replace(/\s+/g, ' ').trim();
+                    return !context || !candidateHasConflictingYears(context, wantedTitles);
+                  })
+                  .map(item => ({
+                    id: String(item.id),
+                    title: String(item.title || '').replace(/\s+/g, ' ').trim()
+                  }));
+                cache.set(key, items, items.length ? 5 * 60 : 60);
+                return items;
+              } catch (error) {
+                console.warn(`[resolver] search "${query}": ${error.message}`);
+              }
+            }
+
+            try {
+              const response = await onlineHttp.get('/search/videos', {
+                params: { search_query: query },
+                headers: { Referer: `${ONLINE_BASE_URL}/` }
+              });
+              const $ = cheerio.load(response.data);
+              const items = [];
+              const seen = new Set();
+
+              $("a[href^='/video/'], a[href*='online.sktorrent.eu/video/']").each((_, el) => {
+                const link = $(el);
+                const href = String(link.attr('href') || '');
+                const match = href.match(/\/video\/(\d+)/i);
+                if (!match || seen.has(match[1])) return;
+
+                const context = String(
+                  link.attr('title') ||
+                  link.find('img').attr('alt') ||
+                  link.text() ||
+                  link.closest('article,li,div,tr,td').text() || ''
+                ).replace(/\s+/g, ' ').trim();
+
+                if (context && candidateHasConflictingYears(context, wantedTitles)) return;
+                seen.add(match[1]);
+                items.push({ id: match[1], title: context });
+              });
+
+              cache.set(key, items, items.length ? 5 * 60 : 60);
+              return items;
+            } catch (error) {
+              console.warn(`[direct-online] search "${query}": ${error.message}`);
+              return [];
+            }
+          }'''
+
+          s, n = re.subn(
+              r"async function searchDirectOnlineVideos\(query, wantedTitles\) \{.*?\n\}\n\nasync function streamsForDirectOnlineVideo",
+              search_fn + "\n\nasync function streamsForDirectOnlineVideo",
+              s,
+              count=1,
+              flags=re.S,
+          )
+          assert n == 1, 'searchDirectOnlineVideos replacement failed'
+
+          find_fn = r'''async function findDirectOnlineByTitle(queries, titles) {
+            // Important: search -> resolve immediately -> fallback to next query.
+            // The old code first ran up to ten searches and only then opened video
+            // pages, so the addon's 18 s outer timeout could discard good results.
+            const seenIds = new Set();
+            for (const query of queries.slice(0, 10)) {
+              const items = await searchDirectOnlineVideos(query, titles);
+              const fresh = items.filter(item => !seenIds.has(item.id)).slice(0, 10);
+              fresh.forEach(item => seenIds.add(item.id));
+              if (!fresh.length) continue;
+
+              const batches = await Promise.all(fresh.map(streamsForDirectOnlineVideo));
+              const streams = dedupeStreams(batches.flat());
+              if (streams.length) return streams.slice(0, 12);
+            }
+            return [];
+          }'''
+
+          s, n = re.subn(
+              r"async function findDirectOnlineByTitle\(queries, titles\) \{.*?\n\}\n\nasync function streamsFromSktorrentDetail",
+              find_fn + "\n\nasync function streamsFromSktorrentDetail",
+              s,
+              count=1,
+              flags=re.S,
+          )
+          assert n == 1, 'findDirectOnlineByTitle replacement failed'
+
+          provider_helper = r'''function directProviderWithin(promise, timeoutMs, label) {
+            let timer;
+            const timeout = new Promise(resolve => {
+              timer = setTimeout(() => {
+                console.warn(`[direct] ${label} timed out after ${timeoutMs}ms`);
+                resolve([]);
+              }, timeoutMs);
+            });
+            return Promise.race([
+              Promise.resolve(promise).catch(error => {
+                console.warn(`[direct] ${label} failed: ${error.message}`);
+                return [];
+              }),
+              timeout
+            ]).finally(() => clearTimeout(timer));
+          }
+
+          async function findOnlineStreams({ titles, type, season, episode }) {
+            const queries = buildQueries(titles, type, season, episode);
+
+            // Do not let one slow provider make the outer 18 s Stremio lookup throw
+            // away results already found by another provider.
+            const [fromDirectOnline, fromTorrentDetails, sledujToByTitle] = await Promise.all([
+              directProviderWithin(findDirectOnlineByTitle(queries, titles), 13000, 'SKTOnline title search'),
+              directProviderWithin(findFromSktorrentDetails(queries, titles), 14000, 'SKTorrent detail players'),
+              directProviderWithin(findSledujtetoByTitle(queries, titles), 12000, 'SledujTo title search')
+            ]);
+
+            return dedupeStreams([
+              ...fromDirectOnline,
+              ...fromTorrentDetails,
+              ...sledujToByTitle
+            ]).slice(0, 24);
+          }'''
+
+          s, n = re.subn(
+              r"async function findOnlineStreams\(\{ titles, type, season, episode \}\) \{.*?\n\}",
+              provider_helper,
+              s,
+              count=1,
+              flags=re.S,
+          )
+          assert n == 1, 'findOnlineStreams replacement failed'
+
+          path.write_text(s)
+
+          addon = Path('addon.js')
+          a = addon.read_text()
+          a2 = a.replace('combined-v8:', 'combined-v9:')
+          assert a2 != a, 'cache version replacement failed'
+          addon.write_text(a2)
+          PY
+
+      - name: Syntax check
+        run: |
+          node --check api/sktonline.js
+          node --check addon.js
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/one-time-direct-search-fix.yml
+          git add api/sktonline.js addon.js
+          git commit -m "Fix direct SKTOnline search latency and fallbacks"
+          git push origin Master
