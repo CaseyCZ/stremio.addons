@@ -1,0 +1,241 @@
+name: One-time Direct full torrent traversal
+
+on:
+  push:
+    branches: [Master]
+    paths:
+      - '.github/workflows/one-time-direct-all-torrents.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch Direct traversal
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('api/sktonline.js')
+          text = path.read_text()
+
+          new_search = r'''async function searchSktorrentDetails(query, wantedTitles, trustedReference = false) {
+  // Direct must inspect every relevant SKTorrent result, not only the first
+  // handful. Walk result pages until pagination ends (with a high safety cap),
+  // dedupe by torrent id and keep all title-matching candidates.
+  const wantedKey = (wantedTitles || []).map(normalize).sort().join('|');
+  const key = `skt-detail-search-all-v1:${normalize(query)}:${trustedReference ? 'trusted' : 'normal'}:${wantedKey}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+
+  const items = [];
+  const seen = new Set();
+  const MAX_PAGES = 12;
+  let lastPage = 0;
+
+  try {
+    for (let page = 0; page < MAX_PAGES && page <= lastPage; page += 1) {
+      const response = await sktorrentHttp.get('/torrent/torrents_v2.php', {
+        params: { search: query, category: 0, active: 0, order: 'data', by: 'DESC', page },
+        headers: { Referer: `${SKTORRENT_BASE_URL}/torrent/torrents_v2.php` }
+      });
+      const $ = cheerio.load(response.data);
+
+      // Discover real pagination from the result page. If there is no pager,
+      // page 0 is the complete result set.
+      $('a[href*="page="]').each((_, el) => {
+        const href = String($(el).attr('href') || '');
+        const match = href.match(/[?&]page=(\d+)/i);
+        if (match) lastPage = Math.min(MAX_PAGES - 1, Math.max(lastPage, Number(match[1])));
+      });
+
+      let rawCount = 0;
+      let newIds = 0;
+      $('a[href*="details.php"]').each((_, el) => {
+        const link = $(el);
+        const href = String(link.attr('href') || '');
+        const idMatch = href.match(/[?&]id=([a-f0-9]{40})/i);
+        if (!idMatch) return;
+        rawCount += 1;
+        if (seen.has(idMatch[1])) return;
+
+        const cell = link.closest('td');
+        const card = cell.length ? cell : link.closest('tr, article, div');
+        const name = String(
+          link.attr('title') ||
+          link.find('img').attr('alt') ||
+          link.text() ||
+          card.text() || ''
+        ).replace(/\s+/g, ' ').trim();
+        if (!name) return;
+
+        const score = titleMatchScore(name, wantedTitles);
+        if (!trustedReference && score < 0.45) return;
+
+        const category = String(card.find('b').first().text() || '').trim();
+        if (/^x{3}$/i.test(category) || /\bxxx\b/i.test(category)) return;
+
+        const detailsUrl = absoluteUrl(href, SKTORRENT_SEARCH_URL);
+        if (!detailsUrl) return;
+
+        const cardHtml = String(card.html() || '');
+        const hasPlayVideo = /play[\s_-]*video|title\s*=\s*["'][^"']*\bplay\b|alt\s*=\s*["'][^"']*\bplay\b|fa-play(?:-circle)?|glyphicon-play|online\d*\.sktorrent\.eu/i.test(cardHtml);
+
+        seen.add(idMatch[1]);
+        newIds += 1;
+        items.push({
+          id: idMatch[1],
+          name,
+          category,
+          score,
+          detailsUrl,
+          hasPlayVideo
+        });
+      });
+
+      // Defensive stop for sites that repeat the last page forever.
+      if (!rawCount || (page > 0 && newIds === 0)) break;
+    }
+
+    const result = items.sort((a, b) => {
+      const scoreDiff = (b.score || 0) - (a.score || 0);
+      if (scoreDiff) return scoreDiff;
+      const playVideoDiff = Number(b.hasPlayVideo) - Number(a.hasPlayVideo);
+      if (playVideoDiff) return playVideoDiff;
+      return candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
+    });
+
+    cache.set(key, result, result.length ? 5 * 60 : 60);
+    return result;
+  } catch (error) {
+    console.warn(`[direct] SKTorrent search "${query}": ${error.message}`);
+    return items;
+  }
+}
+'''
+
+          text, n = re.subn(
+              r'async function searchSktorrentDetails\(query, wantedTitles, trustedReference = false\) \{.*?\n\}\n\nasync function streamsForOnlinePage',
+              new_search + '\nasync function streamsForOnlinePage',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if n != 1:
+              raise SystemExit('searchSktorrentDetails replacement failed')
+
+          new_find = r'''async function findFromSktorrentDetails(queries, titles, imdbId, client = null) {
+  // Collect every candidate returned by all useful title variants, then inspect
+  // every candidate detail. Do not stop after 10/16 results or after the first
+  // Direct hit: a later torrent can be the one carrying the SKTOnline iframe.
+  const candidates = new Map();
+  const historyQueries = dedupe((queries || []).filter(Boolean));
+
+  for (let offset = 0; offset < historyQueries.length; offset += 3) {
+    const group = historyQueries.slice(offset, offset + 3);
+    const groups = await Promise.all(group.map(query => searchSktorrentDetails(query, titles)));
+    for (const found of groups) {
+      for (const item of found) {
+        if (!candidates.has(item.id)) candidates.set(item.id, item);
+      }
+    }
+  }
+
+  if (!candidates.size) return [];
+
+  const rankedCandidates = [...candidates.values()].sort((a, b) => {
+    const scoreDiff = (b.score || titleMatchScore(b.name, titles)) - (a.score || titleMatchScore(a.name, titles));
+    if (scoreDiff) return scoreDiff;
+    const playVideoDiff = Number(b.hasPlayVideo) - Number(a.hasPlayVideo);
+    if (playVideoDiff) return playVideoDiff;
+    return candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
+  });
+
+  let result = [];
+  const DETAIL_CONCURRENCY = 6;
+  for (let offset = 0; offset < rankedCandidates.length; offset += DETAIL_CONCURRENCY) {
+    const batch = rankedCandidates.slice(offset, offset + DETAIL_CONCURRENCY);
+    const resolved = await Promise.all(
+      batch.map(candidate => streamsFromSktorrentDetail(candidate, client))
+    );
+    result = dedupeStreams([...result, ...resolved.flat()]);
+  }
+
+  return result;
+}
+'''
+
+          text, n = re.subn(
+              r'async function findFromSktorrentDetails\(queries, titles, imdbId, client = null\) \{.*?\n\}\n\nfunction directProviderWithin',
+              new_find + '\nfunction directProviderWithin',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if n != 1:
+              raise SystemExit('findFromSktorrentDetails replacement failed')
+
+          # Give exhaustive detail traversal enough time and do not throw away
+          # valid unique Direct variants at 24 entries.
+          text = text.replace(
+              "directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 20000, 'SKTorrent detail players')",
+              "directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 45000, 'SKTorrent detail players')",
+              1,
+          )
+          text = text.replace(
+              "  ]).slice(0, 24);\n}",
+              "  ]).slice(0, 48);\n}",
+              1,
+          )
+
+          # The supplied player example also has a real 240p rendition. Keep it
+          # discoverable by the CDN fallback.
+          text = text.replace(
+              "const qualities = ['1080p', '720p', '480p', '360p'];",
+              "const qualities = ['1080p', '720p', '480p', '360p', '240p'];",
+              1,
+          )
+          text = text.replace(
+              "const match = text.match(/\\b(2160|1440|1080|720|480|360)p?\\b/i);",
+              "const match = text.match(/\\b(2160|1440|1080|720|480|360|240)p?\\b/i);",
+              1,
+          )
+
+          path.write_text(text)
+          PY
+
+      - name: Syntax and regression checks
+        shell: bash
+        run: |
+          node --check api/sktonline.js
+          node --check api/sktorrent.js
+          node --check addon.js
+          node <<'NODE'
+          const fs = require('fs');
+          const s = fs.readFileSync('api/sktonline.js', 'utf8');
+          if (!s.includes('skt-detail-search-all-v1')) throw new Error('all-results search missing');
+          if (s.includes('rankedCandidates.slice(0, 10)')) throw new Error('old first-wave limit remains');
+          if (!s.includes('DETAIL_CONCURRENCY = 6')) throw new Error('detail traversal batching missing');
+          if (!s.includes("'240p'")) throw new Error('240p fallback missing');
+          console.log('Direct full traversal regression checks OK');
+          NODE
+
+      - name: Commit patch and cleanup
+        shell: bash
+        run: |
+          rm -f .github/workflows/one-time-direct-all-torrents.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/sktonline.js .github/workflows/one-time-direct-all-torrents.yml
+          git commit -m "Inspect all SKTorrent matches for Direct players"
+          git push
