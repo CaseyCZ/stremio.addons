@@ -524,6 +524,7 @@ app.get('/health', (req, res) => {
     torrentsEnabled: true,
     torrentClients: activeClientCount(),
     resolverConfigured: Boolean(process.env.SKTONLINE_RESOLVER_URL),
+    sktonlineProxyConfigured: Boolean(String(process.env.SKTONLINE_PROXY_URL || '').trim()),
     providers: ['SKTOnline direct search', 'SKTOnline players from SKTorrent details', 'SledujTo', 'SKTorrent P2P', 'Sosac ID overlay'],
     sosacOverlay: true,
     streamCacheKeys: streamCache.keys().length,

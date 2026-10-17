@@ -1,6 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const NodeCache = require('node-cache');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 const { getClient } = require('./sktorrent');
 
 const SKTORRENT_BASE_URL = 'https://sktorrent.eu';
@@ -9,6 +10,7 @@ const ONLINE_BASE_URL = 'https://online.sktorrent.eu';
 const SLEDUJTETO_BASE_URL = 'https://www.sledujteto.cz';
 const RESOLVER_BASE_URL = String(process.env.SKTONLINE_RESOLVER_URL || '').replace(/\/+$/, '');
 const RESOLVER_TOKEN = String(process.env.SKTONLINE_RESOLVER_TOKEN || '').trim();
+const SKTONLINE_PROXY_URL = String(process.env.SKTONLINE_PROXY_URL || '').trim();
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
 const cache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60, maxKeys: 1800 });
 
@@ -21,11 +23,18 @@ const LANGUAGE_DEFS = [
   { code: 'HU', flag: '🇭🇺', aliases: ['HU', 'HUN'] }
 ];
 
-function makeHttp(baseURL, timeout = 9000) {
+function proxyConfig(agent) {
+  return agent ? { httpAgent: agent, httpsAgent: agent, proxy: false } : {};
+}
+
+const sktOnlineProxyAgent = SKTONLINE_PROXY_URL ? new SocksProxyAgent(SKTONLINE_PROXY_URL) : null;
+
+function makeHttp(baseURL, timeout = 9000, agent = null) {
   return axios.create({
     baseURL,
     timeout,
     maxContentLength: 8 * 1024 * 1024,
+    ...proxyConfig(agent),
     headers: {
       'User-Agent': USER_AGENT,
       'Accept-Encoding': 'identity',
@@ -35,7 +44,7 @@ function makeHttp(baseURL, timeout = 9000) {
 }
 
 const sktorrentHttp = makeHttp(SKTORRENT_BASE_URL, 9000);
-const onlineHttp = makeHttp(ONLINE_BASE_URL, 9000);
+const onlineHttp = makeHttp(ONLINE_BASE_URL, 9000, sktOnlineProxyAgent);
 const sledujtetoHttp = makeHttp(SLEDUJTETO_BASE_URL, 9000);
 const resolverHttp = RESOLVER_BASE_URL ? makeHttp(RESOLVER_BASE_URL, 12000) : null;
 
@@ -336,6 +345,7 @@ async function probeSktCdnHead(url) {
   try {
     const response = await axios.head(url, {
       timeout: 2200,
+      ...proxyConfig(sktOnlineProxyAgent),
       maxRedirects: 2,
       validateStatus: () => true,
       headers: {
