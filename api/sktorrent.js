@@ -434,21 +434,107 @@ function queryVariants(titles, type, season, episode) {
   return [...new Set(out)].slice(0, 16);
 }
 
+function episodeReleasePriority(name, season, episode) {
+  if (!Number.isInteger(season) || !Number.isInteger(episode)) return 0;
+  const text = String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  const exactPatterns = [
+    new RegExp(`(?:^|[^a-z0-9])s0?${season}[^a-z0-9]*e0?${episode}(?:[^0-9]|$)`, 'i'),
+    new RegExp(`(?:^|[^0-9])0?${season}x0?${episode}(?:[^0-9]|$)`, 'i')
+  ];
+  if (exactPatterns.some(pattern => pattern.test(text))) return 0;
+
+  const explicitEpisodes = [];
+  for (const match of text.matchAll(/s0?(\d{1,2})[^a-z0-9]*e0?(\d{1,3})/gi)) {
+    explicitEpisodes.push([Number(match[1]), Number(match[2])]);
+  }
+  for (const match of text.matchAll(/(?:^|[^0-9])0?(\d{1,2})x0?(\d{1,3})(?:[^0-9]|$)/gi)) {
+    explicitEpisodes.push([Number(match[1]), Number(match[2])]);
+  }
+  if (explicitEpisodes.length) return 9;
+
+  const ranges = [];
+  const rangePatterns = [
+    /s0?(\d{1,2})\s*[-–—]\s*s?0?(\d{1,2})/gi,
+    /(?:^|[^0-9])(\d{1,2})\s*\.?\s*[-–—]\s*(\d{1,2})\s*\.?\s*(?:serie|series|season)/gi
+  ];
+  for (const pattern of rangePatterns) {
+    for (const match of text.matchAll(pattern)) ranges.push([Number(match[1]), Number(match[2])]);
+  }
+  if (ranges.length) {
+    for (const [a, b] of ranges) {
+      const low = Math.min(a, b);
+      const high = Math.max(a, b);
+      if (low <= season && season <= high && low !== high) return 5;
+    }
+    return 9;
+  }
+
+  const seasonPatterns = [
+    new RegExp(`(?:^|[^a-z0-9])s0?${season}(?:[^0-9]|$)`, 'i'),
+    new RegExp(`(?:^|[^0-9])0?${season}\\s*\\.?\\s*(?:serie|series|season)(?:[^a-z]|$)`, 'i')
+  ];
+  if (seasonPatterns.some(pattern => pattern.test(text))) return 1;
+  if (/\b(komplet|complete|all seasons?)\b/i.test(text)) return 6;
+  return 2;
+}
+
 async function findTorrentStreams({ username, password, imdbId, titles, type, season, episode, limit = 8 }) {
   const client = getClient(username, password);
-  // Search by the actual movie/series title and inspect the returned releases.
-  // Do not spend the request budget on CSFD lookups or query permutations.
-  const plainTitles = [...new Set((titles || [])
-    .map(title => String(title || '').replace(/\b(?:19|20)\d{2}\b/g, ' ').replace(/\s+/g, ' ').trim())
-    .filter(Boolean))];
-  const query = plainTitles.sort((a, b) => a.length - b.length)[0] || '';
-  if (!query) return [];
-  const results = await searchTorrents(query, titles, 3, false);
-  const found = new Map(results.map(item => [item.id, item]));
+  const isEpisode = type === 'series' && Number.isInteger(season) && Number.isInteger(episode);
+  const found = new Map();
+
+  if (isEpisode) {
+    const allQueries = queryVariants(titles, type, season, episode);
+    const s = String(season).padStart(2, '0');
+    const e = String(episode).padStart(2, '0');
+    const exactNeedles = [new RegExp(`S${s}E${e}`, 'i'), new RegExp(`${season}x${e}`, 'i')];
+    const exactQueries = allQueries.filter(query => exactNeedles.some(pattern => pattern.test(query))).slice(0, 8);
+    const fallbackQueries = allQueries.filter(query => !exactQueries.includes(query)).slice(0, 8);
+
+    for (let offset = 0; offset < exactQueries.length && found.size < limit * 2; offset += 4) {
+      const batch = exactQueries.slice(offset, offset + 4);
+      const groups = await Promise.all(batch.map(query => searchTorrents(query, titles, 1, false)));
+      for (const results of groups) {
+        for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
+      }
+    }
+
+    if (found.size < Math.max(4, limit)) {
+      for (let offset = 0; offset < fallbackQueries.length && found.size < limit * 2; offset += 4) {
+        const batch = fallbackQueries.slice(offset, offset + 4);
+        const groups = await Promise.all(batch.map(query => searchTorrents(query, titles, 1, false)));
+        for (const results of groups) {
+          for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
+        }
+      }
+    }
+  } else {
+    // Keep the proven movie/non-episode search unchanged.
+    const plainTitles = [...new Set((titles || [])
+      .map(title => String(title || '').replace(/\b(?:19|20)\d{2}\b/g, ' ').replace(/\s+/g, ' ').trim())
+      .filter(Boolean))];
+    const query = plainTitles.sort((a, b) => a.length - b.length)[0] || '';
+    if (!query) return [];
+    const results = await searchTorrents(query, titles, 3, false);
+    for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
+  }
 
   const candidates = [...found.values()]
-    .sort((a, b) => (b.score - a.score) || (b.seeds - a.seeds))
-    .slice(0, Math.min(limit * 2, 12));
+    .map(candidate => ({
+      ...candidate,
+      episodePriority: isEpisode ? episodeReleasePriority(candidate.name, season, episode) : 0
+    }))
+    .filter(candidate => candidate.episodePriority < 9)
+    .sort((a, b) =>
+      (a.episodePriority - b.episodePriority) ||
+      (b.score - a.score) ||
+      (b.seeds - a.seeds)
+    )
+    .slice(0, Math.min(limit * 3, 18));
 
   const resolved = await Promise.all(candidates.map(async candidate => {
     const torrent = await downloadTorrentData(client, candidate);
@@ -469,17 +555,30 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
     ].filter(Boolean);
 
     return {
-      name: `SKTorrent • ${quality}`,
-      title: titleLines.join('\n'),
-      infoHash: torrent.infoHash,
-      fileIdx: file.index,
-      fileName: String(file.path || '').split('/').pop(),
-      sources: torrent.trackers.map(tracker => `tracker:${tracker}`),
-      behaviorHints: { bingeGroup: `caseycz-skt:${torrent.infoHash}` }
+      episodePriority: candidate.episodePriority,
+      stream: {
+        name: `SKTorrent • ${quality}`,
+        title: titleLines.join('\n'),
+        infoHash: torrent.infoHash,
+        fileIdx: file.index,
+        fileName: String(file.path || '').split('/').pop(),
+        sources: torrent.trackers.map(tracker => `tracker:${tracker}`),
+        behaviorHints: { bingeGroup: `caseycz-skt:${torrent.infoHash}` }
+      }
     };
   }));
 
-  return resolved.filter(Boolean).slice(0, limit);
+  const usable = resolved.filter(Boolean);
+  if (!isEpisode) return usable.map(item => item.stream).slice(0, limit);
+
+  const hasEpisodeOrSeasonRelease = usable.some(item => item.episodePriority <= 1);
+  const preferred = hasEpisodeOrSeasonRelease
+    ? usable.filter(item => item.episodePriority <= 1)
+    : usable;
+  return preferred
+    .sort((a, b) => a.episodePriority - b.episodePriority)
+    .map(item => item.stream)
+    .slice(0, limit);
 }
 
 module.exports = {
