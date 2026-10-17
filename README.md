@@ -1,94 +1,75 @@
-# SKTOnline + SKTorrent pro Stremio
+<p align="center">
+  <img src="readme-header.svg" alt="Stremio SKTOnline + SKTorrent by CaseyCZ" width="100%" />
+</p>
 
-Stremio addon z rodiny CaseyCZ apps. Kombinuje **přímé SKTOnline streamy**, **SKTOnline titulky** a volitelné **SKTorrent P2P** zdroje. Součástí je také vlastní **Sosáč ID overlay**, který převádí položky katalogu Sosáče na IMDb/Cinemeta bez jakékoliv změny Sosáč addonu.
+<p align="center">
+  <img src="https://img.shields.io/badge/CZ-%C4%8Ce%C5%A1tina-38BDF8?style=for-the-badge&labelColor=0284C7" alt="Čeština" />
+</p>
 
-## Co addon umí
+<p align="center">
+  Neoficiální komunitní addon pro <strong>Stremio</strong>, který kombinuje přímé streamy ze <strong>SKTOnline</strong> a volitelné torrentové zdroje ze <strong>SKTorrent</strong>.
+</p>
 
-- vyhledává přímé SKTOnline MP4 streamy
-- zobrazuje kvalitu a dostupné jazykové informace zdroje
-- zachovává oddělené varianty podle audia a titulků
-- poskytuje dostupné SKTOnline VTT titulky přes Stremio `subtitles` resource
-- hledá SKTOnline přehrávače také z detailů na `sktorrent.eu`
-- volitelně přidává SKTorrent P2P zdroje
-- u torrentů zobrazuje původní název releasu, jazykové informace, kvalitu, seedery a velikost
-- `.torrent` metadata převádí na `infoHash`, `fileIdx` a trackery pro Stremio
-- automaticky obnovuje přihlášení na SKTorrent při vypršení session
-- převádí `sosac_m_*`, `sosac_s_*` a `sosac_ep_*` na IMDb/Cinemeta ve vlastní overlay vrstvě
-- ukládá instalační konfiguraci šifrovaně pomocí AES-256-GCM
-- poskytuje `/health` a `/version` pro dashboard a kontrolu nasazení
+<p align="center">
+  <img src="https://img.shields.io/github/package-json/v/CaseyCZ/stremio.sktonline?style=for-the-badge&label=VERZE&color=38BDF8&labelColor=0284C7" alt="Aktuální verze SKTOnline + SKTorrent" />
+</p>
 
-## Direct vs. P2P
+## O projektu
 
-**SKTOnline Direct** a **SKTorrent P2P** jsou oddělené zdroje.
+**SKTOnline + SKTorrent** přidává do Stremia přímé SKTOnline streamy, dostupné titulky a volitelné P2P zdroje ze SKTorrentu.
 
-U Direct streamu server addonu pouze najde správný SKTOnline zdroj. Výsledná MP4 URL je předána přímo Stremiu a video se přehrává z CDN SKTorrentu — datový tok videa nejde přes server addonu.
+Addon umí pracovat také s položkami z katalogu **Sosáč**. Pomocí vlastní překladové vrstvy dohledá odpovídající titul a nabídne k němu své SKTOnline a SKTorrent zdroje. Samotný Sosáč addon ani jeho repo se nijak nemění.
 
-U P2P zdroje server po přihlášení získá `.torrent`, vybere odpovídající video soubor a Stremiu předá torrentová metadata. Samotné přehrávání pak probíhá mezi Stremiem a peery.
+## Hlavní funkce
 
-## Cloudflare WARP
+- 🎬 přímé SKTOnline streamy
+- 📺 výběr dostupných kvalit videa
+- 💬 dostupné titulky ve Stremio přehrávači
+- 🌍 zobrazení rozpoznaného jazyka zdroje
+- 🧲 volitelné SKTorrent P2P zdroje
+- 📝 původní název torrentového releasu
+- 👥 počet seederů a velikost torrentu
+- 🔗 podpora položek z katalogu Sosáč přes vlastní overlay
+- ⚡ rychlejší opakované načítání díky cache
+- 📱 použití na běžných Stremio klientech na desktopu, Androidu / Google TV a Apple zařízeních
 
-Server může pro požadavky na `online.sktorrent.eu` používat lokální Cloudflare WARP SOCKS proxy. Důvodem je dostupnost SKTOnline z hostingové sítě.
+## Přímé streamy a torrenty
 
-WARP slouží pouze pro **serverové vyhledání SKTOnline stránky, metadata, kontroly CDN a titulky**. Finální MP4 stream se přes WARP ani přes server addonu neproxyuje.
+SKTOnline zdroje se přehrávají jako **Direct** streamy. Video jde přímo ze zdroje do Stremia.
 
-Příklad:
+SKTorrent zdroje jsou zobrazené samostatně jako **P2P**. U nich si Stremio stáhne data přímo přes torrentovou síť.
 
-```bash
-SKTONLINE_PROXY_URL=socks5h://127.0.0.1:40000
-```
+Díky tomu jsou Direct a P2P zdroje v seznamu přehledně oddělené a uživatel si může vybrat, co chce použít.
 
-## Konfigurace
+## Soukromí a konfigurace
 
-Konfigurátor umožňuje:
+Pro SKTorrent P2P je potřeba vlastní účet na SKTorrentu. Přihlašovací údaje jsou uložené uvnitř šifrované instalační konfigurace a addon je používá jen pro získání potřebných torrentových údajů.
 
-- zvolit jazyk addonu
-- zapnout nebo vypnout SKTorrent P2P
-- zadat SKTorrent uživatelské jméno a heslo
-- volitelně zadat údaje k Sosáči pro vlastní `sosac_* → IMDb/Cinemeta` overlay
-- hesla lze v konfigurátoru dočasně zobrazit nebo znovu skrýt
+Když přihlášení na SKTorrent vyprší, addon se pokusí přihlásit znovu automaticky — není potřeba addon přeinstalovávat.
 
-Přihlašovací údaje se nelogují. Instalační token je šifrovaný pomocí AES-256-GCM. Instalační URL je přesto vhodné považovat za citlivou.
+Údaje k Sosáči jsou volitelné a slouží pouze pro vlastní překladovou vrstvu `sosac_* → IMDb/Cinemeta`.
 
-## Přihlášení SKTorrent
+V konfigurátoru lze heslo dočasně **zobrazit** a znovu **skrýt**.
 
-Přihlášení používá aktuální formulář `torrent/login.php` (`uid` + `pwd`). Addon udržuje session cookies a při jejich vypršení se automaticky znovu přihlásí uloženými údaji. Uživatel proto nemusí addon přeinstalovávat.
+Instalační odkaz je citlivý a neměl by se veřejně sdílet.
 
-## Sosáč overlay
+## Důležité
 
-Repo ani addon Sosáče se neupravuje. SKTOnline addon má vlastní překladovou vrstvu, která podle údajů ze Sosáče dohledá odpovídající IMDb/Cinemeta ID a následně hledá vlastní SKTOnline a SKTorrent zdroje.
+Projekt je neoficiální komunitní addon a není oficiálně spojen ani podporován službami Stremio, SKTorrent, SKTOnline ani Sosáč.
 
-## Lokální spuštění
+Repozitář nehostuje video obsah ani torrentová data. Dostupnost jednotlivých zdrojů se může měnit.
 
-```bash
-npm install
-openssl rand -hex 32 > ~/.stremio-sktonline-config-key
-chmod 600 ~/.stremio-sktonline-config-key
-npm start
-```
+## Podpora
 
-Výchozí port je `7002`. Konfigurátor je na:
+<p align="center">
+  <a href="https://www.buymeacoffee.com/caseycz"><img src="https://img.shields.io/badge/Podpo%C5%99it%20CaseyCZ-Buy%20Me%20a%20Coffee-38BDF8?style=for-the-badge&labelColor=0284C7&logo=buymeacoffee&logoColor=white" alt="Podpořit CaseyCZ" /></a>
+</p>
 
-```text
-http://localhost:7002/configure
-```
+<p align="center">
+  <a href="https://www.buymeacoffee.com/caseycz"><img src="https://caseycz.github.io/support-qr.svg" width="150" alt="QR kód Buy Me a Coffee CaseyCZ" /></a><br>
+  <sub>Naskenuj QR kód nebo klikni na tlačítko.</sub>
+</p>
 
-## Proměnné prostředí
-
-- `PORT` – HTTP port, výchozí `7002`
-- `CONFIG_ENCRYPTION_KEY` – 64 hex znaků
-- `CONFIG_ENCRYPTION_KEY_FILE` – soubor s 64hex klíčem
-- `SKTONLINE_PROXY_URL` – volitelná SOCKS proxy pro serverové SKTOnline požadavky, např. `socks5h://127.0.0.1:40000`
-
-## Routy
-
-- `/configure`
-- `/manifest.json`
-- `/:cfg/manifest.json`
-- `/:cfg/stream/:type/:id.json`
-- `/:cfg/subtitles/:type/:id.json`
-- `/health`
-- `/version`
-
-## Nasazení
-
-Projekt používá PM2 a GitHub Actions validaci. Před nasazením se kontroluje syntaxe hlavních Node.js souborů, vazba verze a deploy skript.
+<p align="center">
+  <a href="https://caseycz.github.io/"><img src="https://img.shields.io/badge/CaseyCZ%20Website-Otev%C5%99%C3%ADt-172033?style=flat-square&labelColor=111827" alt="CaseyCZ Website" /></a>
+</p>
