@@ -1,0 +1,49 @@
+name: Temporary direct stream diagnostic
+
+on:
+  push:
+    branches: [Master]
+    paths:
+      - '.github/workflows/direct-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --omit=dev --no-audit --no-fund
+      - name: Test SKTOnline directly
+        run: |
+          node <<'NODE'
+          const axios = require('axios');
+          const cheerio = require('cheerio');
+          const { findDirectOnlineByTitle } = require('./api/sktonline');
+          const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
+          (async()=>{
+            try {
+              const home=await axios.get('https://online.sktorrent.eu/',{timeout:15000,headers:{'User-Agent':UA,'Accept-Encoding':'identity'}});
+              const cookies=(home.headers['set-cookie']||[]).map(x=>x.split(';')[0]).join('; ');
+              console.log('HOME',home.status,'bytes',String(home.data||'').length,'cookies',cookies?cookies.split('; ').length:0);
+              const search=await axios.get('https://online.sktorrent.eu/search/videos',{timeout:15000,params:{type:'public',t:'a',o:'mr',search_query:'Barbie',page:1},headers:{'User-Agent':UA,'Accept-Encoding':'identity',Referer:'https://online.sktorrent.eu/',...(cookies?{Cookie:cookies}:{})}});
+              const $=cheerio.load(search.data);
+              console.log('SEARCH',search.status,'url',search.request?.res?.responseUrl,'bytes',String(search.data||'').length,'title',$('title').text().trim());
+              console.log('SELECTORS','well-sm',$('div.well.well-sm').length,'well',$('div.well').length,'videoLinks',$("a[href*='/video/']").length,'allLinks',$('a[href]').length);
+              const samples=[];
+              $('a[href]').each((i,e)=>{ if(samples.length<20){ const a=$(e); const href=a.attr('href'); if(href) samples.push([href,String(a.attr('title')||a.find('img').attr('alt')||a.text()).replace(/\s+/g,' ').trim().slice(0,100)]); }});
+              console.log('LINKS',JSON.stringify(samples));
+              const streams=await findDirectOnlineByTitle(['Barbie','Barbie 2023'],['Barbie','Barbie 2023']);
+              console.log('DIRECT_STREAMS',streams.length,JSON.stringify(streams.map(s=>({name:s.name,url:s.url})).slice(0,8)));
+            } catch(e) {
+              console.error('DIAG_ERROR',e.message,e.response?.status,e.response?.headers?.location||'');
+              process.exitCode=1;
+            }
+          })();
+          NODE
