@@ -20,30 +20,39 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --omit=dev --no-audit --no-fund
-      - name: Test SKTOnline directly
+      - name: Inspect SKTOnline markup
         run: |
           node <<'NODE'
           const axios = require('axios');
           const cheerio = require('cheerio');
-          const { findDirectOnlineByTitle } = require('./api/sktonline');
           const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
+          const base='https://online.sktorrent.eu';
           (async()=>{
-            try {
-              const home=await axios.get('https://online.sktorrent.eu/',{timeout:15000,headers:{'User-Agent':UA,'Accept-Encoding':'identity'}});
-              const cookies=(home.headers['set-cookie']||[]).map(x=>x.split(';')[0]).join('; ');
-              console.log('HOME',home.status,'bytes',String(home.data||'').length,'cookies',cookies?cookies.split('; ').length:0);
-              const search=await axios.get('https://online.sktorrent.eu/search/videos',{timeout:15000,params:{type:'public',t:'a',o:'mr',search_query:'Barbie',page:1},headers:{'User-Agent':UA,'Accept-Encoding':'identity',Referer:'https://online.sktorrent.eu/',...(cookies?{Cookie:cookies}:{})}});
-              const $=cheerio.load(search.data);
-              console.log('SEARCH',search.status,'url',search.request?.res?.responseUrl,'bytes',String(search.data||'').length,'title',$('title').text().trim());
-              console.log('SELECTORS','well-sm',$('div.well.well-sm').length,'well',$('div.well').length,'videoLinks',$("a[href*='/video/']").length,'allLinks',$('a[href]').length);
-              const samples=[];
-              $('a[href]').each((i,e)=>{ if(samples.length<20){ const a=$(e); const href=a.attr('href'); if(href) samples.push([href,String(a.attr('title')||a.find('img').attr('alt')||a.text()).replace(/\s+/g,' ').trim().slice(0,100)]); }});
-              console.log('LINKS',JSON.stringify(samples));
-              const streams=await findDirectOnlineByTitle(['Barbie','Barbie 2023'],['Barbie','Barbie 2023']);
-              console.log('DIRECT_STREAMS',streams.length,JSON.stringify(streams.map(s=>({name:s.name,url:s.url})).slice(0,8)));
-            } catch(e) {
-              console.error('DIAG_ERROR',e.message,e.response?.status,e.response?.headers?.location||'');
-              process.exitCode=1;
+            const home=await axios.get(base+'/',{timeout:15000,headers:{'User-Agent':UA,'Accept-Encoding':'identity'}});
+            const cookies=(home.headers['set-cookie']||[]).map(x=>x.split(';')[0]).join('; ');
+            const headers={'User-Agent':UA,'Accept-Encoding':'identity',Referer:base+'/',...(cookies?{Cookie:cookies}:{})};
+            const search=await axios.get(base+'/search/videos',{timeout:15000,params:{type:'public',t:'a',o:'mr',search_query:'Barbie',page:1},headers});
+            const $=cheerio.load(search.data);
+            console.log('SEARCH',search.status,'bytes',String(search.data||'').length,'cards',$('div.well.well-sm').length,'videoLinks',$("a[href*='/video/']").length);
+            const cards=[];
+            $('div.well.well-sm').slice(0,8).each((i,e)=>{
+              const n=$(e); const all=n.find('a[href]').map((_,a)=>$(a).attr('href')).get();
+              cards.push({i,first:all[0],all:all.slice(0,6),text:n.text().replace(/\s+/g,' ').trim().slice(0,180)});
+            });
+            console.log('CARDS',JSON.stringify(cards));
+            const vids=[];
+            $("a[href*='/video/']").slice(0,10).each((i,e)=>{
+              const a=$(e); vids.push({href:a.attr('href'),title:String(a.attr('title')||a.find('img').attr('alt')||a.text()).replace(/\s+/g,' ').trim(),card:a.closest('div.well').text().replace(/\s+/g,' ').trim().slice(0,220)});
+            });
+            console.log('VIDS',JSON.stringify(vids));
+            for (const item of vids.slice(0,4)) {
+              const url=new URL(item.href,base).toString();
+              const r=await axios.get(url,{timeout:15000,headers});
+              const p=cheerio.load(r.data);
+              const sources=p('video#video source[src], video source[src], video[src], source[src]').map((_,e)=>({src:p(e).attr('src'),label:p(e).attr('label'),type:p(e).attr('type')})).get();
+              const mp4=[...String(r.data||'').matchAll(/https?:\/\/[^\s"'<>]+?\.mp4(?:\?[^\s"'<>]*)?/gi)].slice(0,6).map(m=>m[0]);
+              const iframes=p('iframe[src]').map((_,e)=>p(e).attr('src')).get().slice(0,6);
+              console.log('DETAIL',JSON.stringify({url,final:r.request?.res?.responseUrl,status:r.status,bytes:String(r.data||'').length,title:p('title').text().trim(),sources,mp4,iframes,video:p('video').length}));
             }
-          })();
+          })().catch(e=>{console.error('DIAG_ERROR',e.message,e.response?.status,e.response?.headers?.location||'');process.exitCode=1;});
           NODE
