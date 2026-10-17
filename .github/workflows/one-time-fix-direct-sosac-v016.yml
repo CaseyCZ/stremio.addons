@@ -1,0 +1,37 @@
+name: Fix Direct and Sosac overlay v0.1.6
+
+on:
+  push:
+    branches:
+      - Master
+    paths:
+      - .github/workflows/one-time-fix-direct-sosac-v016.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply fix
+        run: python3 scripts/fix-direct-sosac-v016.py
+      - name: Validate
+        run: |
+          node --check addon.js
+          node --check api/sktonline.js
+          node --check api/sosac-overlay.js
+          node --check api/sktorrent.js
+          npm run version:check
+      - name: Commit and cleanup
+        run: |
+          rm -f scripts/fix-direct-sosac-v016.py
+          rm -f .github/workflows/one-time-fix-direct-sosac-v016.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix Direct lookup and Sosac IMDb overlay"
+          git push
