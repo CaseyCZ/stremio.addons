@@ -37,6 +37,7 @@ jobs:
           node --check api/csfd.js
           node --check api/sktonline.js
           node --check api/sktorrent.js
+          node --check api/sosac-overlay.js
           bash -n deploy-server.sh
 
       - name: Deployment note
