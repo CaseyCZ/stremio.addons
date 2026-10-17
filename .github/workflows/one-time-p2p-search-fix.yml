@@ -38,7 +38,7 @@ jobs:
           }
 
           function resolveWithin'''
-          text, count = re.subn(r'function titleCandidates\(meta, type\) \{.*?\n\}\n\nfunction resolveWithin', new_title_candidates, text, count=1, flags=re.S)
+          text, count = re.subn(r'function titleCandidates\(meta, type\) \{.*?\n\}\n\nfunction resolveWithin', lambda _: new_title_candidates, text, count=1, flags=re.S)
           if count != 1:
             raise SystemExit('titleCandidates replacement failed')
           text = text.replace('combined-v9:', 'combined-v10:')
@@ -106,7 +106,7 @@ jobs:
           }
 
           async function findTorrentStreams'''
-          text, count = re.subn(r'function queryVariants\(titles, type, season, episode\) \{.*?\n\}\n\nasync function findTorrentStreams', new_queries, text, count=1, flags=re.S)
+          text, count = re.subn(r'function queryVariants\(titles, type, season, episode\) \{.*?\n\}\n\nasync function findTorrentStreams', lambda _: new_queries, text, count=1, flags=re.S)
           if count != 1:
             raise SystemExit('queryVariants replacement failed')
 
