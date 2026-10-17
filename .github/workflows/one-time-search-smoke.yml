@@ -1,0 +1,77 @@
+name: One-time search smoke
+
+on:
+  push:
+    branches: [Master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Check CSFD mapping and SKTorrent search
+        continue-on-error: true
+        run: |
+          node - <<'NODE'
+          const axios = require('axios');
+          const cheerio = require('cheerio');
+          const { getCsfdUrl } = require('./api/csfd');
+
+          const cases = [
+            ['tt1345836', 'The Dark Knight Rises'],
+            ['tt0110912', 'Pulp Fiction']
+          ];
+
+          (async () => {
+            for (const [imdbId, title] of cases) {
+              const csfdUrl = await getCsfdUrl(imdbId);
+              console.log(`MAP ${imdbId} => ${csfdUrl || 'NONE'}`);
+              for (const query of [csfdUrl, title].filter(Boolean)) {
+                try {
+                  const response = await axios.get('https://sktorrent.eu/torrent/torrents_v2.php', {
+                    timeout: 10000,
+                    params: { search: query, category: 0, active: 0, order: 'data', by: 'DESC', page: 0 },
+                    headers: {
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36',
+                      'Accept-Encoding': 'identity'
+                    }
+                  });
+                  const $ = cheerio.load(response.data);
+                  const ids = new Set();
+                  $('a[href*="details.php"]').each((_, el) => {
+                    const href = String($(el).attr('href') || '');
+                    const match = href.match(/[?&]id=([a-f0-9]{40})/i);
+                    if (match) ids.add(match[1]);
+                  });
+                  console.log(`SEARCH ${JSON.stringify(query)} => ${ids.size} detail IDs`);
+                } catch (error) {
+                  console.log(`SEARCH ${JSON.stringify(query)} => ERROR ${error.message}`);
+                }
+              }
+            }
+          })().catch(error => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Remove one-time workflow
+        if: always()
+        shell: bash
+        run: |
+          rm -f .github/workflows/one-time-search-smoke.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/one-time-search-smoke.yml
+          git commit -m "Remove one-time search smoke test"
+          git push
