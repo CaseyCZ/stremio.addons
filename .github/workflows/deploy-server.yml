@@ -1,4 +1,4 @@
-name: Deploy SKTOnline to server
+name: Validate SKTOnline source
 
 on:
   push:
@@ -10,45 +10,42 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-stremio-sktonline
-  cancel-in-progress: false
+  group: validate-stremio-sktonline
+  cancel-in-progress: true
 
 jobs:
-  deploy:
-    runs-on: [self-hosted, Linux, ARM64, dashboard]
-    timeout-minutes: 15
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
 
     steps:
-      - name: Deploy on Oracle
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash /home/ubuntu/stremio.sktonline/deploy-server.sh
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Verify service and deployed commit
-        shell: bash
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Validate addon
         run: |
           set -euo pipefail
-          cd /home/ubuntu/stremio.sktonline
+          npm install --omit=dev --no-audit --no-fund
+          npm run version:check
           node --check addon.js
           node --check api/cinemeta.js
           node --check api/csfd.js
           node --check api/sktonline.js
           node --check api/sktorrent.js
-          SERVER_SHA="$(git rev-parse HEAD)"
-          echo "SERVER_SHA=$SERVER_SHA"
-          echo "GITHUB_SHA=$GITHUB_SHA"
-          test "$SERVER_SHA" = "$GITHUB_SHA"
-          curl -fsS http://127.0.0.1:7003/health
+          bash -n deploy-server.sh
 
-      - name: Deployment summary
+      - name: Deployment note
         run: |
           {
-            echo "### Deploy SKTOnline on Oracle runner"
+            echo "### SKTOnline source validation"
             echo
             echo "- GitHub commit: \`${GITHUB_SHA}\`"
-            echo "- Runner: \`oracle-dashboard\`"
-            echo "- PM2 process: \`stremio-sktonline\`"
-            echo "- Local port: \`7003\`"
-            echo "- Result: deployment completed and verified"
+            echo "- Source validation: passed"
+            echo "- Oracle deployment: handled by the private dashboard auto-deploy poll"
           } >> "$GITHUB_STEP_SUMMARY"
