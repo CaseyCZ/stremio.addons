@@ -211,6 +211,54 @@ function normalizePlaybackStreams(streams) {
   });
 }
 
+function sktVideoIdFromStream(stream) {
+  if (!stream || !String(stream.name || '').startsWith('SKTOnline • ')) return null;
+  try {
+    const url = new URL(String(stream.url || ''));
+    const match = decodeURIComponent(url.pathname || '').match(/\/h264\/(\d+)_((?:2160|1440|1080|720|480|360|240)p)\.mp4$/i);
+    return match ? match[1] : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function replaceStreamSubtitleLine(title, value) {
+  const lines = String(title || '').split('\n');
+  const text = `💬 ${value || 'Bez titulků'}`;
+  const index = lines.findIndex(line => /^💬\s/.test(line));
+  if (index >= 0) lines[index] = text;
+  else if (lines.length > 1) lines.splice(1, 0, text);
+  else lines.push(text);
+  return lines.join('\n');
+}
+
+async function decorateSktOnlineSubtitleLabels(streams) {
+  if (!Array.isArray(streams) || !streams.length) return streams || [];
+  const videoIds = uniqueStrings(streams.map(sktVideoIdFromStream).filter(Boolean));
+  if (!videoIds.length) return streams;
+
+  const availability = new Map(await Promise.all(videoIds.map(async videoId => {
+    const [hasCz, hasSk] = await Promise.all([
+      subtitleUrlExists(`https://online.sktorrent.eu/media/videos/vtt/${videoId}/cze.vtt`),
+      subtitleUrlExists(`https://online.sktorrent.eu/media/videos/vtt/${videoId}/slo.vtt`)
+    ]);
+    const labels = [];
+    if (hasCz) labels.push('🇨🇿 CZ');
+    if (hasSk) labels.push('🇸🇰 SK');
+    return [videoId, labels];
+  })));
+
+  return streams.map(stream => {
+    const videoId = sktVideoIdFromStream(stream);
+    if (!videoId) return stream;
+    const labels = availability.get(videoId) || [];
+    return {
+      ...stream,
+      title: replaceStreamSubtitleLine(stream.title, labels.length ? labels.join(' • ') : 'Bez titulků')
+    };
+  });
+}
+
 function combinedStreamIdentity(stream) {
   if (!stream) return '';
   if (stream.infoHash) {
@@ -321,7 +369,7 @@ async function resolveSktOnlineSubtitles(cfg, type, requestId, parsed) {
   if (!cfg.enableOnline) return [];
 
   const fingerprint = configFingerprint(cfg);
-  const combinedKey = `combined-v13:${fingerprint}:${type}:${requestId}`;
+  const combinedKey = `combined-v14:${fingerprint}:${type}:${requestId}`;
   const sourceKey = `source-videoids-v1:${fingerprint}:${type}:${requestId}`;
   let videoIds = sourceIdentityCache.get(sourceKey);
 
@@ -460,7 +508,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const parsed = await resolveIncomingStremioId(cfg, req.params.type, req.params.id);
   if (!parsed) return res.json({ streams: [], cacheMaxAge: 0 });
 
-  const cacheKey = `combined-v13:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
+  const cacheKey = `combined-v14:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
   const cached = streamCache.get(cacheKey);
   if (cached !== undefined) return res.json({ streams: cached, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
 
@@ -498,7 +546,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
     const directBundle = directRaw && !Array.isArray(directRaw)
       ? directRaw
       : { streams: Array.isArray(directRaw) ? directRaw : [], videoIds: [] };
-    const direct = normalizePlaybackStreams(Array.isArray(directBundle.streams) ? directBundle.streams : []);
+    const direct = await decorateSktOnlineSubtitleLabels(normalizePlaybackStreams(Array.isArray(directBundle.streams) ? directBundle.streams : []));
     const videoIds = uniqueStrings(Array.isArray(directBundle.videoIds) ? directBundle.videoIds : []);
     const streams = dedupeCombinedStreams([...direct, ...torrents]);
 
