@@ -5,7 +5,7 @@ const os = require('os');
 const crypto = require('crypto');
 const NodeCache = require('node-cache');
 const { CinemetaApi, uniqueStrings } = require('./api/cinemeta');
-const { findOnlineStreams } = require('./api/sktonline');
+const { findOnlineStreams, findOnlineSourceBundle } = require('./api/sktonline');
 const { SosacOverlay } = require('./api/sosac-overlay');
 const { getClient, findTorrentStreams, activeClientCount } = require('./api/sktorrent');
 
@@ -17,6 +17,7 @@ const CONFIG_TOKEN_AAD = Buffer.from('stremio-sktonline:enc1', 'utf8');
 const streamCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60, maxKeys: 2000 });
 const subtitleCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 60, maxKeys: 2000 });
 const subtitleProbeCache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 5 * 60, maxKeys: 4000 });
+const sourceIdentityCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 60, maxKeys: 2000 });
 const cinemeta = new CinemetaApi();
 
 function readConfigEncryptionKey() {
@@ -309,17 +310,28 @@ async function resolveSktOnlineSubtitles(cfg, type, requestId, parsed) {
   if (cached !== undefined) return cached;
   if (!cfg.enableOnline) return [];
 
-  const combinedKey = `combined-v13:${configFingerprint(cfg)}:${type}:${requestId}`;
-  let directStreams = streamCache.get(combinedKey);
+  const fingerprint = configFingerprint(cfg);
+  const combinedKey = `combined-v13:${fingerprint}:${type}:${requestId}`;
+  const sourceKey = `source-videoids-v1:${fingerprint}:${type}:${requestId}`;
+  let videoIds = sourceIdentityCache.get(sourceKey);
 
-  if (!Array.isArray(directStreams)) {
+  // Backward-compatible fallback for a stream response cached before the
+  // source-identity resolver ran. Normally subtitles reuse sourceKey directly.
+  if (!Array.isArray(videoIds) || !videoIds.length) {
+    const combinedStreams = streamCache.get(combinedKey);
+    if (Array.isArray(combinedStreams)) {
+      videoIds = extractSktOnlineVideoIds(combinedStreams);
+    }
+  }
+
+  if (!Array.isArray(videoIds) || !videoIds.length) {
     const meta = await cinemeta.getMeta(type, parsed.imdbId);
     const titles = titleCandidates(meta, type);
     if (!titles.length) {
       subtitleCache.set(lookupKey, [], 2 * 60);
       return [];
     }
-    directStreams = await resolveWithin(findOnlineStreams({
+    const bundleRaw = await resolveWithin(findOnlineSourceBundle({
       imdbId: parsed.imdbId,
       titles,
       type,
@@ -327,10 +339,13 @@ async function resolveSktOnlineSubtitles(cfg, type, requestId, parsed) {
       episode: parsed.episode,
       sktUsername: cfg.enableTorrents ? cfg.sktUsername : '',
       sktPassword: cfg.enableTorrents ? cfg.sktPassword : ''
-    }), 22000, 'subtitle-direct-detail');
+    }), 22000, 'subtitle-direct-source');
+    const bundle = bundleRaw && !Array.isArray(bundleRaw) ? bundleRaw : { streams: [], videoIds: [] };
+    videoIds = Array.isArray(bundle.videoIds) ? bundle.videoIds : [];
+    if (videoIds.length) sourceIdentityCache.set(sourceKey, videoIds, 10 * 60);
   }
 
-  const videoIds = extractSktOnlineVideoIds(directStreams).slice(0, 8);
+  videoIds = uniqueStrings(videoIds).slice(0, 8);
   const candidates = [];
   for (const videoId of videoIds) {
     candidates.push(
@@ -445,7 +460,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
     if (!titles.length) return res.json({ streams: [], cacheMaxAge: 0 });
 
     const directPromise = cfg.enableOnline
-      ? resolveWithin(findOnlineStreams({
+      ? resolveWithin(findOnlineSourceBundle({
           imdbId: parsed.imdbId,
           titles,
           type: req.params.type,
@@ -453,8 +468,8 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
           episode: parsed.episode,
           sktUsername: cfg.enableTorrents ? cfg.sktUsername : '',
           sktPassword: cfg.enableTorrents ? cfg.sktPassword : ''
-        }), 22000, 'direct-detail')
-      : Promise.resolve([]);
+        }), 22000, 'direct-source')
+      : Promise.resolve({ streams: [], videoIds: [] });
 
     const torrentPromise = cfg.enableTorrents
       ? resolveWithin(findTorrentStreams({
@@ -470,9 +485,18 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
       : Promise.resolve([]);
 
     const [directRaw, torrents] = await Promise.all([directPromise, torrentPromise]);
-    const direct = normalizePlaybackStreams(directRaw);
+    const directBundle = directRaw && !Array.isArray(directRaw)
+      ? directRaw
+      : { streams: Array.isArray(directRaw) ? directRaw : [], videoIds: [] };
+    const direct = normalizePlaybackStreams(Array.isArray(directBundle.streams) ? directBundle.streams : []);
+    const videoIds = uniqueStrings(Array.isArray(directBundle.videoIds) ? directBundle.videoIds : []);
     const streams = dedupeCombinedStreams([...direct, ...torrents]);
 
+    if (videoIds.length) {
+      const sourceKey = `source-videoids-v1:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
+      sourceIdentityCache.set(sourceKey, videoIds, 10 * 60);
+      console.log(`[source] ${req.params.type}/${req.params.id}: videoIds=${videoIds.join(',')}`);
+    }
     streamCache.set(cacheKey, streams, streams.length ? 5 * 60 : 60);
     return res.json({ streams, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
   } catch (error) {
@@ -504,7 +528,8 @@ app.get('/health', (req, res) => {
     sosacOverlay: true,
     streamCacheKeys: streamCache.keys().length,
     subtitleCacheKeys: subtitleCache.keys().length,
-    subtitleProbeCacheKeys: subtitleProbeCache.keys().length
+    subtitleProbeCacheKeys: subtitleProbeCache.keys().length,
+    sourceIdentityCacheKeys: sourceIdentityCache.keys().length
   });
 });
 

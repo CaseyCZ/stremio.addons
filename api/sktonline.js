@@ -404,6 +404,9 @@ async function streamsForKnownOnlineVideoId(videoId, pageTitle = 'SKTOnline') {
   const streams = checks.filter(Boolean).map(item => {
     const stream = makeStream('SKTOnline', pageTitle || 'SKTOnline', item.url, item.quality, `${ONLINE_BASE_URL}/`);
     stream.behaviorHints = { notWebReady: false };
+    // Internal identity only. findOnlineSourceBundle strips this before the
+    // stream is returned to Stremio, while keeping videoId for subtitles.
+    stream._sktVideoId = id;
     return stream;
   });
   const result = dedupeStreams(streams);
@@ -1279,7 +1282,25 @@ function directProviderWithin(promise, timeoutMs, label) {
   ]).finally(() => clearTimeout(timer));
 }
 
-async function findOnlineStreams({ imdbId, titles, type, season, episode, sktUsername = '', sktPassword = '' }) {
+function videoIdFromResolvedStream(stream) {
+  const explicit = String(stream && stream._sktVideoId || '').trim();
+  if (/^\d+$/.test(explicit)) return explicit;
+  try {
+    const parsed = new URL(String(stream && stream.url || ''));
+    const match = decodeURIComponent(parsed.pathname || '').match(/\/h264\/(\d+)_((?:2160|1440|1080|720|480|360|240)p)\.mp4$/i);
+    return match ? match[1] : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function cleanResolvedStream(stream) {
+  if (!stream || typeof stream !== 'object') return stream;
+  const { _sktVideoId, ...clean } = stream;
+  return clean;
+}
+
+async function findOnlineSourceBundle({ imdbId, titles, type, season, episode, sktUsername = '', sktPassword = '' }) {
   const queries = buildQueries(titles, type, season, episode);
   let sktClient = null;
   if (sktUsername && sktPassword) {
@@ -1292,15 +1313,26 @@ async function findOnlineStreams({ imdbId, titles, type, season, episode, sktUse
     directProviderWithin(findSledujtetoByTitle(queries, titles), 12000, 'SledujTo title search')
   ]);
 
-  return dedupeStreams([
+  const resolved = dedupeStreams([
     ...fromDirectOnline,
     ...fromTorrentDetails,
     ...sledujToByTitle
   ]).slice(0, 48);
+
+  const videoIds = dedupe(resolved.map(videoIdFromResolvedStream).filter(Boolean));
+  return {
+    streams: resolved.map(cleanResolvedStream),
+    videoIds
+  };
+}
+
+async function findOnlineStreams(options) {
+  return (await findOnlineSourceBundle(options)).streams;
 }
 
 module.exports = {
   findOnlineStreams,
+  findOnlineSourceBundle,
   findDirectOnlineByTitle,
   findFromSktorrentDetails
 };
