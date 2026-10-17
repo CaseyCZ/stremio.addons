@@ -99,7 +99,7 @@ function buildQueries(titles, type, season, episode) {
     if (!base) continue;
     const plain = stripDiacritics(base);
   const variants = type === 'movie'
-    ? dedupe([base, plain, stripYearTokens(base), stripYearTokens(plain)])
+    ? dedupe([base, plain, stripYearTokens(base), stripYearTokens(plain), shortTitle(stripYearTokens(plain), 3), shortTitle(stripYearTokens(plain), 2)])
     : dedupe([base, plain, shortTitle(plain, 3)]);
     if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {
       const sxxexx = `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
@@ -110,7 +110,7 @@ function buildQueries(titles, type, season, episode) {
       queries.push(...variants);
     }
   }
-  return dedupe(queries).slice(0, 6);
+  return dedupe(queries).slice(0, 12);
 }
 
 function cleanUrlText(value) {
@@ -661,7 +661,7 @@ async function searchSledujtetoSlug(query, wantedTitles) {
 }
 
 async function findSledujtetoByTitle(queries, titles) {
-  for (const query of queries.slice(0, 4)) {
+  for (const query of queries.slice(0, 6)) {
     let pages = await searchSledujtetoApi(query, titles);
     if (!pages.length) pages = await searchSledujtetoSlug(query, titles);
     if (!pages.length) continue;
@@ -689,7 +689,7 @@ async function searchDirectOnlineVideos(query, wantedTitles) {
         if (!item || !/^\d+$/.test(String(item.id || ''))) return false;
         if (!context) return true;
         if (candidateHasConflictingYears(context, wantedTitles)) return false;
-        return titleMatchScore(context, wantedNames) >= 0.55;
+        return titleMatchScore(context, wantedNames) >= 0.35;
       }).map(item => ({
         id: String(item.id),
         title: String(item.title || '').replace(/\s+/g, ' ').trim()
@@ -726,7 +726,7 @@ async function searchDirectOnlineVideos(query, wantedTitles) {
 
       if (context) {
         if (candidateHasConflictingYears(context, wantedTitles)) return;
-        if (titleMatchScore(context, wantedNames) < 0.55) return;
+        if (titleMatchScore(context, wantedNames) < 0.35) return;
       }
 
       seen.add(match[1]);
@@ -748,7 +748,7 @@ async function streamsForDirectOnlineVideo(item) {
 
 async function findDirectOnlineByTitle(queries, titles) {
   const found = new Map();
-  for (const query of queries.slice(0, 6)) {
+  for (const query of queries.slice(0, 10)) {
     const items = await searchDirectOnlineVideos(query, titles);
     for (const item of items) if (!found.has(item.id)) found.set(item.id, item);
     if (found.size >= 8) break;
