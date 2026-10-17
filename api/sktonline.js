@@ -614,11 +614,10 @@ async function searchSktorrentDetails(query, wantedTitles, trustedReference = fa
 
   const items = [];
   const seen = new Set();
-  const MAX_PAGES = 12;
   let lastPage = 0;
 
   try {
-    for (let page = 0; page < MAX_PAGES && page <= lastPage; page += 1) {
+    for (let page = 0; page <= lastPage; page += 1) {
       const response = await sktorrentHttp.get('/torrent/torrents_v2.php', {
         params: { search: query, category: 0, active: 0, order: 'data', by: 'DESC', page },
         headers: { Referer: `${SKTORRENT_BASE_URL}/torrent/torrents_v2.php` }
@@ -628,7 +627,7 @@ async function searchSktorrentDetails(query, wantedTitles, trustedReference = fa
       $('a[href*="page="]').each((_, el) => {
         const href = String($(el).attr('href') || '');
         const match = href.match(/[?&]page=(\di+)/i);
-        if (match) lastPage = Math.min(MAX_PAGES - 1, Math.max(lastPage, Number(match[1])));
+        if (match) lastPage = Math.max(lastPage, Number(match[1]));
       });
 
       let rawCount = 0;
@@ -1289,7 +1288,7 @@ async function findOnlineStreams({ imdbId, titles, type, season, episode, sktUse
 
   const [fromDirectOnline, fromTorrentDetails, sledujToByTitle] = await Promise.all([
     directProviderWithin(findDirectOnlineByTitle(queries, titles), 18000, 'SKTOnline title search'),
-    directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 45000, 'SKTorrent detail players'),
+    directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 60000, 'SKTorrent detail players'),
     directProviderWithin(findSledujtetoByTitle(queries, titles), 12000, 'SledujTo title search')
   ]);
 
