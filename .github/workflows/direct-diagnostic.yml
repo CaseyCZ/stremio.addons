@@ -20,29 +20,33 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --omit=dev --no-audit --no-fund
-      - name: Test canonical SKTOnline paths
+      - name: Inspect SKTOnline frontend endpoints
         run: |
           node <<'NODE'
           const axios=require('axios');
           const cheerio=require('cheerio');
           const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
           const base='https://online.sktorrent.eu';
-          const cookies={};
-          const absorb=r=>{for(const x of (r.headers['set-cookie']||[])){const p=String(x).split(';')[0],i=p.indexOf('=');if(i>0)cookies[p.slice(0,i)]=p.slice(i+1);}};
-          const cookie=()=>Object.entries(cookies).map(([k,v])=>`${k}=${v}`).join('; ');
-          const h=ref=>({'User-Agent':UA,'Accept-Encoding':'identity',Accept:'text/html,application/xhtml+xml,*/*',Referer:ref,...(cookie()?{Cookie:cookie()}: {})});
-          const show=(name,r)=>{const text=String(r.data||''),$=cheerio.load(text);console.log(name,JSON.stringify({status:r.status,final:r.request?.res?.responseUrl,bytes:text.length,title:$('title').text().trim(),video:$('video').length,sources:$('video source[src],source[src],video[src]').map((_,e)=>$(e).attr('src')).get().slice(0,8),location:r.headers.location||''}));};
           (async()=>{
-            const home=await axios.get(base+'/',{timeout:15000,headers:h(base+'/')});absorb(home);
-            const s=await axios.get(base+'/search/videos',{timeout:15000,params:{type:'public',t:'a',o:'mr',search_query:'Barbie',page:1},headers:h(base+'/')});absorb(s);
-            const $=cheerio.load(s.data); const a=$("a[href*='/video/']").filter((_,e)=>/barbie/i.test($(e).attr('href')||'')).first();
-            const href=a.attr('href'); const id=(href.match(/\/video\/(\d+)/)||[])[1]; const exact=new URL(href,base).toString(); const ref=s.request?.res?.responseUrl||base+'/search/videos';
-            console.log('TARGET',id,href);
-            for(const [name,url] of [
-              ['EXACT',exact],
-              ['ID_NO_SLASH',base+'/video/'+id],
-              ['ID_SLASH',base+'/video/'+id+'/'],
-              ['ID_DOUBLE_SLASH',base+'/video/'+id+'//']
-            ]){try{const r=await axios.get(url,{timeout:15000,headers:h(ref),maxRedirects:5,validateStatus:x=>x>=200&&x<500});absorb(r);show(name,r);}catch(e){console.log(name,'ERR',e.message,e.response?.status||'');}}
+            const r=await axios.get(base+'/search/videos',{timeout:15000,params:{type:'public',t:'a',o:'mr',search_query:'Barbie',page:1},headers:{'User-Agent':UA,'Accept-Encoding':'identity',Referer:base+'/'}});
+            const $=cheerio.load(r.data);
+            const scripts=$('script[src]').map((_,e)=>new URL($(e).attr('src'),base).toString()).get();
+            console.log('SCRIPTS',JSON.stringify(scripts));
+            for(const url of scripts){
+              try{
+                const x=await axios.get(url,{timeout:12000,headers:{'User-Agent':UA,'Accept-Encoding':'identity',Referer:base+'/'}});
+                const text=String(x.data||'');
+                if(!/(embed|video|player|ajax|source|h264)/i.test(text)) continue;
+                const snippets=[];
+                for(const re of [/embed/ig,/video[_\/-]?id/ig,/player/ig,/ajax/ig,/h264/ig,/source/ig]){
+                  let m,count=0; while((m=re.exec(text))&&count<8){snippets.push(text.slice(Math.max(0,m.index-300),Math.min(text.length,m.index+700)).replace(/\s+/g,' '));count++;}
+                }
+                console.log('SCRIPT_MATCH',url,'bytes',text.length,JSON.stringify([...new Set(snippets)].slice(0,15)));
+              }catch(e){console.log('SCRIPT_ERR',url,e.message,e.response?.status||'');}
+            }
+            const inline=$('script:not([src])').map((_,e)=>$(e).html()||'').get().join('\n');
+            const hits=[];
+            for(const re of [/embed/ig,/video/ig,/player/ig,/ajax/ig]){let m,c=0;while((m=re.exec(inline))&&c<10){hits.push(inline.slice(Math.max(0,m.index-250),Math.min(inline.length,m.index+650)).replace(/\s+/g,' '));c++;}}
+            console.log('INLINE',JSON.stringify([...new Set(hits)].slice(0,20)));
           })().catch(e=>{console.error('DIAG_ERROR',e.message,e.response?.status||'');process.exitCode=1;});
           NODE
