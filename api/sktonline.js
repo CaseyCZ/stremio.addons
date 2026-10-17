@@ -100,7 +100,7 @@ function buildQueries(titles, type, season, episode) {
     const plain = stripDiacritics(base);
   const variants = type === 'movie'
     ? dedupe([base, plain, stripYearTokens(base), stripYearTokens(plain), shortTitle(stripYearTokens(plain), 3), shortTitle(stripYearTokens(plain), 2)])
-    : dedupe([base, plain, shortTitle(plain, 3)]);
+    : dedupe([base, plain, shortTitle(plain, 3), shortTitle(plain, 1)]);
     if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {
       const sxxexx = `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
       const x = `${season}x${String(episode).padStart(2, '0')}`;
@@ -676,24 +676,23 @@ async function findSledujtetoByTitle(queries, titles) {
 
 
 async function searchDirectOnlineVideos(query, wantedTitles) {
-  const key = `online-title-search:${normalize(query)}`;
+  const key = `online-title-search-v2:${normalize(query)}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
   if (resolverHttp) {
     try {
       const payload = await resolverPost('/v1/search', { query });
-      const wantedNames = dedupe((wantedTitles || []).map(stripYearTokens).filter(Boolean));
-      const items = (Array.isArray(payload.items) ? payload.items : []).filter(item => {
-        const context = String(item && item.title || '').replace(/\s+/g, ' ').trim();
-        if (!item || !/^\d+$/.test(String(item.id || ''))) return false;
-        if (!context) return true;
-        if (candidateHasConflictingYears(context, wantedTitles)) return false;
-        return titleMatchScore(context, wantedNames) >= 0.35;
-      }).map(item => ({
-        id: String(item.id),
-        title: String(item.title || '').replace(/\s+/g, ' ').trim()
-      }));
+      const items = (Array.isArray(payload.items) ? payload.items : [])
+        .filter(item => item && /^\d+$/.test(String(item.id || '')))
+        .filter(item => {
+          const context = String(item.title || '').replace(/\s+/g, ' ').trim();
+          return !context || !candidateHasConflictingYears(context, wantedTitles);
+        })
+        .map(item => ({
+          id: String(item.id),
+          title: String(item.title || '').replace(/\s+/g, ' ').trim()
+        }));
       cache.set(key, items, items.length ? 5 * 60 : 60);
       return items;
     } catch (error) {
@@ -707,7 +706,6 @@ async function searchDirectOnlineVideos(query, wantedTitles) {
       headers: { Referer: `${ONLINE_BASE_URL}/` }
     });
     const $ = cheerio.load(response.data);
-    const wantedNames = dedupe((wantedTitles || []).map(stripYearTokens).filter(Boolean));
     const items = [];
     const seen = new Set();
 
@@ -724,11 +722,7 @@ async function searchDirectOnlineVideos(query, wantedTitles) {
         link.closest('article,li,div,tr,td').text() || ''
       ).replace(/\s+/g, ' ').trim();
 
-      if (context) {
-        if (candidateHasConflictingYears(context, wantedTitles)) return;
-        if (titleMatchScore(context, wantedNames) < 0.35) return;
-      }
-
+      if (context && candidateHasConflictingYears(context, wantedTitles)) return;
       seen.add(match[1]);
       items.push({ id: match[1], title: context });
     });
@@ -747,15 +741,18 @@ async function streamsForDirectOnlineVideo(item) {
 }
 
 async function findDirectOnlineByTitle(queries, titles) {
-  const found = new Map();
+  const seenIds = new Set();
   for (const query of queries.slice(0, 10)) {
     const items = await searchDirectOnlineVideos(query, titles);
-    for (const item of items) if (!found.has(item.id)) found.set(item.id, item);
-    if (found.size >= 8) break;
+    const fresh = items.filter(item => !seenIds.has(item.id)).slice(0, 10);
+    fresh.forEach(item => seenIds.add(item.id));
+    if (!fresh.length) continue;
+
+    const batches = await Promise.all(fresh.map(streamsForDirectOnlineVideo));
+    const streams = dedupeStreams(batches.flat());
+    if (streams.length) return streams.slice(0, 12);
   }
-  if (!found.size) return [];
-  const batches = await Promise.all([...found.values()].slice(0, 8).map(streamsForDirectOnlineVideo));
-  return dedupeStreams(batches.flat()).slice(0, 12);
+  return [];
 }
 
 async function streamsFromSktorrentDetail(candidate) {
@@ -818,13 +815,30 @@ async function findFromSktorrentDetails(queries, titles) {
   return dedupeStreams(batches.flat()).slice(0, 12);
 }
 
+function directProviderWithin(promise, timeoutMs, label) {
+  let timer;
+  const timeout = new Promise(resolve => {
+    timer = setTimeout(() => {
+      console.warn(`[direct] ${label} timed out after ${timeoutMs}ms`);
+      resolve([]);
+    }, timeoutMs);
+  });
+  return Promise.race([
+    Promise.resolve(promise).catch(error => {
+      console.warn(`[direct] ${label} failed: ${error.message}`);
+      return [];
+    }),
+    timeout
+  ]).finally(() => clearTimeout(timer));
+}
+
 async function findOnlineStreams({ titles, type, season, episode }) {
   const queries = buildQueries(titles, type, season, episode);
 
   const [fromDirectOnline, fromTorrentDetails, sledujToByTitle] = await Promise.all([
-    findDirectOnlineByTitle(queries, titles),
-    findFromSktorrentDetails(queries, titles),
-    findSledujtetoByTitle(queries, titles)
+    directProviderWithin(findDirectOnlineByTitle(queries, titles), 13000, 'SKTOnline title search'),
+    directProviderWithin(findFromSktorrentDetails(queries, titles), 14000, 'SKTorrent detail players'),
+    directProviderWithin(findSledujtetoByTitle(queries, titles), 12000, 'SledujTo title search')
   ]);
 
   return dedupeStreams([
