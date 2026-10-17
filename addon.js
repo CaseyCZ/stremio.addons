@@ -285,7 +285,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const parsed = parseStremioId(req.params.id);
   if (!parsed) return res.json({ streams: [], cacheMaxAge: 0 });
 
-  const cacheKey = `combined-v10:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
+  const cacheKey = `combined-v11:${configFingerprint(cfg)}:${req.params.type}:${req.params.id}`;
   const cached = streamCache.get(cacheKey);
   if (cached !== undefined) return res.json({ streams: cached, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
 
@@ -296,6 +296,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
 
     const directPromise = cfg.enableOnline
       ? resolveWithin(findOnlineStreams({
+          imdbId: parsed.imdbId,
           titles,
           type: req.params.type,
           season: parsed.season,
@@ -307,6 +308,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
       ? resolveWithin(findTorrentStreams({
           username: cfg.sktUsername,
           password: cfg.sktPassword,
+          imdbId: parsed.imdbId,
           titles,
           type: req.params.type,
           season: parsed.season,

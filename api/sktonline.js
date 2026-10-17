@@ -1,6 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const NodeCache = require('node-cache');
+const { getCsfdUrl } = require('./csfd');
 
 const SKTORRENT_BASE_URL = 'https://sktorrent.eu';
 const SKTORRENT_SEARCH_URL = `${SKTORRENT_BASE_URL}/torrent/torrents_v2.php`;
@@ -61,7 +62,7 @@ function candidateYearMatches(candidate, wantedTitles) {
   const wantedYears = dedupe((wantedTitles || []).flatMap(yearsInText));
   if (!wantedYears.length) return true;
   const candidateYears = yearsInText(candidate);
-  if (!candidateYears.length) return false;
+  if (!candidateYears.length) return true;
   return candidateYears.some(year => wantedYears.includes(year));
 }
 
@@ -99,7 +100,7 @@ function buildQueries(titles, type, season, episode) {
     if (!base) continue;
     const plain = stripDiacritics(base);
   const variants = type === 'movie'
-    ? dedupe([base, plain, stripYearTokens(base), stripYearTokens(plain), shortTitle(stripYearTokens(plain), 3), shortTitle(stripYearTokens(plain), 2)])
+    ? dedupe([stripYearTokens(base), stripYearTokens(plain), base, plain, shortTitle(stripYearTokens(plain), 3), shortTitle(stripYearTokens(plain), 2)])
     : dedupe([base, plain, shortTitle(plain, 3), shortTitle(plain, 1)]);
     if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {
       const sxxexx = `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
@@ -369,7 +370,7 @@ function isSktOnlineUrl(url) {
   return host === 'online.sktorrent.eu' || /^online\d+\.sktorrent\.eu$/i.test(host);
 }
 
-async function searchSktorrentDetails(query, wantedTitles) {
+async function searchSktorrentDetails(query, wantedTitles, trustedReference = false) {
   const key = `skt-detail-search:${query.toLowerCase()}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
@@ -395,7 +396,8 @@ async function searchSktorrentDetails(query, wantedTitles) {
         .replace(/\s+/g, ' ').trim();
       const score = titleMatchScore(name, wantedTitles);
       const category = String(card.find('b').first().text() || '').trim();
-      if (!name || !candidateYearMatches(name, wantedTitles) || candidateHasConflictingYears(name, wantedTitles) || score < 0.7) return;
+      if (!name || candidateHasConflictingYears(name, wantedTitles)) return;
+      if (!trustedReference && (!candidateYearMatches(name, wantedTitles) || score < 0.55)) return;
       if (category && !/(film|seri|dokum|tv)/i.test(category)) return;
       const detailsUrl = absoluteUrl(href, SKTORRENT_SEARCH_URL);
       if (!detailsUrl) return;
@@ -796,12 +798,17 @@ async function streamsFromSktorrentDetail(candidate) {
   }
 }
 
-async function findFromSktorrentDetails(queries, titles) {
+async function findFromSktorrentDetails(queries, titles, imdbId) {
   const candidates = new Map();
-  for (const query of queries.slice(0, 4)) {
+  const csfdUrl = await getCsfdUrl(imdbId);
+  if (csfdUrl) {
+    const exact = await searchSktorrentDetails(csfdUrl, titles, true);
+    for (const item of exact) if (!candidates.has(item.id)) candidates.set(item.id, item);
+  }
+  for (const query of queries.slice(0, 6)) {
     const found = await searchSktorrentDetails(query, titles);
     for (const item of found) if (!candidates.has(item.id)) candidates.set(item.id, item);
-    if (candidates.size >= 10) break;
+    if (candidates.size >= 12) break;
   }
   if (!candidates.size) return [];
   const rankedCandidates = [...candidates.values()].sort((a, b) => {
@@ -832,12 +839,12 @@ function directProviderWithin(promise, timeoutMs, label) {
   ]).finally(() => clearTimeout(timer));
 }
 
-async function findOnlineStreams({ titles, type, season, episode }) {
+async function findOnlineStreams({ imdbId, titles, type, season, episode }) {
   const queries = buildQueries(titles, type, season, episode);
 
   const [fromDirectOnline, fromTorrentDetails, sledujToByTitle] = await Promise.all([
     directProviderWithin(findDirectOnlineByTitle(queries, titles), 13000, 'SKTOnline title search'),
-    directProviderWithin(findFromSktorrentDetails(queries, titles), 14000, 'SKTorrent detail players'),
+    directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId), 16000, 'SKTorrent detail players'),
     directProviderWithin(findSledujtetoByTitle(queries, titles), 12000, 'SledujTo title search')
   ]);
 

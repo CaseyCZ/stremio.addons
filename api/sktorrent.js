@@ -3,6 +3,7 @@ const cheerio = require('cheerio');
 const NodeCache = require('node-cache');
 const bencode = require('bncode');
 const crypto = require('crypto');
+const { getCsfdUrl } = require('./csfd');
 
 const BASE_URL = 'https://sktorrent.eu';
 const LOGIN_URL = `${BASE_URL}/torrent/login.php`;
@@ -236,9 +237,9 @@ function getClient(username, password) {
   return client;
 }
 
-async function searchTorrents(query, wantedTitles, maxPages = 1) {
+async function searchTorrents(query, wantedTitles, maxPages = 1, trustedReference = false) {
   const wantedKey = (wantedTitles || []).map(normalize).sort().join('|');
-  const cacheKey = `${normalize(query)}:${maxPages}:${wantedKey}`;
+  const cacheKey = `${normalize(query)}:${maxPages}:${trustedReference ? 'trusted' : 'normal'}:${wantedKey}`;
   const cached = searchCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
@@ -265,7 +266,8 @@ async function searchTorrents(query, wantedTitles, maxPages = 1) {
 
         const name = String(link.attr('title') || link.find('img').attr('alt') || link.text() || '').replace(/\s+/g, ' ').trim();
         const score = titleMatchScore(name, wantedTitles);
-        if (!name || !candidateYearMatches(name, wantedTitles) || candidateHasConflictingYears(name, wantedTitles) || score < 0.55) return;
+        if (!name || candidateHasConflictingYears(name, wantedTitles)) return;
+        if (!trustedReference && (!candidateYearMatches(name, wantedTitles) || score < 0.55)) return;
 
         const text = cell.text().replace(/\s+/g, ' ').trim();
         const category = cell.find('b').first().text().trim();
@@ -431,16 +433,21 @@ function queryVariants(titles, type, season, episode) {
   return [...new Set(out)].slice(0, 16);
 }
 
-async function findTorrentStreams({ username, password, titles, type, season, episode, limit = 8 }) {
+async function findTorrentStreams({ username, password, imdbId, titles, type, season, episode, limit = 8 }) {
   const client = getClient(username, password);
   const queries = queryVariants(titles, type, season, episode);
+  const csfdUrl = await getCsfdUrl(imdbId);
+  const priorityQueries = csfdUrl ? [csfdUrl, ...queries] : queries;
   const found = new Map();
 
   // Search several title variants in parallel, but keep the batch small so
   // we improve coverage without hammering SKTorrent.
-  for (let offset = 0; offset < queries.length; offset += 4) {
-    const batch = queries.slice(offset, offset + 4);
-    const batches = await Promise.all(batch.map(query => searchTorrents(query, titles, 1)));
+  for (let offset = 0; offset < priorityQueries.length; offset += 4) {
+    const batch = priorityQueries.slice(offset, offset + 4);
+    const batches = await Promise.all(batch.map(query => {
+      const trustedReference = Boolean(csfdUrl && query === csfdUrl);
+      return searchTorrents(query, titles, trustedReference ? 6 : 1, trustedReference);
+    }));
     for (const results of batches) {
       for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
     }
