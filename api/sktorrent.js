@@ -100,7 +100,7 @@ function codecTags(value) {
   const text = String(value || '');
   const tags = [];
   if (/\b(hevc|h\.?265|x265)\b/i.test(text)) tags.push('HEVC');
-  else if (/\b(h\.?264|x264|avc)\b/i.test(text)) tags.push('H264');
+  else if (/\b(h\.?264|x264|avc)\b/i.test(text)) tags.push('H.264');
   if (/\b(dolby[ ._-]?vision|dolbyvision|dv)\b/i.test(text)) tags.push('DV');
   else if (/\bhdr10\+?\b|\bhdr\b/i.test(text)) tags.push('HDR');
   return tags;
@@ -678,10 +678,15 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
     const tags = codecTags(combined);
     const language = languageLabel(combined);
     const size = candidate.size !== '?' ? candidate.size : humanBytes(file.length);
+    const fileName = String(file.path || '').split('/').pop();
+    const releaseName = fileName
+      .replace(/\.(?:mkv|mp4|avi|m4v|mov|ts|webm)$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     const details = [`👥 ${candidate.seeds} seed`, `📦 ${size}`, ...tags].filter(Boolean).join(' • ');
     const titleLines = [
       language ? `🎧 ${language}` : null,
-      `🗂️ ${candidate.name}`,
+      releaseName ? `🎞 ${releaseName}` : null,
       details
     ].filter(Boolean);
 
@@ -692,7 +697,7 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
         title: titleLines.join('\n'),
         infoHash: torrent.infoHash,
         fileIdx: file.index,
-        fileName: String(file.path || '').split('/').pop(),
+        fileName,
         sources: torrent.trackers.map(tracker => `tracker:${tracker}`),
         behaviorHints: { bingeGroup: `caseycz-skt:${torrent.infoHash}` }
       }
