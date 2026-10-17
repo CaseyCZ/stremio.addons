@@ -1,8 +1,8 @@
 {
   "name": "stremio-sktonline",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "private": true,
-  "description": "Stremio addon for direct SKTOnline and SledujTo streams.",
+  "description": "Stremio addon for direct SKTOnline streams and optional SKTorrent P2P.",
   "main": "addon.js",
   "scripts": {
     "start": "node addon.js",

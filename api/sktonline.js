@@ -7,7 +7,6 @@ const { getClient } = require('./sktorrent');
 const SKTORRENT_BASE_URL = 'https://sktorrent.eu';
 const SKTORRENT_SEARCH_URL = `${SKTORRENT_BASE_URL}/torrent/torrents_v2.php`;
 const ONLINE_BASE_URL = 'https://online.sktorrent.eu';
-const SLEDUJTETO_BASE_URL = 'https://www.sledujteto.cz';
 const RESOLVER_BASE_URL = String(process.env.SKTONLINE_RESOLVER_URL || '').replace(/\/+$/, '');
 const RESOLVER_TOKEN = String(process.env.SKTONLINE_RESOLVER_TOKEN || '').trim();
 const SKTONLINE_PROXY_URL = String(process.env.SKTONLINE_PROXY_URL || '').trim();
@@ -45,7 +44,6 @@ function makeHttp(baseURL, timeout = 9000, agent = null) {
 
 const sktorrentHttp = makeHttp(SKTORRENT_BASE_URL, 9000);
 const onlineHttp = makeHttp(ONLINE_BASE_URL, 9000, sktOnlineProxyAgent);
-const sledujtetoHttp = makeHttp(SLEDUJTETO_BASE_URL, 9000);
 const resolverHttp = RESOLVER_BASE_URL ? makeHttp(RESOLVER_BASE_URL, 12000) : null;
 
 let onlineCookieHeader = '';
@@ -606,11 +604,6 @@ function hostOf(url) {
   try { return new URL(url).hostname.toLowerCase(); } catch (_) { return ''; }
 }
 
-function isSledujToUrl(url) {
-  const host = hostOf(url);
-  return host === 'sledujteto.cz' || host.endsWith('.sledujteto.cz');
-}
-
 function isSktOnlineUrl(url) {
   const host = hostOf(url);
   return host === 'online.sktorrent.eu' || /^online\d+\.sktorrent\.eu$/i.test(host);
@@ -754,215 +747,6 @@ async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
     return [];
   }
 }
-
-function sledujtetoFileId(pageUrl, $, html) {
-  try {
-    const match = new URL(pageUrl).pathname.match(/\/file\/(\d+)/i);
-    if (match) return match[1];
-  } catch (_) {}
-  const initScript = $('#player').attr('data-ng-init') || $('[data-ng-init*="init("]').first().attr('data-ng-init') || '';
-  const initMatch = String(initScript).match(/init\s*\(\s*(\d+)/i);
-  if (initMatch) return initMatch[1];
-  const htmlMatch = String(html || '').match(/data-ng-init=["'][^"']*init\s*\(\s*(\d+)/i);
-  return htmlMatch ? htmlMatch[1] : null;
-}
-
-function sledujtetoPlayerInit($, html, pageUrl) {
-  const values = [
-    $('#player').attr('data-ng-init'),
-    $('[data-ng-init*="init("]').first().attr('data-ng-init')
-  ].filter(Boolean);
-  const rawMatch = String(html || '').match(/init\s*\(\s*(\d+)\s*,\s*['"]([^'"]+)['"]/i);
-  if (rawMatch) values.push(`init(${rawMatch[1]},'${rawMatch[2]}')`);
-  for (const value of values) {
-    const match = String(value).match(/init\s*\(\s*(\d+)\s*,\s*['"]([^'"]+)['"]/i);
-    if (!match) continue;
-    const apiUrl = absoluteUrl(match[2], pageUrl);
-    if (apiUrl) return { fileId: match[1], apiUrl };
-  }
-  return null;
-}
-
-function sourceItemsFromJson(value) {
-  const out = [];
-  const walk = node => {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item);
-      return;
-    }
-    const file = node.file || node.video_url || node.videoUrl || node.url;
-    if (typeof file === 'string' && isHttpUrl(file)) out.push({ url: file, label: String(node.label || node.quality || node.res || '') });
-    for (const child of Object.values(node)) if (child && typeof child === 'object') walk(child);
-  };
-  walk(value);
-  const seen = new Set();
-  return out.filter(item => !seen.has(item.url) && seen.add(item.url));
-}
-
-function findVideoUrl(value) {
-  if (!value || typeof value !== 'object') return null;
-  for (const key of ['video_url', 'videoUrl', 'file']) {
-    if (typeof value[key] === 'string' && isHttpUrl(value[key])) return value[key];
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findVideoUrl(item);
-      if (found) return found;
-    }
-    return null;
-  }
-  for (const child of Object.values(value)) {
-    if (child && typeof child === 'object') {
-      const found = findVideoUrl(child);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-async function streamsForSledujteto(pageUrl, referer = `${SLEDUJTETO_BASE_URL}/`) {
-  const pageKey = `sledujteto-page:${pageUrl}`;
-  const cached = cache.get(pageKey);
-  if (cached !== undefined) return cached;
-  try {
-    const response = await sledujtetoHttp.get(pageUrl, { headers: { Referer: referer } });
-    const finalUrl = absoluteUrl(response.request?.res?.responseUrl || pageUrl, SLEDUJTETO_BASE_URL) || pageUrl;
-    const $ = cheerio.load(response.data);
-    const pageTitle = $('title').text().replace(/\s+/g, ' ').trim() || 'SledujTo';
-    const streams = mediaUrlsFromHtml($, response.data, finalUrl)
-      .map(item => makeStream('SledujTo', pageTitle, item.url, item.label, finalUrl));
-
-    const player = sledujtetoPlayerInit($, response.data, finalUrl);
-    if (player) {
-      try {
-        const endpoint = new URL(String(player.fileId), player.apiUrl.endsWith('/') ? player.apiUrl : `${player.apiUrl}/`).toString();
-        const info = await sledujtetoHttp.get(endpoint, { headers: { Referer: finalUrl } });
-        for (const item of sourceItemsFromJson(info.data)) {
-          const url = absoluteUrl(item.url, endpoint);
-          if (url && isHttpUrl(url)) streams.push(makeStream('SledujTo', pageTitle, url, item.label, finalUrl));
-        }
-      } catch (error) {
-        console.warn(`[sledujteto] player ${player.fileId}: ${error.message}`);
-      }
-    }
-
-    const fileId = (player && player.fileId) || sledujtetoFileId(finalUrl, $, response.data);
-    if (fileId) {
-      try {
-        const service = await sledujtetoHttp.post('/services/add-file-link', {
-          params: { id: Number(fileId) }
-        }, {
-          headers: {
-            'Content-Type': 'application/json',
-            Origin: SLEDUJTETO_BASE_URL,
-            Referer: finalUrl
-          }
-        });
-        const rawVideoUrl = findVideoUrl(service.data);
-        const url = absoluteUrl(rawVideoUrl, SLEDUJTETO_BASE_URL);
-        if (url && isHttpUrl(url)) streams.push(makeStream('SledujTo', pageTitle, url, '', finalUrl));
-      } catch (error) {
-        console.warn(`[sledujteto] link ${fileId}: ${error.message}`);
-      }
-    }
-
-    const result = dedupeStreams(streams);
-    cache.set(pageKey, result, 60);
-    return result;
-  } catch (error) {
-    console.warn(`[sledujteto] page ${pageUrl}: ${error.message}`);
-    return [];
-  }
-}
-
-function sledujtetoPageUrlFromItem(item) {
-  if (!item || typeof item !== 'object') return null;
-  const raw = item.url || item.link || item.href || item.web_url || item.webUrl || item.page_url || item.pageUrl;
-  const url = absoluteUrl(raw, SLEDUJTETO_BASE_URL);
-  if (!url || !isSledujToUrl(url)) return null;
-  try { return /\/file\/\d+/i.test(new URL(url).pathname) ? url : null; } catch (_) { return null; }
-}
-
-function sledujtetoItemTitle(item, pageUrl) {
-  if (!item || typeof item !== 'object') return pageUrl || '';
-  return String(item.name || item.title || item.filename || item.file_name || item.label || item.description || pageUrl || '').replace(/\s+/g, ' ').trim();
-}
-
-async function searchSledujtetoApi(query, wantedTitles) {
-  const key = `sledujteto-search:${query.toLowerCase()}`;
-  const cached = cache.get(key);
-  if (cached !== undefined) return cached;
-  try {
-    const response = await sledujtetoHttp.get('/api/web/videos', {
-      params: { query, page: 1, limit: 30, collection: 'suggestions', sort: 'relevance', me: 0, excluded_ids: '' },
-      headers: { 'X-Requested-With': 'XMLHttpRequest', Referer: `${SLEDUJTETO_BASE_URL}/` }
-    });
-    const files = Array.isArray(response.data?.data?.files)
-      ? response.data.data.files
-      : Array.isArray(response.data?.files)
-        ? response.data.files
-        : Array.isArray(response.data)
-          ? response.data
-          : [];
-    const urls = [];
-    for (const item of files) {
-      const pageUrl = sledujtetoPageUrlFromItem(item);
-      if (!pageUrl) continue;
-      const title = sledujtetoItemTitle(item, pageUrl);
-      if (titleMatchScore(title, wantedTitles) >= 0.45 || titleMatchScore(pageUrl, wantedTitles) >= 0.45) urls.push(pageUrl);
-    }
-    const result = dedupe(urls).slice(0, 8);
-    cache.set(key, result, result.length ? 300 : 60);
-    return result;
-  } catch (error) {
-    console.warn(`[sledujteto] API search "${query}": ${error.message}`);
-    return [];
-  }
-}
-
-async function searchSledujtetoSlug(query, wantedTitles) {
-  const slug = slugify(query);
-  if (!slug) return [];
-  const pageUrl = `${SLEDUJTETO_BASE_URL}/vyhledat/${encodeURIComponent(slug)}.html`;
-  const key = `sledujteto-slug:${slug}`;
-  const cached = cache.get(key);
-  if (cached !== undefined) return cached;
-  try {
-    const response = await sledujtetoHttp.get(pageUrl, { headers: { Referer: `${SLEDUJTETO_BASE_URL}/` } });
-    const $ = cheerio.load(response.data);
-    const finalUrl = absoluteUrl(response.request?.res?.responseUrl || pageUrl, SLEDUJTETO_BASE_URL) || pageUrl;
-    const urls = [];
-    if ($('#player').length || $('[data-ng-init*="init("]').length) urls.push(finalUrl);
-    $('a[href*="/file/"]').each((_, el) => {
-      const url = absoluteUrl($(el).attr('href'), finalUrl);
-      if (!url) return;
-      const title = String($(el).attr('title') || $(el).text() || url).replace(/\s+/g, ' ').trim();
-      if (titleMatchScore(title, wantedTitles) >= 0.45 || titleMatchScore(url, wantedTitles) >= 0.45) urls.push(url);
-    });
-    const result = dedupe(urls).slice(0, 8);
-    cache.set(key, result, result.length ? 300 : 60);
-    return result;
-  } catch (error) {
-    console.warn(`[sledujteto] slug search "${query}": ${error.message}`);
-    return [];
-  }
-}
-
-async function findSledujtetoByTitle(queries, titles) {
-  for (const query of queries.slice(0, 6)) {
-    let pages = await searchSledujtetoApi(query, titles);
-    if (!pages.length) pages = await searchSledujtetoSlug(query, titles);
-    if (!pages.length) continue;
-    const batches = await Promise.all(pages.slice(0, 6).map(page => streamsForSledujteto(page)));
-    const all = dedupeStreams(batches.flat());
-    if (all.length) return all.slice(0, 8);
-  }
-  return [];
-}
-
-
-
 
 function onlineSearchItemsFromHtml($, wantedTitles) {
   let cards = $('div.well.well-sm').toArray();
@@ -1149,33 +933,6 @@ async function findDirectOnlineByTitle(queries, titles) {
   return [];
 }
 
-async function streamsFromSledujSearch(searchUrl, titles, referer) {
-  const key = 'sleduj-linked-search:' + searchUrl;
-  let pages = cache.get(key);
-  if (pages === undefined) {
-    try {
-      const response = await sledujtetoHttp.get(searchUrl, { headers: { Referer: referer } });
-      const $ = cheerio.load(response.data);
-      pages = [];
-      $('a[href*="/file/"]').each((_, el) => {
-        const link = $(el);
-        const url = absoluteUrl(link.attr('href'), searchUrl);
-        if (!url || !isSledujToUrl(url) || !/\/file\/\d+/i.test(url)) return;
-        const title = String(link.attr('title') || link.text() || link.closest('article,li,div').text() || '').trim();
-        if (title && titleMatchScore(title, titles) < 0.45) return;
-        pages.push(url);
-      });
-      pages = dedupe(pages).slice(0, 8);
-      cache.set(key, pages, pages.length ? 300 : 60);
-    } catch (error) {
-      console.warn('[sledujteto] linked search failed: ' + error.message);
-      return [];
-    }
-  }
-  const streams = await Promise.all(pages.map(url => streamsForSledujteto(url, searchUrl)));
-  return dedupeStreams(streams.flat());
-}
-
 async function streamsFromSktorrentDetail(candidate, client = null) {
   const key = `skt-detail-direct-v3:${client ? client.clientKey : 'anon'}:${candidate.id}`;
   const cached = cache.get(key);
@@ -1207,25 +964,17 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
     }
 
     const links = urlsFromHtml($, response.data, finalUrl);
-    const sledujLinks = links.filter(url => isSledujToUrl(url) && /\/file\/\d+/i.test(url));
-    const sledujSearchLinks = links.filter(url => isSledujToUrl(url) && /\/vyhledat\//i.test(url));
     const onlineEntries = onlineEmbedEntriesFromDetail($, finalUrl, title, response.data);
     const detailVideoId = onlineVideoIdFromHtml($, response.data);
     const onlineDirectLinks = links.filter(url => isSktOnlineUrl(url) && isPlayableMediaUrl(url));
 
-    const [sledujBatches, onlineBatches] = await Promise.all([
-      Promise.all([
-        ...sledujLinks.slice(0, 4).map(url => streamsForSledujteto(url, finalUrl)),
-        ...sledujSearchLinks.slice(0, 2).map(url => streamsFromSledujSearch(url, [title], finalUrl))
-      ]),
-      Promise.all([
-        ...(detailVideoId ? [streamsForKnownOnlineVideoId(detailVideoId, title)] : []),
-        ...onlineEntries.slice(0, 6).map(entry => streamsForOnlinePage(entry.url, finalUrl, entry.title || title)),
-        ...onlineDirectLinks.slice(0, 4).map(url => Promise.resolve([makeStream('SKTOnline', title, url, '', finalUrl)]))
-      ])
+    const onlineBatches = await Promise.all([
+      ...(detailVideoId ? [streamsForKnownOnlineVideoId(detailVideoId, title)] : []),
+      ...onlineEntries.slice(0, 6).map(entry => streamsForOnlinePage(entry.url, finalUrl, entry.title || title)),
+      ...onlineDirectLinks.slice(0, 4).map(url => Promise.resolve([makeStream('SKTOnline', title, url, '', finalUrl)]))
     ]);
 
-    streams.push(...sledujBatches.flat(), ...onlineBatches.flat());
+    streams.push(...onlineBatches.flat());
     const result = dedupeStreams(streams).slice(0, 12);
     cache.set(key, result, result.length ? 120 : 60);
     return result;
@@ -1368,17 +1117,15 @@ async function findOnlineSourceBundle({ imdbId, titles, type, season, episode, s
     try { sktClient = getClient(sktUsername, sktPassword); } catch (_) {}
   }
 
-  const [fromDirectOnline, fromTorrentDetails, sledujToByTitle] = await Promise.all([
-    directProviderWithin(findDirectOnlineByTitle(queries, titles), 18000, 'SKTOnline title search'),
-    directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 18000, 'SKTorrent detail players'),
-    directProviderWithin(findSledujtetoByTitle(queries, titles), 12000, 'SledujTo title search')
-  ]);
+  const [fromDirectOnline, fromTorrentDetails] = await Promise.all([
+  directProviderWithin(findDirectOnlineByTitle(queries, titles), 18000, 'SKTOnline title search'),
+  directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 18000, 'SKTorrent detail players')
+]);
 
-  const resolvedAll = dedupeStreams([
-    ...fromDirectOnline,
-    ...fromTorrentDetails,
-    ...sledujToByTitle
-  ]).slice(0, 48);
+const resolvedAll = dedupeStreams([
+  ...fromDirectOnline,
+  ...fromTorrentDetails
+]).slice(0, 48);
 
   // Keep every healthy SKTOnline videoId internally for subtitles and future
   // rediscovery, but show only the best source for each audio/subtitle variant.

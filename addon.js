@@ -124,9 +124,9 @@ function getHost(req) {
 
 function labels(language) {
   return {
-    cs: { name: 'SKTOnline + SledujTo + SKTorrent', description: 'Přímé streamy ze SKTOnline a SledujTo plus volitelné SKTorrent P2P torrenty.' },
-    sk: { name: 'SKTOnline + SledujTo + SKTorrent', description: 'Priame streamy zo SKTOnline a SledujTo plus voliteľné SKTorrent P2P torrenty.' },
-    en: { name: 'SKTOnline + SledujTo + SKTorrent', description: 'Direct SKTOnline and SledujTo streams plus optional SKTorrent P2P torrents.' }
+    cs: { name: 'SKTOnline + SKTorrent', description: 'Přímé streamy ze SKTOnline plus volitelné SKTorrent P2P torrenty.' },
+    sk: { name: 'SKTOnline + SKTorrent', description: 'Priame streamy zo SKTOnline plus voliteľné SKTorrent P2P torrenty.' },
+    en: { name: 'SKTOnline + SKTorrent', description: 'Direct SKTOnline streams plus optional SKTorrent P2P torrents.' }
   }[language] || null;
 }
 
@@ -483,7 +483,7 @@ app.get('/manifest.json', (req, res) => {
   res.json({
     id: 'cz.caseycz.stremio.sktonline.direct.configure',
     version: VERSION,
-    name: 'SKTOnline + SledujTo + SKTorrent',
+    name: 'SKTOnline + SKTorrent',
     description: `Configure at ${getHost(req)}/configure`,
     types: [], resources: [], catalogs: [],
     behaviorHints: { configurable: true, configurationRequired: true }
@@ -580,7 +580,7 @@ app.get('/health', (req, res) => {
     torrentClients: activeClientCount(),
     resolverConfigured: Boolean(process.env.SKTONLINE_RESOLVER_URL),
     sktonlineProxyConfigured: Boolean(String(process.env.SKTONLINE_PROXY_URL || '').trim()),
-    providers: ['SKTOnline direct search', 'SKTOnline players from SKTorrent details', 'SledujTo', 'SKTorrent P2P', 'Sosac ID overlay'],
+    providers: ['SKTOnline direct search', 'SKTOnline players from SKTorrent details', 'SKTorrent P2P', 'Sosac ID overlay'],
     sosacOverlay: true,
     streamCacheKeys: streamCache.keys().length,
     subtitleCacheKeys: subtitleCache.keys().length,
