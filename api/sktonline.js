@@ -411,6 +411,35 @@ async function streamsForKnownOnlineVideoId(videoId, pageTitle = 'SKTOnline') {
   return result;
 }
 
+function onlineVideoIdFromHtml($, html = '') {
+  const values = [String(html || '')];
+  if ($) {
+    $('video[poster], [style*="media/videos/tmb"], img[src*="media/videos/tmb"], script').each((_, el) => {
+      const node = $(el);
+      values.push(
+        String(node.attr('poster') || ''),
+        String(node.attr('style') || ''),
+        String(node.attr('src') || ''),
+        String(node.html() || '')
+      );
+    });
+  }
+
+  for (const raw of values) {
+    const source = cleanUrlText(raw);
+    if (!source) continue;
+    for (const pattern of [
+      /\bvideo_id\s*=\s*["']?(\d{1,10})/i,
+      /\/media\/videos\/(?:tmb1?|h264)\/+([0-9]{1,10})(?:\/|_)/i,
+      /\/video\/([0-9]{1,10})(?:\/|$)/i
+    ]) {
+      const match = source.match(pattern);
+      if (match) return match[1];
+    }
+  }
+  return null;
+}
+
 function mediaUrlsFromHtml($, html, pageUrl) {
   const out = [];
   const add = (raw, label = '') => {
@@ -482,20 +511,20 @@ function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle, html = '') {
     if (!source) return;
 
     const candidates = [];
-    for (const match of source.match(/(?:https?:)?\/\/online(?:\d+)?\.sktorrent\.eu\/embed\/[a-z0-9_-]+/gi) || []) {
+    for (const match of source.match(/(?:https?:)?\/\/online(?:\d+)?\.sktorrent\.eu\/embed\/[a-z0-9_-]+(?:&\d+)?(?:[?#][^\s\"'<>]*)?/gi) || []) {
       candidates.push(match);
     }
     for (const match of source.match(/(?:^|[\s"'=(])\/embed\/[a-z0-9_-]+/gi) || []) {
       candidates.push(match.replace(/^[\s"'=(]+/, ''));
     }
-    if (!candidates.length && /^\/embed\/[a-z0-9_-]+(?:[?#].*)?$/i.test(source)) candidates.push(source);
+    if (!candidates.length && /^\/embed\/[a-z0-9_-]+(?:&\d+)?(?:[?#].*)?$/i.test(source)) candidates.push(source);
 
     for (const candidate of candidates) {
       let url = null;
       if (/^\/embed\//i.test(candidate)) url = absoluteUrl(candidate, ONLINE_BASE_URL);
       else if (/^\/\//.test(candidate)) url = `https:${candidate}`;
       else url = absoluteUrl(candidate, pageUrl);
-      if (!url || !isSktOnlineUrl(url) || !/\/embed\/[a-z0-9_-]+/i.test(url)) continue;
+      if (!url || !isSktOnlineUrl(url) || !/\/embed\/[a-z0-9_-]+(?:&\d+)?/i.test(url)) continue;
 
       const existing = byUrl.get(url);
       const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim();
@@ -514,6 +543,10 @@ function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle, html = '') {
   // or JavaScript handler instead, so inspect all of those forms as well.
   $('iframe[src], frame[src]').each((_, el) => {
     add($(el).attr('src'), nearbyTitleForOnlineEmbed($, el));
+  });
+
+  $('meta[itemprop="embedURL"][content], meta[property="og:url"][content], meta[property="og:video"][content]').each((_, el) => {
+    add($(el).attr('content'), releaseTitle);
   });
 
   $('a[href], [data-src], [data-url], [data-file], [data-video], [onclick]').each((_, el) => {
@@ -626,7 +659,7 @@ async function searchSktorrentDetails(query, wantedTitles, trustedReference = fa
 }
 
 async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
-  const key = `linked-online:${pageUrl}:${normalize(sourceTitle)}`;
+  const key = `linked-online-v2:${pageUrl}:${normalize(sourceTitle)}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
@@ -657,8 +690,14 @@ async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
     const finalUrl = absoluteUrl(response.request?.res?.responseUrl || pageUrl, ONLINE_BASE_URL) || pageUrl;
     const $ = cheerio.load(response.data);
     const title = sourceTitle || $('title').text().replace(/\s+/g, ' ').trim() || 'SKTOnline';
-    const streams = mediaUrlsFromHtml($, response.data, finalUrl)
+    let streams = mediaUrlsFromHtml($, response.data, finalUrl)
       .map(item => makeStream('SKTOnline', title, item.url, item.label, referer || finalUrl));
+
+    if (!streams.length) {
+      const videoId = onlineVideoIdFromHtml($, response.data);
+      if (videoId) streams = await streamsForKnownOnlineVideoId(videoId, title);
+    }
+
     const result = dedupeStreams(streams);
     cache.set(key, result, result.length ? 120 : 60);
     return result;
@@ -1090,7 +1129,7 @@ async function streamsFromSledujSearch(searchUrl, titles, referer) {
 }
 
 async function streamsFromSktorrentDetail(candidate, client = null) {
-  const key = `skt-detail-direct-v2:${client ? client.clientKey : 'anon'}:${candidate.id}`;
+  const key = `skt-detail-direct-v3:${client ? client.clientKey : 'anon'}:${candidate.id}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
   try {
@@ -1123,7 +1162,8 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
     const sledujLinks = links.filter(url => isSledujToUrl(url) && /\/file\/\d+/i.test(url));
     const sledujSearchLinks = links.filter(url => isSledujToUrl(url) && /\/vyhledat\//i.test(url));
     const onlineEntries = onlineEmbedEntriesFromDetail($, finalUrl, title, response.data);
-  const onlineDirectLinks = links.filter(url => isSktOnlineUrl(url) && isPlayableMediaUrl(url));
+    const detailVideoId = onlineVideoIdFromHtml($, response.data);
+    const onlineDirectLinks = links.filter(url => isSktOnlineUrl(url) && isPlayableMediaUrl(url));
 
     const [sledujBatches, onlineBatches] = await Promise.all([
       Promise.all([
@@ -1131,9 +1171,10 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
         ...sledujSearchLinks.slice(0, 2).map(url => streamsFromSledujSearch(url, [title], finalUrl))
       ]),
       Promise.all([
-      ...onlineEntries.slice(0, 6).map(entry => streamsForOnlinePage(entry.url, finalUrl, entry.title || title)),
-      ...onlineDirectLinks.slice(0, 4).map(url => Promise.resolve([makeStream('SKTOnline', title, url, '', finalUrl)]))
-    ])
+        ...(detailVideoId ? [streamsForKnownOnlineVideoId(detailVideoId, title)] : []),
+        ...onlineEntries.slice(0, 6).map(entry => streamsForOnlinePage(entry.url, finalUrl, entry.title || title)),
+        ...onlineDirectLinks.slice(0, 4).map(url => Promise.resolve([makeStream('SKTOnline', title, url, '', finalUrl)]))
+      ])
     ]);
 
     streams.push(...sledujBatches.flat(), ...onlineBatches.flat());
