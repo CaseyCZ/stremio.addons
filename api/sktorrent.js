@@ -377,22 +377,153 @@ async function downloadTorrentData(client, candidate) {
 }
 
 const VIDEO_EXT = /\.(mkv|mp4|avi|m4v|mov|ts|webm)$/i;
+const EXTRA_VIDEO_HINT = /(?:^|[ ._\-/])(sample|trailer|teaser|bonus|extras?|making[ ._-]*of|ukazka)(?:[ ._\-/]|$)/i;
+
+function episodeText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\\/g, '/');
+}
+
+function explicitEpisodePairs(value) {
+  const text = episodeText(value);
+  const pairs = [];
+  const patterns = [
+    /(?:^|[^a-z0-9])s(?:eason)?\s*0?(\d{1,2})\s*[ ._-]*e(?:p(?:isode)?)?\s*0?(\d{1,3})(?=[^0-9]|$)/gi,
+    /(?:^|[^0-9])0?(\d{1,2})\s*x\s*0?(\d{1,3})(?=[^0-9]|$)/gi,
+    /(?:season|serie|series|seria|sezona)\s*0?(\d{1,2})[^0-9]{0,14}(?:episode|epizoda|episoda|dil|cast|ep)\s*0?(\d{1,3})(?=[^0-9]|$)/gi
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) pairs.push([Number(match[1]), Number(match[2])]);
+  }
+  return pairs;
+}
+
+function seasonMarkers(value) {
+  const text = episodeText(value);
+  const seasons = [];
+  const patterns = [
+    /(?:^|[^a-z0-9])s(?:eason)?\s*0?(\d{1,2})(?=[^0-9]|$)/gi,
+    /(?:season|serie|series|seria|sezona)\s*0?(\d{1,2})(?=[^0-9]|$)/gi
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) seasons.push(Number(match[1]));
+  }
+  return [...new Set(seasons)];
+}
+
+function episodeMarkers(value) {
+  const text = episodeText(value);
+  const episodes = [];
+  const pattern = /(?:^|[^a-z0-9])(?:e(?:p(?:isode)?)?|episode|epizoda|episoda|dil|cast)\s*0?(\d{1,3})(?=[^0-9]|$)/gi;
+  for (const match of text.matchAll(pattern)) episodes.push(Number(match[1]));
+  return [...new Set(episodes)];
+}
+
+function leadingEpisodeNumber(value) {
+  const stem = episodeText(value).replace(/\.[a-z0-9]{2,5}$/i, '');
+  const match = stem.match(/^\s*[\[(]?\s*0*(\d{1,3})\s*(?:[\])]|[ ._-]|$)/);
+  return match ? Number(match[1]) : null;
+}
+
+function hasCompactEpisodeCode(value, season, episode) {
+  const text = episodeText(value);
+  const s = String(season).padStart(2, '0');
+  const e = String(episode).padStart(2, '0');
+  const codes = [...new Set([`${season}${e}`, `${s}${e}`])]
+    .filter(code => !['2160', '1440', '1080', '720', '480', '360'].includes(code));
+  return codes.some(code => new RegExp(`(?:^|[^0-9])${code}(?:[^0-9]|$)`).test(text));
+}
+
+function parentPath(filePath) {
+  const parts = String(filePath || '').replace(/\\/g, '/').split('/');
+  parts.pop();
+  return parts.join('/');
+}
+
+function episodeFileScore(file, season, episode) {
+  const fullPath = String(file.path || '');
+  const normalized = episodeText(fullPath);
+  const parts = normalized.split('/');
+  const fileName = parts.pop() || '';
+  const parent = parts.join('/');
+
+  const pairs = explicitEpisodePairs(normalized);
+  if (pairs.length) {
+    return pairs.some(([s, e]) => s === season && e === episode) ? 140 : Number.NEGATIVE_INFINITY;
+  }
+
+  const parentSeasons = seasonMarkers(parent);
+  if (parentSeasons.length && !parentSeasons.includes(season)) return Number.NEGATIVE_INFINITY;
+  const seasonContext = parentSeasons.includes(season);
+  let score = seasonContext ? 35 : 0;
+
+  const markedEpisodes = episodeMarkers(fileName);
+  if (markedEpisodes.length) {
+    if (!markedEpisodes.includes(episode)) return Number.NEGATIVE_INFINITY;
+    score += 90;
+  }
+
+  if (hasCompactEpisodeCode(fileName, season, episode)) score += 100;
+
+  const leading = leadingEpisodeNumber(fileName);
+  if (seasonContext && leading === episode) score += 75;
+
+  if (EXTRA_VIDEO_HINT.test(normalized)) score -= 80;
+  return score;
+}
+
+function median(values) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function chooseBySeasonStructure(videos, season, episode) {
+  const groups = new Map();
+  for (const file of videos) {
+    const parent = parentPath(file.path);
+    const seasons = seasonMarkers(parent);
+    if (!seasons.includes(season) || EXTRA_VIDEO_HINT.test(episodeText(file.path))) continue;
+    if (!groups.has(parent)) groups.set(parent, []);
+    groups.get(parent).push(file);
+  }
+
+  const rankedGroups = [...groups.values()]
+    .map(group => {
+      const lengths = group.map(file => Number(file.length || 0)).filter(length => length > 0);
+      const typical = median(lengths);
+      const threshold = typical > 0 ? Math.max(50 * 1024 * 1024, typical * 0.35) : 0;
+      const main = group
+        .filter(file => !threshold || Number(file.length || 0) >= threshold)
+        .sort((a, b) => a.index - b.index);
+      return { main, typical };
+    })
+    .filter(group => group.main.length >= episode && group.main.length <= 40)
+    .sort((a, b) => (b.main.length - a.main.length) || (b.typical - a.typical));
+
+  if (!rankedGroups.length) return null;
+  return rankedGroups[0].main[episode - 1] || null;
+}
 
 function chooseVideoFile(files, type, season, episode) {
   const videos = (files || []).filter(file => VIDEO_EXT.test(file.path));
   if (!videos.length) return null;
 
   if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {
-    const s = String(season).padStart(2, '0');
-    const e = String(episode).padStart(2, '0');
-    const patterns = [
-      new RegExp(`(?:^|[^a-z0-9])s0?${season}[^a-z0-9]*e0?${episode}(?:[^0-9]|$)`, 'i'),
-      new RegExp(`(?:^|[^0-9])0?${season}x0?${episode}(?:[^0-9]|$)`, 'i'),
-      new RegExp(`(?:^|[^a-z0-9])${s}${e}(?:[^0-9]|$)`, 'i')
-    ];
-    const matched = videos.filter(file => patterns.some(pattern => pattern.test(file.path)));
-    if (matched.length) return matched.sort((a, b) => b.length - a.length)[0];
-    return null;
+    const scored = videos
+      .map(file => ({ file, score: episodeFileScore(file, season, episode) }))
+      .filter(item => Number.isFinite(item.score) && item.score >= 75)
+      .sort((a, b) => (b.score - a.score) || (b.file.length - a.file.length));
+    if (scored.length) return scored[0].file;
+
+    // Last-resort structural inference for packs where filenames contain only
+    // titles or simple numbering: identify the requested season folder, remove
+    // obvious extras/samples and select the Nth main video in torrent order.
+    return chooseBySeasonStructure(videos, season, episode);
   }
 
   return videos.sort((a, b) => b.length - a.length)[0];
