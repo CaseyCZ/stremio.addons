@@ -18,13 +18,13 @@
     input:focus,select:focus{border-color:#0ea5e9;box-shadow:0 0 0 2px rgba(14,165,233,.15)}
     .toggle{display:flex;align-items:flex-start;gap:11px;margin:18px 0;padding:14px;border:1px solid var(--border);border-radius:12px;background:#0b1220;cursor:pointer}.toggle input{width:20px;min-height:20px;height:20px;margin:1px 0 0;accent-color:#0284c7}.toggle strong{display:block;color:#dbeafe;font-size:.92rem}.toggle span{display:block;color:var(--muted);font-size:.8rem;line-height:1.4;margin-top:4px}
     .auth{padding:2px 14px 12px;border:1px solid var(--border);border-radius:12px;background:rgba(23,32,51,.7);margin-bottom:16px}.auth[hidden]{display:none}
-    .result-row{display:flex;gap:8px;align-items:stretch}.result-row input{min-width:0;flex:1}
+    .result-row,.password-row{display:flex;gap:8px;align-items:stretch}.result-row input,.password-row input{min-width:0;flex:1}
     button,.btn{border:0;border-radius:12px;background:var(--accent2);color:#fff;font:inherit;font-weight:750;cursor:pointer;text-decoration:none;text-align:center}
-    button:disabled{opacity:.55;cursor:wait}.copy{flex:0 0 auto;padding:0 13px;background:#243149;border:1px solid var(--border)}
+    button:disabled{opacity:.55;cursor:wait}.copy,.show-password{flex:0 0 auto;padding:0 13px;background:#243149;border:1px solid var(--border)}.show-password{min-width:88px}
     .primary{width:100%;min-height:48px;margin-top:10px;font-size:1rem}.note{margin:18px 0;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);color:#cbd5e1;font-size:.86rem;line-height:1.45}
     .sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}.source{padding:14px;border:1px solid var(--border);border-radius:12px;background:#0b1220}.source strong{display:block;color:#dbeafe;font-size:.92rem}.source span{display:block;color:var(--muted);font-size:.8rem;line-height:1.4;margin-top:4px}
     #result{display:none;margin-top:22px;padding-top:20px;border-top:1px solid var(--border)}#installUrl{font-size:.78rem}.btn{display:block;width:100%;padding:13px;margin-top:10px}#status{min-height:20px;margin-top:12px;color:var(--ok);font-size:.86rem}.error{color:var(--err)!important}.foot{margin:14px 4px 0;color:#64748b;text-align:center;font-size:.76rem}
-    @media(max-width:720px){.sources{grid-template-columns:1fr}}@media(max-width:520px){body{padding:14px}.card{padding:21px}}
+    @media(max-width:720px){.sources{grid-template-columns:1fr}}@media(max-width:520px){body{padding:14px}.card{padding:21px}.password-row{align-items:stretch}.show-password{min-width:82px;padding:0 10px}}
   </style>
 </head>
 <body>
@@ -36,7 +36,7 @@
         <span class="badge">🎞️ Direct + P2P</span>
       </div>
       <h1>SKTOnline + SKTorrent</h1>
-      <p class="lead">Přímá videa zůstávají přímá. Volitelně lze přidat i SKTorrent P2P, kdy server pouze získá metadata .torrent a Stremio se připojuje k peerům samo.</p>
+      <p class="lead">Jeden addon pro přímé SKTOnline streamy, dostupné titulky a volitelné SKTorrent P2P zdroje. Server pouze vyhledá zdroj a metadata — samotné video jde přímo z CDN a torrent přímo přes P2P.</p>
 
       <div class="field">
         <label for="uiLanguage">Jazyk addonu</label>
@@ -48,9 +48,9 @@
       </div>
 
       <div class="sources">
-        <div class="source"><strong>SKTOnline</strong><span>Přímé MP4 streamy z CDN SKTorrent. Video nejde přes náš server.</span></div>
-        <div class="source"><strong>SKTorrent P2P</strong><span>Addon vrátí Stremiu infoHash, správný soubor a trackery z původního .torrentu.</span></div>
-        <div class="source"><strong>Sosáč overlay</strong><span>Položky katalogu Sosáče převede na IMDb/Cinemeta ID bez změny Sosáč addonu.</span></div>
+        <div class="source"><strong>SKTOnline Direct</strong><span>Přímé MP4 streamy z CDN SKTorrent, včetně kvality, dostupných jazykových informací a titulků. Video nejde přes náš server.</span></div>
+        <div class="source"><strong>SKTorrent P2P</strong><span>Volitelné torrentové zdroje s původním názvem releasu, jazykem, kvalitou, velikostí a seedery. Stremio přehrává přes P2P.</span></div>
+        <div class="source"><strong>Sosáč overlay</strong><span>Položky katalogu Sosáče převede na IMDb/Cinemeta ID, aby pro ně šlo dohledat SKTOnline a SKTorrent zdroje. Sosáč addon se nemění.</span></div>
       </div>
 
       <label class="toggle" for="enableTorrents">
@@ -65,7 +65,7 @@
         </div>
         <div class="field">
           <label for="sktPassword">SKTorrent heslo</label>
-          <input id="sktPassword" type="password" autocomplete="current-password" placeholder="Heslo">
+          <div class="password-row"><input id="sktPassword" type="password" autocomplete="current-password" placeholder="Heslo"><button class="show-password" type="button" data-password-target="sktPassword" aria-label="Zobrazit SKTorrent heslo" aria-pressed="false">Zobrazit</button></div>
         </div>
         <div class="note">Při vytvoření odkazu se přihlášení ověří. Jméno a heslo jsou uvnitř instalačního tokenu zašifrované AES-256-GCM. Když SKTorrent cookies vyprší, addon se znovu přihlásí automaticky — není potřeba přeinstalace.</div>
       </div>
@@ -77,12 +77,12 @@
         </div>
         <div class="field">
           <label for="sosacPassword">Sosáč heslo (volitelné)</label>
-          <input id="sosacPassword" type="password" autocomplete="current-password" placeholder="Heslo">
+          <div class="password-row"><input id="sosacPassword" type="password" autocomplete="current-password" placeholder="Heslo"><button class="show-password" type="button" data-password-target="sosacPassword" aria-label="Zobrazit Sosáč heslo" aria-pressed="false">Zobrazit</button></div>
         </div>
         <div class="note">Slouží jen pro naši vlastní překladovou vrstvu <code>sosac_* → IMDb/Cinemeta</code>. Sosáč repo ani addon se nijak nemění.</div>
       </div>
 
-      <div class="note">Přehrávání zůstává mimo náš server: direct zdroje jdou přímo z jejich CDN a torrent jde přímo přes P2P. Server řeší jen vyhledání, přihlášení a metadata.</div>
+      <div class="note">Přehrávání zůstává mimo náš server: Direct zdroje jdou přímo z CDN a torrent jde přímo přes P2P. Server řeší jen vyhledání, přihlášení a metadata.</div>
       <button id="generate" class="primary" type="button">Vytvořit instalační odkaz</button>
 
       <div id="result">
@@ -106,8 +106,9 @@ let requestId=0;
 function getBasePath(){return location.pathname.replace(/\/configure\/?$/,'').replace(/\/enc1\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2}$/,'').replace(/\/$/,'')}
 function getInstallBasePath(){const base=getBasePath();return base||'/stremio-sktonline'}
 function setStatus(text,error=false){status.textContent=text;status.classList.toggle('error',error)}
+function togglePassword(button){const input=document.getElementById(button.dataset.passwordTarget);if(!input)return;const show=input.type==='password';input.type=show?'text':'password';button.textContent=show?'Skrýt':'Zobrazit';button.setAttribute('aria-pressed',show?'true':'false')}
 function syncTorrentUi(){torrentAuth.hidden=!enableTorrents.checked}
-enableTorrents.addEventListener('change',syncTorrentUi);syncTorrentUi();
+enableTorrents.addEventListener('change',syncTorrentUi);syncTorrentUi();document.querySelectorAll('[data-password-target]').forEach(button=>button.addEventListener('click',()=>togglePassword(button)));
 async function loadVersion(){for(const url of [...new Set([`${getBasePath()}/health`,'/health'])]){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)continue;const d=await r.json();if(d.version){versionBadge.textContent=`📦 Verze ${d.version}`;return}}catch(_){}}versionBadge.textContent='📦 Verze'}
 async function buildInstall(){const id=++requestId;result.style.display='block';installUrl.value='';stremioBtn.href='#';generateBtn.disabled=true;try{const torrents=enableTorrents.checked;const username=document.getElementById('sktUsername').value.trim();const password=document.getElementById('sktPassword').value;if(torrents&&(!username||!password))throw new Error('Vyplň uživatelské jméno a heslo SKTorrent.');setStatus(torrents?'Ověřuji SKTorrent přihlášení a vytvářím konfiguraci…':'Vytvářím konfiguraci…');const cfg={uiLanguage:document.getElementById('uiLanguage').value,enableOnline:true,enableTorrents:torrents,sktUsername:username,sktPassword:password,sosacUsername:document.getElementById('sosacUsername').value.trim(),sosacPassword:document.getElementById('sosacPassword').value};const response=await fetch(`${getBasePath()}/api/config-token`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},cache:'no-store',body:JSON.stringify(cfg)});const data=await response.json().catch(()=>({}));if(!response.ok||!data.token)throw new Error(data.error||'Nepodařilo se vytvořit konfiguraci.');if(id!==requestId)return;const basePath=getInstallBasePath();const path=`${basePath}/${data.token}/manifest.json`;installUrl.value=`${location.origin}${path}`;stremioBtn.href=`stremio://${location.host}${path}`;setStatus(data.torrentsEnabled?'✓ Přihlášení ověřeno. Direct + P2P instalační odkaz je připravený.':'✓ Direct instalační odkaz je připravený.')}catch(error){if(id===requestId)setStatus(error.message||'Chyba při vytváření konfigurace.',true)}finally{if(id===requestId)generateBtn.disabled=false}}
 generateBtn.addEventListener('click',buildInstall);document.getElementById('copyUrl').addEventListener('click',async()=>{if(!installUrl.value)return;try{await navigator.clipboard.writeText(installUrl.value);setStatus('Odkaz zkopírován.')}catch(_){installUrl.focus();installUrl.select();setStatus('Odkaz je označený. Zkopíruj ho ručně.')}});loadVersion();
