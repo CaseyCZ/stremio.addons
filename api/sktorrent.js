@@ -3,7 +3,6 @@ const cheerio = require('cheerio');
 const NodeCache = require('node-cache');
 const bencode = require('bncode');
 const crypto = require('crypto');
-const { getCsfdUrl } = require('./csfd');
 
 const BASE_URL = 'https://sktorrent.eu';
 const LOGIN_URL = `${BASE_URL}/torrent/login.php`;
@@ -255,8 +254,10 @@ async function searchTorrents(query, wantedTitles, maxPages = 1, trustedReferenc
       });
       const $ = cheerio.load(response.data);
       let found = 0;
+      let rawCount = 0;
 
       $('a[href^="details.php"] img, a[href*="details.php"] img').each((_, img) => {
+        rawCount += 1;
         const link = $(img).closest('a');
         const cell = link.closest('td');
         const href = String(link.attr('href') || '');
@@ -288,7 +289,7 @@ async function searchTorrents(query, wantedTitles, maxPages = 1, trustedReferenc
         found += 1;
       });
 
-      if (found < 10) break;
+      if (rawCount < 10) break;
     } catch (error) {
       console.warn(`[sktorrent] search "${query}" page ${page}: ${error.message}`);
       break;
@@ -435,25 +436,15 @@ function queryVariants(titles, type, season, episode) {
 
 async function findTorrentStreams({ username, password, imdbId, titles, type, season, episode, limit = 8 }) {
   const client = getClient(username, password);
-  const queries = queryVariants(titles, type, season, episode);
-  const csfdUrl = await getCsfdUrl(imdbId);
-  const found = new Map();
-
-  // Exact CSFD reference is the highest-confidence path. One page is normally
-  // enough and avoids spending most of the Stremio timeout walking pagination.
-  if (csfdUrl) {
-    const exact = await searchTorrents(csfdUrl, titles, 1, true);
-    for (const item of exact) if (!found.has(item.id)) found.set(item.id, item);
-  }
-
-  // Fill any remaining slots from broader text variants in small parallel batches.
-  for (let offset = 0; offset < queries.length && found.size < limit * 2; offset += 4) {
-    const batch = queries.slice(offset, offset + 4);
-    const batches = await Promise.all(batch.map(query => searchTorrents(query, titles, 1, false)));
-    for (const results of batches) {
-      for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
-    }
-  }
+  // Search by the actual movie/series title and inspect the returned releases.
+  // Do not spend the request budget on CSFD lookups or query permutations.
+  const plainTitles = [...new Set((titles || [])
+    .map(title => String(title || '').replace(/\\b(?:19|20)\\d{2}\\b/g, ' ').replace(/\\s+/g, ' ').trim())
+    .filter(Boolean))];
+  const query = plainTitles.sort((a, b) => a.length - b.length)[0] || '';
+  if (!query) return [];
+  const results = await searchTorrents(query, titles, 3, false);
+  const found = new Map(results.map(item => [item.id, item]));
 
   const candidates = [...found.values()]
     .sort((a, b) => (b.score - a.score) || (b.seeds - a.seeds))
