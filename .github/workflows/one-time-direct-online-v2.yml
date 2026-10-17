@@ -1,0 +1,32 @@
+name: One-time direct stream repair
+
+on:
+  push:
+    branches: [Master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch
+        run: python scripts/patch_direct_online_v2.py
+      - name: Syntax check
+        run: |
+          node --check api/sktonline.js
+          node --check addon.js
+      - name: Commit repair and cleanup
+        shell: bash
+        run: |
+          rm -f scripts/patch_direct_online_v2.py .github/workflows/one-time-direct-online-v2.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/sktonline.js scripts/patch_direct_online_v2.py .github/workflows/one-time-direct-online-v2.yml
+          git commit -m "Repair direct SKTOnline video discovery and playback"
+          git push
