@@ -1,7 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const NodeCache = require('node-cache');
-const { getCsfdUrl } = require('./csfd');
 const { getClient } = require('./sktorrent');
 
 const SKTORRENT_BASE_URL = 'https://sktorrent.eu';
@@ -803,20 +802,13 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
 
 async function findFromSktorrentDetails(queries, titles, imdbId, client = null) {
   const candidates = new Map();
-  const csfdUrl = await getCsfdUrl(imdbId);
-  if (csfdUrl) {
-    const exact = await searchSktorrentDetails(csfdUrl, titles, true);
-    for (const item of exact) if (!candidates.has(item.id)) candidates.set(item.id, item);
+  // Search SKTorrent by the plain title, then inspect matching results.
+  const query = String(queries.find(value => value && !/\\b(?:19|20)\\d{2}\\b/.test(value)) || queries[0] || '').trim();
+  if (query) {
+    const results = await searchSktorrentDetails(query, titles);
+    for (const item of results) candidates.set(item.id, item);
   }
 
-  const fallbacks = queries.slice(0, 6);
-  for (let offset = 0; offset < fallbacks.length && candidates.size < 10; offset += 3) {
-    const batch = fallbacks.slice(offset, offset + 3);
-    const groups = await Promise.all(batch.map(query => searchSktorrentDetails(query, titles)));
-    for (const found of groups) {
-      for (const item of found) if (!candidates.has(item.id)) candidates.set(item.id, item);
-    }
-  }
   if (!candidates.size) return [];
   const rankedCandidates = [...candidates.values()].sort((a, b) => {
     const playVideoDiff = Number(b.hasPlayVideo) - Number(a.hasPlayVideo);
