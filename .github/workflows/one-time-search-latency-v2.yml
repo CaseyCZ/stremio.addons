@@ -1,0 +1,35 @@
+name: One-time search latency v2
+
+on:
+  push:
+    branches: [Master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch
+        run: python scripts/patch_search_latency.py
+      - name: Syntax check
+        run: |
+          node --check addon.js
+          node --check api/csfd.js
+          node --check api/sktorrent.js
+          node --check api/sktonline.js
+          bash -n deploy-server.sh
+      - name: Commit patch and cleanup
+        shell: bash
+        run: |
+          rm -f scripts/patch_search_latency.py .github/workflows/one-time-search-latency-v2.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add addon.js api/sktorrent.js api/sktonline.js deploy-server.sh scripts/patch_search_latency.py .github/workflows/one-time-search-latency-v2.yml
+          git commit -m "Optimize SKTorrent search latency"
+          git push
