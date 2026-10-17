@@ -439,7 +439,7 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
   // Search by the actual movie/series title and inspect the returned releases.
   // Do not spend the request budget on CSFD lookups or query permutations.
   const plainTitles = [...new Set((titles || [])
-    .map(title => String(title || '').replace(/\\b(?:19|20)\\d{2}\\b/g, ' ').replace(/\\s+/g, ' ').trim())
+    .map(title => String(title || '').replace(/\${x}(?:19|20)\${x}{2}\${x}/g, ' ').replace(/\${x}+/g, ' ').trim())
     .filter(Boolean))];
   const query = plainTitles.sort((a, b) => a.length - b.length)[0] || '';
   if (!query) return [];
