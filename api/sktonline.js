@@ -141,7 +141,7 @@ function languageCodesInText(text) {
   const source = String(text || '').toUpperCase();
   const out = [];
   for (const def of LANGUAGE_DEFS) {
-    if (def.aliases.some(alias => new RegExp(`\\b${alias}\\b`, 'i').test(source))) out.push(def.code);
+    if (def.aliases.some(alias => new RegExp(`\${x}${alias}\${x}`, 'i').test(source))) out.push(def.code);
   }
   return out;
 }
@@ -177,8 +177,8 @@ function subtitleCodesInText(text) {
   const subtitleWord = '(?:TITULKY|TITULKU|TITULKYMI|TIT|SUBS?|SUBTITLE[S]?)';
   for (const def of LANGUAGE_DEFS) {
     for (const alias of def.aliases) {
-      const before = new RegExp(`\\b${alias}\\b[^\\n\\r,;|]{0,12}\\b${subtitleWord}\\b`, 'i');
-      const after = new RegExp(`\\b${subtitleWord}\\b[^\\n\\r,;|]{0,12}\\b${alias}\\b`, 'i');
+      const before = new RegExp(`\${x}${alias}\${x}[^\\n\\r,;|]{0,12}\${x}${subtitleWord}\${x}`, 'i');
+      const after = new RegExp(`\${x}${subtitleWord}\${x}[^\\n\\r,;|]{0,12}\${x}${alias}\${x}`, 'i');
       if (before.test(source) || after.test(source)) {
         found.push(def.code);
         break;
@@ -803,7 +803,7 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
 async function findFromSktorrentDetails(queries, titles, imdbId, client = null) {
   const candidates = new Map();
   // Search SKTorrent by the plain title, then inspect matching results.
-  const query = String(queries.find(value => value && !/\\b(?:19|20)\\d{2}\\b/.test(value)) || queries[0] || '').trim();
+  const query = String(queries.find(value => value && !/\${x}(?:19|20)\${x}{2}\${x}/.test(value)) || queries[0] || '').trim();
   if (query) {
     const results = await searchSktorrentDetails(query, titles);
     for (const item of results) candidates.set(item.id, item);
