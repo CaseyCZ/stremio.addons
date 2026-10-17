@@ -83,21 +83,23 @@ function normalizeImdb(value) {
 
 function extractImdb(value, depth = 0, seen = new Set()) {
   if (depth > 4 || value === null || value === undefined) return null;
-  const primitive = normalizeImdb(value);
-  if (primitive) return primitive;
   if (typeof value !== 'object' || seen.has(value)) return null;
   seen.add(value);
 
   const preferred = ['imdb', 'imdb_id', 'imdbId', 'imdbid', 'imdbID', 'm'];
   for (const key of preferred) {
     if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
-    const direct = normalizeImdb(value[key]);
+    const candidate = value[key];
+    const direct = normalizeImdb(candidate);
     if (direct) return direct;
-    const nested = extractImdb(value[key], depth + 1, seen);
-    if (nested) return nested;
+    if (candidate && typeof candidate === 'object') {
+      const nested = extractImdb(candidate, depth + 1, seen);
+      if (nested) return nested;
+    }
   }
+
   for (const [key, nested] of Object.entries(value)) {
-    if (preferred.includes(key)) continue;
+    if (preferred.includes(key) || !nested || typeof nested !== 'object') continue;
     const found = extractImdb(nested, depth + 1, seen);
     if (found) return found;
   }

@@ -626,7 +626,7 @@ async function searchSktorrentDetails(query, wantedTitles, trustedReference = fa
 
       $('a[href*="page="]').each((_, el) => {
         const href = String($(el).attr('href') || '');
-        const match = href.match(/[?&]page=(\di+)/i);
+        const match = href.match(/[?&]page=(\d+)/i);
         if (match) lastPage = Math.max(lastPage, Number(match[1]));
       });
 
@@ -1288,7 +1288,7 @@ async function findOnlineStreams({ imdbId, titles, type, season, episode, sktUse
 
   const [fromDirectOnline, fromTorrentDetails, sledujToByTitle] = await Promise.all([
     directProviderWithin(findDirectOnlineByTitle(queries, titles), 18000, 'SKTOnline title search'),
-    directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 60000, 'SKTorrent detail players'),
+    directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 18000, 'SKTorrent detail players'),
     directProviderWithin(findSledujtetoByTitle(queries, titles), 12000, 'SledujTo title search')
   ]);
 
