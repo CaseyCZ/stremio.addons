@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Apply patch
-        run: node scripts/apply-sosac-overlay-subtitles.js
+        run: node scripts/apply-sosac-overlay-v2.js
       - name: Validate JavaScript
         run: |
           node --check addon.js
@@ -28,6 +28,8 @@ jobs:
       - name: Commit result
         run: |
           rm -f scripts/apply-sosac-overlay-subtitles.js
+          rm -f scripts/apply-sosac-overlay-v2.js
+          rm -f scripts/sosac-overlay-addon-snippet.txt
           rm -f .github/workflows/one-time-add-sktonline-subtitles.yml
           rm -f .github/workflows/one-time-apply-sosac-overlay.yml
           git config user.name "github-actions[bot]"
