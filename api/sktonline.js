@@ -385,15 +385,66 @@ function detailAudioCodes($) {
   return dedupe(out);
 }
 
-function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle) {
+function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle, html = '') {
   const entries = [];
-  const seen = new Set();
+  const byUrl = new Map();
+
+  const add = (raw, title = '') => {
+    const source = cleanUrlText(raw);
+    if (!source) return;
+
+    const candidates = [];
+    for (const match of source.match(/(?:https?:)?\/\/online(?:\d+)?\.sktorrent\.eu\/embed\/[a-z0-9_-]+/gi) || []) {
+      candidates.push(match);
+    }
+    for (const match of source.match(/(?:^|[\s"'=(])\/embed\/[a-z0-9_-]+/gi) || []) {
+      candidates.push(match.replace(/^[\s"'=(]+/, ''));
+    }
+    if (!candidates.length && /^\/embed\/[a-z0-9_-]+(?:[?#].*)?$/i.test(source)) candidates.push(source);
+
+    for (const candidate of candidates) {
+      let url = null;
+      if (/^\/embed\//i.test(candidate)) url = absoluteUrl(candidate, ONLINE_BASE_URL);
+      else if (/^\/\//.test(candidate)) url = `https:${candidate}`;
+      else url = absoluteUrl(candidate, pageUrl);
+      if (!url || !isSktOnlineUrl(url) || !/\/embed\/[a-z0-9_-]+/i.test(url)) continue;
+
+      const existing = byUrl.get(url);
+      const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim();
+      if (existing) {
+        if (!existing.title && cleanTitle) existing.title = cleanTitle;
+        continue;
+      }
+      const entry = { url, title: cleanTitle };
+      byUrl.set(url, entry);
+      entries.push(entry);
+    }
+  };
+
+  // The original site usually embeds the player in an iframe. Some current
+  // SKTorrent detail pages expose the same link as an anchor, data attribute
+  // or JavaScript handler instead, so inspect all of those forms as well.
   $('iframe[src], frame[src]').each((_, el) => {
-    const url = absoluteUrl($(el).attr('src'), pageUrl);
-    if (!url || !isSktOnlineUrl(url) || !/\/embed\//i.test(url) || seen.has(url)) return;
-    seen.add(url);
-    entries.push({ url, title: nearbyTitleForOnlineEmbed($, el) });
+    add($(el).attr('src'), nearbyTitleForOnlineEmbed($, el));
   });
+
+  $('a[href], [data-src], [data-url], [data-file], [data-video], [onclick]').each((_, el) => {
+    const node = $(el);
+    const title = String(
+      node.attr('title') ||
+      node.attr('aria-label') ||
+      node.text() ||
+      releaseTitle || ''
+    ).replace(/\s+/g, ' ').trim();
+    for (const attr of ['href', 'src', 'data-src', 'data-url', 'data-file', 'data-video', 'onclick']) {
+      add(node.attr(attr), title);
+    }
+  });
+
+  // Also scan raw HTML. This catches escaped URLs inside inline scripts such as
+  // https:\/\/online.sktorrent.eu\/embed\/<token> that Cheerio does not expose
+  // as a normal attribute.
+  add(cleanUrlText(html), releaseTitle);
 
   const pageCodes = detailAudioCodes($);
   if (pageCodes.length && pageCodes.length === entries.length) {
@@ -935,13 +986,23 @@ async function streamsFromSledujSearch(searchUrl, titles, referer) {
 }
 
 async function streamsFromSktorrentDetail(candidate, client = null) {
-  const key = `skt-detail-direct:${client ? client.clientKey : 'anon'}:${candidate.id}`;
+  const key = `skt-detail-direct-v2:${client ? client.clientKey : 'anon'}:${candidate.id}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
   try {
-    const response = client
-      ? await client.authenticatedGet(candidate.detailsUrl, { headers: { Referer: SKTORRENT_SEARCH_URL } })
-      : await sktorrentHttp.get(candidate.detailsUrl, { headers: { Referer: SKTORRENT_SEARCH_URL } });
+    const fetchDetail = () => client
+      ? client.authenticatedGet(candidate.detailsUrl, { headers: { Referer: SKTORRENT_SEARCH_URL } })
+      : sktorrentHttp.get(candidate.detailsUrl, { headers: { Referer: SKTORRENT_SEARCH_URL } });
+    let response = await fetchDetail();
+
+    // SKTorrent can occasionally answer an authenticated detail request with a
+    // successful but empty body when the session has gone stale. Force a fresh
+    // login once before giving up so the direct player links are not lost.
+    if (client && !String(response.data || '').trim()) {
+      await client.login(true);
+      response = await fetchDetail();
+    }
+
     const finalUrl = absoluteUrl(response.request?.res?.responseUrl || candidate.detailsUrl, SKTORRENT_BASE_URL) || candidate.detailsUrl;
     const $ = cheerio.load(response.data);
     const title = candidate.name || $('title').text().replace(/\s+/g, ' ').trim() || 'SKTOnline';
@@ -957,7 +1018,7 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
     const links = urlsFromHtml($, response.data, finalUrl);
     const sledujLinks = links.filter(url => isSledujToUrl(url) && /\/file\/\d+/i.test(url));
     const sledujSearchLinks = links.filter(url => isSledujToUrl(url) && /\/vyhledat\//i.test(url));
-    const onlineEntries = onlineEmbedEntriesFromDetail($, finalUrl, title);
+    const onlineEntries = onlineEmbedEntriesFromDetail($, finalUrl, title, response.data);
   const onlineDirectLinks = links.filter(url => isSktOnlineUrl(url) && isPlayableMediaUrl(url));
 
     const [sledujBatches, onlineBatches] = await Promise.all([
