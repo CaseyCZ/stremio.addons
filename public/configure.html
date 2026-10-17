@@ -36,7 +36,7 @@
         <span class="badge">🎞️ Direct + P2P</span>
       </div>
       <h1>SKTOnline + SKTorrent</h1>
-      <p class="lead">Jeden addon pro přímé SKTOnline streamy, dostupné titulky a volitelné SKTorrent P2P zdroje. Server pouze vyhledá zdroj a metadata — samotné video jde přímo z CDN a torrent přímo přes P2P.</p>
+      <p class="lead">Přímé SKTOnline streamy a volitelné SKTorrent torrenty v jednom addonu. Zobrazuje dostupnou kvalitu, jazyky, titulky a funguje i u položek z katalogu Sosáč.</p>
 
       <div class="field">
         <label for="uiLanguage">Jazyk addonu</label>
@@ -48,14 +48,14 @@
       </div>
 
       <div class="sources">
-        <div class="source"><strong>SKTOnline Direct</strong><span>Přímé MP4 streamy z CDN SKTorrent, včetně kvality, dostupných jazykových informací a titulků. Video nejde přes náš server.</span></div>
-        <div class="source"><strong>SKTorrent P2P</strong><span>Volitelné torrentové zdroje s původním názvem releasu, jazykem, kvalitou, velikostí a seedery. Stremio přehrává přes P2P.</span></div>
-        <div class="source"><strong>Sosáč overlay</strong><span>Položky katalogu Sosáče převede na IMDb/Cinemeta ID, aby pro ně šlo dohledat SKTOnline a SKTorrent zdroje. Sosáč addon se nemění.</span></div>
+        <div class="source"><strong>SKTOnline Direct</strong><span>Přímé video zdroje s dostupnou kvalitou, jazykem a titulky.</span></div>
+        <div class="source"><strong>SKTorrent P2P</strong><span>Volitelné torrentové zdroje s původním názvem releasu, kvalitou, velikostí a seedery.</span></div>
+        <div class="source"><strong>Sosáč overlay</strong><span>U položek z katalogu Sosáč dohledá odpovídající SKTOnline a SKTorrent zdroje. Sosáč addon se nemění.</span></div>
       </div>
 
       <label class="toggle" for="enableTorrents">
         <input id="enableTorrents" type="checkbox" checked>
-        <span><strong>Zapnout SKTorrent P2P torrenty</strong><span>Vyžaduje účet SKTorrent, protože stažení .torrent souboru je dostupné po přihlášení.</span></span>
+        <span><strong>Zapnout SKTorrent P2P torrenty</strong><span>Vyžaduje vlastní účet na SKTorrentu.</span></span>
       </label>
 
       <div id="torrentAuth" class="auth">
@@ -67,7 +67,7 @@
           <label for="sktPassword">SKTorrent heslo</label>
           <div class="password-row"><input id="sktPassword" type="password" autocomplete="current-password" placeholder="Heslo"><button class="show-password" type="button" data-password-target="sktPassword" aria-label="Zobrazit SKTorrent heslo" aria-pressed="false">Zobrazit</button></div>
         </div>
-        <div class="note">Při vytvoření odkazu se přihlášení ověří. Jméno a heslo jsou uvnitř instalačního tokenu zašifrované AES-256-GCM. Když SKTorrent cookies vyprší, addon se znovu přihlásí automaticky — není potřeba přeinstalace.</div>
+        <div class="note">Přihlášení se při vytvoření odkazu ověří. Když později vyprší, addon se znovu přihlásí automaticky. Není potřeba přeinstalace.</div>
       </div>
 
       <div class="auth">
@@ -79,10 +79,10 @@
           <label for="sosacPassword">Sosáč heslo (volitelné)</label>
           <div class="password-row"><input id="sosacPassword" type="password" autocomplete="current-password" placeholder="Heslo"><button class="show-password" type="button" data-password-target="sosacPassword" aria-label="Zobrazit Sosáč heslo" aria-pressed="false">Zobrazit</button></div>
         </div>
-        <div class="note">Slouží jen pro naši vlastní překladovou vrstvu <code>sosac_* → IMDb/Cinemeta</code>. Sosáč repo ani addon se nijak nemění.</div>
+        <div class="note">Volitelné údaje k Sosáči slouží jen k tomu, aby addon našel vlastní SKTOnline a SKTorrent zdroje i pro položky z katalogu Sosáč.</div>
       </div>
 
-      <div class="note">Přehrávání zůstává mimo náš server: Direct zdroje jdou přímo z CDN a torrent jde přímo přes P2P. Server řeší jen vyhledání, přihlášení a metadata.</div>
+      <div class="note">Video se přehrává přímo ze zdroje a torrenty přímo přes P2P. Server addonu slouží jen k vyhledání dostupných zdrojů.</div>
       <button id="generate" class="primary" type="button">Vytvořit instalační odkaz</button>
 
       <div id="result">
