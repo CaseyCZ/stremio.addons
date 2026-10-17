@@ -123,7 +123,11 @@ function buildManifest(cfg) {
     idPrefixes: ['tt'],
     resources: ['stream'],
     catalogs: [],
-    behaviorHints: { configurable: true, configurationRequired: false }
+    behaviorHints: {
+      configurable: true,
+      configurationRequired: false,
+      p2p: Boolean(cfg.enableTorrents)
+    }
   };
 }
 
@@ -269,12 +273,19 @@ app.get('/:cfg/configure', (req, res) => {
 app.get('/manifest.json', (req, res) => {
   noCache(res);
   res.json({
-    id: 'cz.caseycz.stremio.sktonline.direct.configure',
+    id: 'cz.caseycz.stremio.sktonline.direct',
     version: VERSION,
     name: 'SKTOnline + SledujTo + SKTorrent',
     description: `Configure at ${getHost(req)}/configure`,
-    types: [], resources: [], catalogs: [],
-    behaviorHints: { configurable: true, configurationRequired: true }
+    types: ['movie', 'series'],
+    idPrefixes: ['tt'],
+    resources: ['stream'],
+    catalogs: [],
+    behaviorHints: {
+      configurable: true,
+      configurationRequired: true,
+      p2p: true
+    }
   });
 });
 
