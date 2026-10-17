@@ -141,7 +141,7 @@ function languageCodesInText(text) {
   const source = String(text || '').toUpperCase();
   const out = [];
   for (const def of LANGUAGE_DEFS) {
-    if (def.aliases.some(alias => new RegExp(`\b${alias}\b`, 'i').test(source))) out.push(def.code);
+    if (def.aliases.some(alias => new RegExp(`\\b${alias}\\b`, 'i').test(source))) out.push(def.code);
   }
   return out;
 }
@@ -177,8 +177,8 @@ function subtitleCodesInText(text) {
   const subtitleWord = '(?:TITULKY|TITULKU|TITULKYMI|TIT|SUBS?|SUBTITLE[S]?)';
   for (const def of LANGUAGE_DEFS) {
     for (const alias of def.aliases) {
-      const before = new RegExp(`\b${alias}\b[^\\n\\r,;|]{0,12}\b${subtitleWord}\b`, 'i');
-      const after = new RegExp(`\b${subtitleWord}\b[^\\n\\r,;|]{0,12}\b${alias}\b`, 'i');
+      const before = new RegExp(`\\b${alias}\\b[^\\n\\r,;|]{0,12}\\b${subtitleWord}\\b`, 'i');
+      const after = new RegExp(`\\b${subtitleWord}\\b[^\\n\\r,;|]{0,12}\\b${alias}\\b`, 'i');
       if (before.test(source) || after.test(source)) {
         found.push(def.code);
         break;
