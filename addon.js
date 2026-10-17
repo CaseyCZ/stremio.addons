@@ -258,6 +258,14 @@ app.get('/configure', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'configure.html'));
 });
 
+// Stremio opens /<encrypted-config>/configure for an installed configured addon.
+// Keep the existing token private and serve the setup UI at this path.
+app.get('/:cfg/configure', (req, res) => {
+  noCache(res);
+  if (!decryptConfig(req.params.cfg)) return res.status(404).send('Configuration not found');
+  return res.sendFile(path.join(__dirname, 'public', 'configure.html'));
+});
+
 app.get('/manifest.json', (req, res) => {
   noCache(res);
   res.json({
