@@ -20,45 +20,30 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --omit=dev --no-audit --no-fund
-      - name: Inspect SKTorrent player links
+      - name: Locate SKTorrent Play Video controls
         run: |
           node <<'NODE'
           const axios=require('axios');
           const cheerio=require('cheerio');
           const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
           const base='https://sktorrent.eu';
-          const headers={'User-Agent':UA,'Accept-Encoding':'identity',Accept:'text/html,application/xhtml+xml,*/*',Referer:base+'/torrent/torrents_v2.php'};
           (async()=>{
-            const r=await axios.get(base+'/torrent/torrents_v2.php',{timeout:15000,params:{search:'Barbie',category:0,active:0,order:'data',by:'DESC',page:0},headers});
-            const $=cheerio.load(r.data);
-            console.log('SEARCH',r.status,'bytes',String(r.data||'').length,'title',$('title').text().trim());
-            const rows=[];
-            $('a[href*="details.php"]').each((_,e)=>{
-              if(rows.length>=12)return;
-              const a=$(e), row=a.closest('tr');
-              const href=a.attr('href');
-              const html=String(row.html()||'').replace(/\s+/g,' ');
-              const text=row.text().replace(/\s+/g,' ').trim();
-              if(/barbie/i.test(text)) rows.push({href,text:text.slice(0,260),html:html.slice(0,5000)});
+            const r=await axios.get(base+'/torrent/torrents_v2.php',{timeout:15000,params:{search:'Barbie',category:0,active:0,order:'data',by:'DESC',page:0},headers:{'User-Agent':UA,'Accept-Encoding':'identity',Referer:base+'/torrent/torrents_v2.php'}});
+            const html=String(r.data||''); const $=cheerio.load(html);
+            console.log('SEARCH',r.status,'bytes',html.length);
+            const controls=[];
+            $('a,button,img,input,[onclick],[data-url],[data-href]').each((_,el)=>{
+              const n=$(el); const attrs={};
+              for(const a of ['href','src','title','alt','onclick','data-url','data-href','class','id']){const v=n.attr(a);if(v)attrs[a]=String(v).slice(0,500);}
+              const text=n.text().replace(/\s+/g,' ').trim().slice(0,250);
+              const blob=JSON.stringify(attrs)+' '+text;
+              if(/play\s*video|fa-play|glyphicon-play|online\d*\.sktorrent|online\.sktorrent|sledujteto|stream|embed/i.test(blob)) controls.push({tag:el.tagName,text,attrs});
             });
-            console.log('ROWS',JSON.stringify(rows.map(x=>({href:x.href,text:x.text,hasPlay:/play|online\.sktorrent|sledujteto/i.test(x.html)}))));
-            for(const item of rows.slice(0,5)) {
-              console.log('ROW_HTML',item.html);
-              const url=new URL(item.href,base+'/torrent/').toString();
-              try {
-                const d=await axios.get(url,{timeout:15000,headers,maxRedirects:5,validateStatus:s=>s>=200&&s<500});
-                const p=cheerio.load(d.data), text=String(d.data||'');
-                const interesting=[];
-                p('a[href],iframe[src],frame[src],video[src],source[src],[data-src],[data-url],[data-file],[onclick]').each((_,el)=>{
-                  const n=p(el); for(const attr of ['href','src','data-src','data-url','data-file','onclick']){const v=n.attr(attr);if(v&&/(online|sleduj|\.mp4|embed|play)/i.test(v))interesting.push({tag:el.tagName,attr,val:String(v).slice(0,500)});}
-                });
-                const online=[...text.matchAll(/https?:\/\/[^\s"'<>]+/gi)].map(m=>m[0].replace(/&amp;/g,'&')).filter(u=>/online\d*\.sktorrent\.eu|online\.sktorrent\.eu|sledujteto/i.test(u));
-                console.log('DETAIL',JSON.stringify({url,final:d.request?.res?.responseUrl,status:d.status,bytes:text.length,title:p('title').text().trim(),interesting:interesting.slice(0,30),online:[...new Set(online)].slice(0,30)}));
-              } catch(e){console.log('DETAIL_ERR',url,e.message,e.response?.status||'');}
-            }
-            // A known public embed from a current indexed repo: check whether embed pages are server-readable.
-            for(const url of ['https://online.sktorrent.eu/embed/04bc593ad9dcf2ec88dd','https://online.sktorrent.eu/embed/a421d5ce262b093bdab2']) {
-              try {const e=await axios.get(url,{timeout:15000,headers:{'User-Agent':UA,'Accept-Encoding':'identity',Referer:base+'/'},validateStatus:s=>s>=200&&s<500});const p=cheerio.load(e.data);console.log('EMBED',JSON.stringify({url,status:e.status,bytes:String(e.data||'').length,final:e.request?.res?.responseUrl,title:p('title').text().trim(),sources:p('source[src],video[src]').map((_,x)=>p(x).attr('src')).get().slice(0,8),start:String(e.data||'').slice(0,200)}));}catch(err){console.log('EMBED_ERR',url,err.message,err.response?.status||'');}
+            console.log('CONTROLS',JSON.stringify(controls.slice(0,80)));
+            for(const needle of ['Play Video','play_video','fa-play','online.sktorrent','embed']) {
+              let pos=0,count=0;
+              while((pos=html.toLowerCase().indexOf(needle.toLowerCase(),pos))>=0 && count<12){console.log('AROUND',needle,html.slice(Math.max(0,pos-450),Math.min(html.length,pos+900)).replace(/\s+/g,' '));pos+=needle.length;count++;}
+              console.log('COUNT',needle,count);
             }
           })().catch(e=>{console.error('DIAG_ERROR',e.message,e.response?.status||'');process.exitCode=1;});
           NODE
