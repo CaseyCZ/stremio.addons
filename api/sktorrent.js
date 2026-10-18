@@ -261,18 +261,27 @@ class SktorrentClient {
       }
     });
 
-    let response = await request();
-    if (options.responseType === 'arraybuffer') {
-      const prefix = Buffer.from(response.data).subarray(0, 200).toString('utf8').toLowerCase();
-      if (!prefix.includes('<html') && !prefix.includes('<!doctype')) return response;
-    } else {
+    const isLoginResponse = response => {
+      if (options.responseType === 'arraybuffer') {
+        const prefix = Buffer.from(response.data).subarray(0, 200).toString('utf8').toLowerCase();
+        return prefix.includes('<html') || prefix.includes('<!doctype');
+      }
       const $ = cheerio.load(response.data);
       const finalUrl = String(response.request?.res?.responseUrl || '');
-      if ($('a[href^="usercp.php"]').length || !finalUrl.includes('login.php')) return response;
-    }
+      const loggedIn = $('a[href^="usercp.php"]').length > 0;
+      const loginForm = $('form[action*="login.php"]').length > 0;
+      return !loggedIn && (loginForm || /\/login\.php(?:[?#]|$)/i.test(finalUrl));
+    };
 
+    let response = await request();
+    if (!isLoginResponse(response)) return response;
+
+    // A request may return the login form with HTTP 200 and NO redirect.
+    // Refresh credentials once rather than caching an empty search result.
     await this.login(true);
-    return request();
+    response = await request();
+    if (isLoginResponse(response)) throw new Error('SKTorrent vyžaduje nové přihlášení.');
+    return response;
   }
 }
 
@@ -290,23 +299,27 @@ function getClient(username, password) {
   return client;
 }
 
-async function searchTorrents(query, wantedTitles, maxPages = 1, trustedReference = false) {
+async function searchTorrents(client, query, wantedTitles, maxPages = 1, trustedReference = false) {
   const wantedKey = (wantedTitles || []).map(normalize).sort().join('|');
-  const cacheKey = `${normalize(query)}:${maxPages}:${trustedReference ? 'trusted' : 'normal'}:${wantedKey}`;
+  const cacheKey = `${client.clientKey}:${normalize(query)}:${maxPages}:${trustedReference ? 'trusted' : 'normal'}:${wantedKey}`;
   const cached = searchCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
   const results = [];
   const seen = new Set();
+  let hadError = false;
   for (let page = 0; page < maxPages; page += 1) {
     try {
-      const response = await axios.get(SEARCH_URL, {
+      const response = await client.authenticatedGet(SEARCH_URL, {
         timeout: 10000,
         maxContentLength: 5 * 1024 * 1024,
         headers: { 'User-Agent': USER_AGENT, 'Accept-Encoding': 'identity', Accept: 'text/html' },
         params: { search: query, category: 0, active: 0, order: 'data', by: 'DESC', page }
       });
       const $ = cheerio.load(response.data);
+      if ($('form[action*="login.php"]').length && !$('a[href^="usercp.php"]').length) {
+        throw new Error('SKTorrent returned a login page instead of search results');
+      }
       let found = 0;
       let rawCount = 0;
 
@@ -350,12 +363,13 @@ async function searchTorrents(query, wantedTitles, maxPages = 1, trustedReferenc
       if (rawCount < 10) break;
     } catch (error) {
       console.warn(`[sktorrent] search "${query}" page ${page}: ${error.message}`);
+      hadError = true;
       break;
     }
   }
 
   results.sort((a, b) => (b.score - a.score) || (b.seeds - a.seeds));
-  searchCache.set(cacheKey, results);
+  if (!hadError) searchCache.set(cacheKey, results, results.length ? 10 * 60 : 60);
   return results;
 }
 
@@ -686,7 +700,7 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
 
     for (let offset = 0; offset < exactQueries.length && found.size < limit * 2; offset += 4) {
       const batch = exactQueries.slice(offset, offset + 4);
-      const groups = await Promise.all(batch.map(query => searchTorrents(query, titles, 1, false)));
+      const groups = await Promise.all(batch.map(query => searchTorrents(client, query, titles, 1, false)));
       for (const results of groups) {
         for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
       }
@@ -695,7 +709,7 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
     if (found.size < Math.max(4, limit)) {
       for (let offset = 0; offset < fallbackQueries.length && found.size < limit * 2; offset += 4) {
         const batch = fallbackQueries.slice(offset, offset + 4);
-        const groups = await Promise.all(batch.map(query => searchTorrents(query, titles, 1, false)));
+        const groups = await Promise.all(batch.map(query => searchTorrents(client, query, titles, 1, false)));
         for (const results of groups) {
           for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
         }
@@ -708,7 +722,7 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
       .filter(Boolean))];
     const query = plainTitles.sort((a, b) => a.length - b.length)[0] || '';
     if (!query) return [];
-    const results = await searchTorrents(query, titles, 3, false);
+    const results = await searchTorrents(client, query, titles, 3, false);
     for (const item of results) if (!found.has(item.id)) found.set(item.id, item);
   }
 
@@ -780,5 +794,6 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
 module.exports = {
   getClient,
   findTorrentStreams,
+  searchTorrents,
   activeClientCount: () => clients.size
 };
