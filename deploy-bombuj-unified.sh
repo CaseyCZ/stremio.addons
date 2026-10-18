@@ -114,6 +114,15 @@ for(const [type,id] of [['movie','bombuj-movies-search'],['series','bombuj-serie
 console.log('Staged Bombuj '+m.version+' verified on port 17104');
 NODE
 
+# Regression: a clean Bombuj process MUST find IMDb episode streams without
+# anyone first opening Bombuj's own catalogue to populate in-memory mappings.
+curl -fsS --max-time 65 "http://127.0.0.1:$STAGING_PORT/stream/series/tt10986410:1:1.json" > /tmp/caseycz-bombuj-staged-ted-lasso.json
+node - <<'NODE'
+const {streams=[]} = require('/tmp/caseycz-bombuj-staged-ted-lasso.json');
+if(!streams.length)throw Error('Cold-start Bombuj IMDb Ted Lasso S01E01 returned no streams');
+console.log('Cold-start IMDb Ted Lasso verified: '+streams.length+' player choices');
+NODE
+
 # Preserve continuity: require the new instance to expose the same Stremio
 # catalog identities that current installs use, before changing port 7004.
 if curl -fsS --max-time 10 http://127.0.0.1:7004/manifest.json >/tmp/caseycz-bombuj-before-cutover.json; then
