@@ -884,7 +884,8 @@ async function searchDirectOnlineVideos(query, wantedTitles, page = 1) {
     if (!html.trim()) return [];
     const $ = cheerio.load(html);
     const items = onlineSearchItemsFromHtml($, wantedTitles);
-    cache.set(key, items, items.length ? 5 * 60 : 25);
+    // A transient empty HTML search must not suppress another attempt for long.
+    cache.set(key, items, items.length ? 5 * 60 : 8);
     return items;
   } catch (error) {
     console.warn(`[direct-online] search "${query}": ${error.message}`);
