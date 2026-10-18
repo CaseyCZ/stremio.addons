@@ -50,7 +50,7 @@
   <div class="field"><label for="sosacPassword">Sosáč – heslo (volitelné)</label>
   <div class="password-row"><input type="password" id="sosacPassword" autocomplete="current-password">
   <button type="button" class="show-password" data-target="sosacPassword">Zobrazit</button></div></div>
-  <div class="note">Použije se pouze pro rozpoznání vlastních ID Sosáče u SKTOnline a SKTorrent. Bombuj zatím používá vlastní ID a IMDb. Všechny údaje v instalační konfiguraci budou šifrované.</div>
+  <div class="note">Volitelné údaje rozpoznají vlastní ID Sosáče u všech tří doplňků. Sosáč samotný se nemění. Každý vygenerovaný odkaz má šifrovanou vlastní konfiguraci; instalační URL nikdy veřejně nesdílej.</div>
 </div>
 
 <div class="addons">
@@ -79,7 +79,10 @@
 <div class="output" style="display:block">
 <label>Manifest Bombuj</label><div class="result-row"><input readonly id="bombujUrl" aria-label="Bombuj manifest"><button type="button" class="copy">Kopírovat</button></div>
 <a id="bombujInstall" href="#">Instalovat Bombuj</a></div>
-<div class="note">Bombuj zatím běží na svém současném serverovém procesu. Společná stránka pouze nabízí jeho instalaci.</div>
+<div class="note">Bez přihlášení používej původní Bombuj manifest výše. Pokud vyplníš údaje Sosáče, můžeš níže vytvořit také vlastní šifrovaný Bombuj manifest, který zpřístupní jeho zdroje i u titulů z katalogu Sosáč. Video zůstává přímo u poskytovatele.</div>
+<button class="primary generate" type="button" data-addon="bombuj" id="bombujBridgeGenerate" hidden>Vytvořit Bombuj manifest s podporou Sosáče</button>
+<div class="feedback" role="status" aria-live="polite"></div>
+<div class="output bridge-output"><label>Bombuj + Sosáč manifest</label><div class="result-row"><input readonly aria-label="Bombuj s propojením na Sosáč"><button type="button" class="copy">Kopírovat</button></div><a class="install" href="#">Instalovat Bombuj s propojením</a></div>
 </section>
 </div>
 
@@ -95,10 +98,19 @@ function feedback(card,message,error){const box=card.querySelector('.feedback');
 function torrentValidation(){
   const filled=document.getElementById('sktUsername').value.trim()&&document.getElementById('sktPassword').value;
   document.getElementById('torrentGenerate').disabled=!filled;
-  if(!filled)document.querySelector('#sktorrent .output').style.display='none';
+  document.querySelector('#sktorrent .output').style.display='none';
 }
 document.getElementById('sktUsername').addEventListener('input',torrentValidation);
 document.getElementById('sktPassword').addEventListener('input',torrentValidation);
+function sosacValidation(){
+  const filled=document.getElementById('sosacUsername').value.trim()&&document.getElementById('sosacPassword').value;
+  document.getElementById('bombujBridgeGenerate').hidden=!filled;
+  document.querySelector('#bombuj .bridge-output').style.display='none';
+  document.querySelector('#sktonline .output').style.display='none';
+  document.querySelector('#sktorrent .output').style.display='none';
+}
+document.getElementById('sosacUsername').addEventListener('input',sosacValidation);
+document.getElementById('sosacPassword').addEventListener('input',sosacValidation);
 document.querySelectorAll('.show-password').forEach(button=>button.addEventListener('click',()=>{
   const input=document.getElementById(button.dataset.target);
   const show=input.type==='password';input.type=show?'text':'password';button.textContent=show?'Skrýt':'Zobrazit';
@@ -109,7 +121,8 @@ document.querySelectorAll('.copy').forEach(button=>button.addEventListener('clic
   catch(_){input.focus();input.select();button.textContent='Označeno';}
 }));
 async function generate(addonType){
-  const card=document.getElementById(addonType),button=card.querySelector('.generate'),output=card.querySelector('.output');
+  const card=document.getElementById(addonType),button=card.querySelector('.generate');
+  const output=addonType==='bombuj'?card.querySelector('.bridge-output'):card.querySelector('.output');
   output.style.display='none';button.disabled=true;feedback(card,addonType==='sktorrent'?'Ověřuji přihlášení…':'Vytvářím instalační odkaz…');
   try {
     const cfg={
@@ -126,10 +139,10 @@ async function generate(addonType){
     });
     const result=await response.json();
     if(!response.ok||!result.token)throw Error(result.error||'Nepodařilo se vytvořit manifest.');
-    const path=baseInstall()+'/'+result.token+'/manifest.json';
-    card.querySelector('.output input').value=location.origin+path;
-    card.querySelector('.install').href='stremio://'+location.host+path;
-    output.style.display='block';feedback(card,addonType==='sktorrent'?'✓ SKTorrent přihlášení ověřeno.':'✓ Připraveno bez přihlášení.');
+    const path=baseInstall()+'/'+result.token+(addonType==='bombuj'?'/bombuj/manifest.json':'/manifest.json');
+    output.querySelector('input').value=location.origin+path;
+    output.querySelector('.install').href='stremio://'+location.host+path;
+    output.style.display='block';feedback(card,addonType==='sktorrent'?'✓ SKTorrent přihlášení ověřeno.':addonType==='bombuj'?'✓ Bombuj manifest s propojením připraven.':'✓ Instalační odkaz připraven.');
   }catch(e){feedback(card,e.message||'Chyba konfigurace',true);}
   finally{button.disabled=false;if(addonType==='sktorrent')torrentValidation();}
 }

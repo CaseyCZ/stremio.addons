@@ -525,6 +525,7 @@ app.get('/:cfg/manifest.json', (req, res) => {
   noCache(res);
   const cfg = normalizeConfig(decryptConfig(req.params.cfg));
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
+  if (cfg.addonType === 'bombuj') return res.status(404).json({ error: 'Use the Bombuj manifest route' });
   return res.json(buildManifest(cfg));
 });
 

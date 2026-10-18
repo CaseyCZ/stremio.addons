@@ -49,6 +49,7 @@ jobs:
           const script = html.match(/<script>([\s\S]*?)<\/script>/i);
           if (!script) throw Error('Missing UI JavaScript');
           new vm.Script(script[1], {filename:'configure-inline.js'});
+          if (!html.includes('/bombuj/manifest.json')) throw Error('Bombuj configured manifest link is missing');
           for (const id of ['sktonline','sktorrent','bombuj']) {
             if (!html.includes('id="'+id+'"')) throw Error('Missing card '+id);
           }
