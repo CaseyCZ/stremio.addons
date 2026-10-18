@@ -55,9 +55,31 @@ jobs:
           }
           console.log('Shared config UI: three addon cards and valid JavaScript');
           NODE
-          CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa PORT=17233 node addon.js >/tmp/caseycz-staging-smoke.log 2>&1 &
+          node - <<'NODE' >/tmp/caseycz-mock-bombuj.log 2>&1 &
+          const http=require('node:http');
+          const manifest={
+            id:'community.caseycz.bombuj',version:'0.8.1',name:'Bombuj',
+            types:['movie','series'],
+            resources:[
+              {name:'catalog',types:['movie','series']},
+              {name:'meta',types:['movie','series'],idPrefixes:['bombuj-series-']},
+              {name:'stream',types:['movie','series'],idPrefixes:['tt','bombuj-series-']},
+              {name:'subtitles',types:['movie','series'],idPrefixes:['tt','bombuj-series-']}
+            ],
+            catalogs:[{type:'series',id:'bombuj-series-search',name:'🔎 Bombuj – Hledat seriály',extra:[{name:'search',isRequired:true}]}]
+          };
+          http.createServer((req,res)=>{
+            res.setHeader('Content-Type','application/json');
+            if(req.url==='/manifest.json')return res.end(JSON.stringify(manifest));
+            if(req.url==='/stream/series/tt1954804:1:1.json')return res.end(JSON.stringify({streams:[{name:'Bombuj Test',externalUrl:'https://example.com/embed/test'}]}));
+            if(req.url==='/catalog/series/bombuj-series-search/search=Hope.json')return res.end(JSON.stringify({metas:[{id:'bombuj-series-saving-hope',name:'Saving Hope'}]}));
+            res.statusCode=404;res.end(JSON.stringify({error:'mock resource missing'}));
+          }).listen(17234,'127.0.0.1');
+          NODE
+          MOCK_PID=$!
+          CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa BOMBUJ_META_URL=http://127.0.0.1:17234 PORT=17233 node addon.js >/tmp/caseycz-staging-smoke.log 2>&1 &
           SMOKE_PID=$!
-          trap 'kill "$SMOKE_PID" 2>/dev/null || true' EXIT
+          trap 'kill "$SMOKE_PID" "$MOCK_PID" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:17233/health >/dev/null 2>&1; then break; fi
             sleep 1
@@ -79,7 +101,20 @@ jobs:
             if(!manifest.idPrefixes.includes('bombuj-series-'))throw Error('Bombuj ID missing');
             const tor=await request({addonType:'sktorrent',uiLanguage:'cs'});
             if(tor.status!==400)throw Error('Uncredentialed SKTorrent was accepted');
-            console.log('Direct install generated without login; SKTorrent correctly requires credentials');
+            const configured=await request({addonType:'bombuj',uiLanguage:'cs',sosacUsername:'testaccount',sosacPassword:'testpassword'});
+            if(!configured.ok)throw Error('Optional Bombuj config rejected: '+configured.status);
+            const bombujToken=(await configured.json()).token;
+            const bridgeManifestResponse=await fetch(base+'/'+bombujToken+'/bombuj/manifest.json');
+            const bridgeManifest=await bridgeManifestResponse.json();
+            if(bridgeManifest.id!=='cz.caseycz.stremio.bombuj.unified')throw Error('Wrong Bombuj ID');
+            if(bridgeManifest.catalogs[0].id!=='bombuj-series-search')throw Error('Bombuj catalog missing');
+            const prefixes=bridgeManifest.resources.find(x=>x.name==='stream').idPrefixes;
+            if(!prefixes.includes('sosac_ep_'))throw Error('Sosac episode overlay unavailable for Bombuj');
+            const forwarded=await fetch(base+'/'+bombujToken+'/bombuj/stream/series/tt1954804:1:1.json').then(r=>r.json());
+            if(forwarded.streams?.length!==1)throw Error('Bombuj stream forwarding failed');
+            const found=await fetch(base+'/'+bombujToken+'/bombuj/catalog/series/bombuj-series-search/search=Hope.json').then(r=>r.json());
+            if(found.metas?.[0]?.name!=='Saving Hope')throw Error('Bombuj catalog forwarding failed');
+            console.log('Direct, protected Torrent, and configured Bombuj JSON routes verified');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
           bash -n deploy-server.sh

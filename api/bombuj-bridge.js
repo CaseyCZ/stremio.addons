@@ -3,7 +3,7 @@
 const SOURCE = String(process.env.BOMBUJ_META_URL || 'http://127.0.0.1:7004').replace(/\/+$/, '');
 const ID_PATTERN = /^(?:tt\d{5,12}(?::\d{1,3}:\d{1,4})?|bombuj-movie-[a-z0-9-]+|bombuj-series-[a-z0-9-]+(?::\d{1,3}:\d{1,4})?|bombuj-episode-[a-z0-9-]+-\d{1,3}x\d{1,4})$/i;
 const CATALOG_PATTERN = /^bombuj-[a-z0-9-]{1,100}$/i;
-const EXTRA_PATTERN = /^[a-z0-9 ,._%+=:()@-]{1,400}$/i;
+const EXTRA_PATTERN = /^[^/\u0000-\u001f\u007f]{1,400}$/u;
 
 function bombujRequestPath(resource, type, id, extra) {
   if (!['movie', 'series'].includes(type)) return null;
