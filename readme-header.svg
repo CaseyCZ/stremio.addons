@@ -1,13 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="Stremio SKTOnline + SKTorrent by CaseyCZ">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="328" viewBox="0 0 1200 328" role="img" aria-label="CaseyCZ Stremio Addons – SKTOnline Direct, SKTorrent P2P, Bombuj">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070b14"/><stop offset="0.55" stop-color="#0b1020"/><stop offset="1" stop-color="#111827"/></linearGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0284c7"/><stop offset="1" stop-color="#38bdf8"/></linearGradient>
-    <radialGradient id="glow" cx="0.78" cy="0.1" r="0.9"><stop offset="0" stop-color="#38bdf8" stop-opacity="0.24"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080e1b"/>
+      <stop offset="0.57" stop-color="#101d30"/>
+      <stop offset="1" stop-color="#111a2a"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#72d3ff"/>
+      <stop offset="1" stop-color="#197cc4"/>
+    </linearGradient>
+    <radialGradient id="aura" cx="0.78" cy="0.05" r="0.84">
+      <stop offset="0" stop-color="#2797e9" stop-opacity=".26"/>
+      <stop offset="1" stop-color="#2797e9" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#93bbdf" opacity=".10"/>
+    </pattern>
+    <clipPath id="frame"><rect x="0" y="0" width="1200" height="328" rx="24"/></clipPath>
   </defs>
-  <rect width="1200" height="300" rx="28" fill="url(#bg)"/><rect width="1200" height="300" rx="28" fill="url(#glow)"/><rect x="1" y="1" width="1198" height="298" rx="27" fill="none" stroke="#2a3850" stroke-width="2"/>
-  <g transform="translate(74 70)"><rect width="92" height="92" rx="24" fill="url(#accent)"/><path d="M35 26 67 46 35 66Z" fill="#fff"/></g>
-  <text x="196" y="100" fill="#38bdf8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="800" letter-spacing="3">CASEYCZ / STREMIO</text>
-  <text x="196" y="158" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="50" font-weight="800" letter-spacing="-2">SKTOnline + SKTorrent</text>
-  <text x="196" y="204" fill="#94a3b8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="23" font-weight="500">Direct streamy · titulky · P2P zdroje</text>
-  <g transform="translate(902 213)"><rect width="224" height="42" rx="12" fill="#111827" stroke="#2a3850"/><circle cx="24" cy="21" r="5" fill="#86efac"/><text x="40" y="27" fill="#f8fafc" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="700">by CaseyCZ</text></g>
+  <g clip-path="url(#frame)">
+    <rect width="1200" height="328" fill="url(#bg)"/>
+    <rect width="1200" height="328" fill="url(#aura)"/>
+    <rect x="590" width="610" height="328" fill="url(#dots)"/>
+    <circle cx="1124" cy="-25" r="178" fill="none" stroke="#377ba7" stroke-opacity=".16" stroke-width="2"/>
+    <circle cx="1124" cy="-25" r="252" fill="none" stroke="#377ba7" stroke-opacity=".10" stroke-width="2"/>
+    <rect x="1" y="1" width="1198" height="326" rx="23" fill="none" stroke="#31435a" stroke-width="2"/>
+  </g>
+  <g transform="translate(66 72)">
+    <rect width="90" height="90" rx="23" fill="url(#mark)"/>
+    <rect x="7" y="7" width="76" height="76" rx="18" fill="none" stroke="#fff" stroke-opacity=".22"/>
+    <path d="M34 25 L68 45 L34 65 Z" fill="#f6fbff"/>
+  </g>
+  <text x="181" y="91" fill="#81c7f1" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="800" letter-spacing="3">CASEYCZ / STREMIO</text>
+  <text x="181" y="151" fill="#f5f9ff" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="57" font-weight="800" letter-spacing="-1.8">Stremio Addons</text>
+  <text x="182" y="190" fill="#afc2d5" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="21" font-weight="500">Tři samostatné doplňky. Jedno společné místo.</text>
+  <g font-family="Inter,Segoe UI,Arial,sans-serif" font-weight="700" font-size="18">
+    <g transform="translate(181 227)">
+      <rect width="244" height="54" rx="13" fill="#183753" stroke="#38678a"/>
+      <circle cx="23" cy="27" r="9" fill="#65bdff"/>
+      <path d="M21 22 L27 27 L21 32 Z" fill="#103451"/>
+      <text x="41" y="34" fill="#e8f6ff">SKTOnline Direct</text>
+    </g>
+    <g transform="translate(439 227)">
+      <rect width="222" height="54" rx="13" fill="#16342f" stroke="#326d65"/>
+      <path d="M20 20 L20 32 M29 20 L29 32 M16 24 L33 24 M16 29 L33 29" fill="none" stroke="#72e4c6" stroke-width="2.8" stroke-linecap="round"/>
+      <text x="43" y="34" fill="#e1fff4">SKTorrent P2P</text>
+    </g>
+    <g transform="translate(675 227)">
+      <rect width="169" height="54" rx="13" fill="#33243a" stroke="#74507e"/>
+      <rect x="17" y="19" width="20" height="17" rx="3" fill="none" stroke="#f3b7e2" stroke-width="2.5"/>
+      <path d="M22 16 L22 36 M17 23 L37 23" stroke="#f3b7e2" stroke-width="2"/>
+      <text x="50" y="34" fill="#ffecfb">Bombuj</text>
+    </g>
+  </g>
+  <text x="1098" y="297" text-anchor="end" fill="#718ea9" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700">by CaseyCZ</text>
 </svg>
