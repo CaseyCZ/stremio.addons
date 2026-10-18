@@ -492,7 +492,7 @@ async function enrichedSeriesCatalog(payload, options) {
       const episodeUrl = 'https://serialy.bombuj.si/serial/' + episode.slug +
         '-' + episode.season + 'x' + episode.episode;
       const cinemeta = await resolveSeriesCinemeta(episode.slug, episodeUrl, {
-        name: item.name.replace(/s+[–-]s+d+×d+(?:s+[–-]s+.*)?$/, ''),
+        name: item.name.replace(/\s+[–-]\s+\d+×\d+(?:\s+[–-]\s+.*)?$/, ''),
         releaseInfo: item.releaseInfo
       });
       return cinemeta
@@ -653,7 +653,7 @@ async function handle(req, res) {
       const payload = await seriesService.episodeMeta(episode.slug, episode.season, episode.episode);
       const cinemeta = await resolveSeriesCinemeta(episode.slug,
         'https://serialy.bombuj.si/serial/' + episode.slug + '-' + episode.season + 'x' + episode.episode,
-        { name: payload.meta?.name?.replace(/s+[–-]s+d+×d+$/, ''),
+        { name: payload.meta?.name?.replace(/\s+[–-]\s+\d+×\d+$/, ''),
           releaseInfo: payload.meta?.releaseInfo });
       return sendJson(res, 200,
         { ...payload, meta: cinemeta
