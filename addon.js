@@ -640,7 +640,9 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
       sourceIdentityCache.set(sourceKey, videoIds, 10 * 60);
       console.log(`[source] ${req.params.type}/${req.params.id}: videoIds=${videoIds.join(',')}`);
     }
-    streamCache.set(cacheKey, streams, streams.length ? 5 * 60 : 60);
+    // SKTOnline's search occasionally returns HTTP 200 with an empty body;
+    // negative-caching that response for a full minute hides later successes.
+    streamCache.set(cacheKey, streams, streams.length ? 5 * 60 : 10);
     return res.json({ streams, cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 });
   } catch (error) {
     console.error(`[stream] ${req.params.type}/${req.params.id}: ${error.message}`);
