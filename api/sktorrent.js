@@ -332,7 +332,11 @@ async function searchTorrents(client, query, wantedTitles, maxPages = 1, trusted
         const id = idMatch ? idMatch[1] : href.split('id=').pop();
         if (!id || seen.has(id)) return;
 
-        const name = String(link.text() || link.attr('title') || link.find('img').attr('alt') || '').replace(/\s+/g, ' ').trim();
+        // Image links often contain whitespace text nodes; the real release
+        // name is stored in the title attribute. Trim BEFORE choosing it.
+        const name = [link.attr('title'), link.text(), link.find('img').attr('alt')]
+          .map(value => String(value || '').replace(/\s+/g, ' ').trim())
+          .find(Boolean) || '';
         const score = titleMatchScore(name, wantedTitles);
         if (!name || candidateHasConflictingYears(name, wantedTitles)) return;
         if (!trustedReference && (!candidateYearMatches(name, wantedTitles) || score < 0.55)) return;
