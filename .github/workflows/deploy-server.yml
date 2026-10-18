@@ -12,6 +12,7 @@ on:
       - feature/cross-catalog-imdb-identity
       - feature/shared-imdb-episode-playback
       - fix/sktonline-strict-episode-identity
+      - fix/sktonline-search-coverage
   workflow_dispatch:
 
 permissions:
