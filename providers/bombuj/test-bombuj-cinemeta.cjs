@@ -163,6 +163,53 @@ test('series episode list enriches titles only for exact season and episode',()=
   assert.equal(cinemetaEpisodeTitle(remote,2,1),null);
 });
 
+
+test('real Cinemeta video format supplies series episode names by season and number', () => {
+  const bombuj = {
+    id:'bombuj-series-crystal-lake-2026',type:'series',name:'Crystal Lake',releaseInfo:'2026',
+    videos:[
+      { id:'bombuj-series-crystal-lake-2026:1:1',season:1,episode:1,title:'Epizoda 1×1' },
+      { id:'bombuj-series-crystal-lake-2026:1:2',season:1,episode:2,title:'Epizoda 1×2' },
+      { id:'bombuj-series-crystal-lake-2026:2:1',season:2,episode:1,title:'Epizoda 2×1' }
+    ]
+  };
+  const cinemeta = {
+    id:'tt23148340',type:'series',releaseInfo:'2026–',poster:'https://cdn.test/crystal.jpg',
+    videos:[
+      {id:'tt23148340:1:1',season:1,number:1,name:'Camp Crystal'},
+      {id:'tt23148340:1:2',season:1,number:2,name:'Part 2'},
+      {id:'tt23148340:1:3',season:1,number:3,name:'Part III'}
+    ]
+  };
+  const enriched = enrichCinemetaSeries(bombuj, cinemeta);
+  assert.deepEqual(enriched.videos.map(v=>v.title), ['Camp Crystal','Part 2','Epizoda 2×1']);
+  assert.deepEqual(enriched.videos.map(v=>v.id), bombuj.videos.map(v=>v.id));
+  assert.equal(enriched.poster,cinemeta.poster);
+  assert.equal(enriched.imdb_id,'tt23148340');
+  const individual = enrichCinemetaEpisode({
+    id:'bombuj-episode-crystal-lake-2026-1x1',type:'series',
+    name:'Crystal Lake – 1×1',releaseInfo:'2026',
+    videos:[bombuj.videos[0]]
+  },cinemeta,1,1);
+  assert.equal(individual.name,'Crystal Lake – 1×1 – Camp Crystal');
+  assert.equal(individual.videos[0].title,'Camp Crystal');
+  assert.equal(individual.videos[0].id,bombuj.videos[0].id);
+});
+
+test('Cinemeta name/number and title/episode variants reject placeholder titles and wrong episodes', () => {
+  const meta={videos:[
+    {season:1,number:1,name:'Episode 1',title:'Real Pilot'},
+    {season:1,number:2,name:'Epizoda 1×2'},
+    {season:1,episode:3,title:'Part III'},
+    {season:2,number:1,name:'A New Chapter'}
+  ]};
+  assert.equal(cinemetaEpisodeTitle(meta,1,1),'Real Pilot');
+  assert.equal(cinemetaEpisodeTitle(meta,1,2),null);
+  assert.equal(cinemetaEpisodeTitle(meta,1,3),'Part III');
+  assert.equal(cinemetaEpisodeTitle(meta,2,1),'A New Chapter');
+  assert.equal(cinemetaEpisodeTitle(meta,2,2),null);
+});
+
 test('missing Cinemeta episode title keeps original, without dropping poster',()=>{
   const source={id:'bombuj-episode-carrie-2026-1x2',type:'series',name:'Carrie – 1×2',
     releaseInfo:'2026',poster:'https://bombuj.si/poster.jpg'};
