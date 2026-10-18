@@ -262,12 +262,12 @@ input:focus, select:focus { border-color: #5eb9ed; }
     <summary>
       <span class="settings-label">
         <span class="settings-icon" aria-hidden="true">🔗</span>
-        <span><span class="settings-title">Volitelné propojení se Sosáčem</span><span class="settings-sub">Rozpoznávání filmů a epizod z katalogu Sosáč</span></span>
+        <span><span class="settings-title">Propojení se Sosáčem (4 zdroje)</span><span class="settings-sub">Aby SKTOnline, SKTorrent i Bombuj fungovaly také v katalogu Sosáč</span></span>
       </span>
       <span class="settings-state" id="sosacState">Nenastaveno</span><span class="chevron" aria-hidden="true">⌄</span>
     </summary>
     <div class="settings-content">
-      <p>Sosáč nijak neupravujeme. Údaje se využijí pouze pro převod jeho vlastních ID na IMDb. Po změně údajů si vytvoř nové instalační odkazy.</p>
+      <p>Pro zobrazení všech čtyř zdrojů také u položek z katalogu Sosáč zadej svůj účet Sosáč a vytvoř znovu instalační odkazy pro <strong>SKTOnline Direct, SKTorrent P2P i Bombuj</strong>. Původní odkazy bez propojení nelze dodatečně změnit. Sosáč zůstává samostatně nainstalovaný a jeho kód neupravujeme. Údaje se v našich doplňcích používají pouze pro převod ID <code>sosac_*</code> na IMDb.</p>
       <div class="settings-fields">
         <div class="field"><label for="sosacUsername">Sosáč – uživatelské jméno</label><input id="sosacUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Volitelné"></div>
         <div class="field"><label for="sosacPassword">Sosáč – heslo</label><div class="password-row"><input id="sosacPassword" type="password" autocomplete="current-password" placeholder="Volitelné"><button class="reveal show-password" data-target="sosacPassword" type="button" aria-pressed="false">Zobrazit</button></div></div>
@@ -318,8 +318,8 @@ function refreshSosac() {
   $('sosacHint').textContent=partial
     ? 'Vyplň jméno i heslo, jinak se propojení nepoužije.'
     : linked
-      ? 'Údaje se přidají do nově vytvořených šifrovaných instalačních odkazů. U Bombuj nyní vytvoř propojený manifest.'
-      : 'Bez vyplnění budou všechny tři doplňky fungovat se svými běžnými zdroji.';
+      ? 'Teď znovu vytvoř a nainstaluj všechny tři manifesty: SKTOnline, SKTorrent i propojený Bombuj. Staré instalace bez Sosáče toto propojení nemají.'
+      : 'Bez propojení fungují vlastní katalogy a Cinemeta. V katalogu Sosáč nemusí naše tři doplňky rozpoznat jeho vlastní ID.';
   $('sosacHint').classList.toggle('warn',partial);
   $('bombujNative').hidden=linked;
   $('bombujLinked').hidden=!linked;
