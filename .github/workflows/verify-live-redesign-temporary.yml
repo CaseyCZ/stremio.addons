@@ -1,0 +1,46 @@
+name: Temporary live verification of CaseyCZ Stremio 0.2.1
+
+on:
+  push:
+    branches: [Master]
+    paths: ['.github/workflows/verify-live-redesign-temporary.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check actual Oracle version and public responsive setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://130.61.49.108/stremio-sktonline'
+          curl -kfsS --retry 3 --retry-delay 2 --max-time 20 "$BASE/health" >/tmp/caseycz-health.json
+          node - <<'NODE'
+          const h=require('/tmp/caseycz-health.json');
+          console.log('LIVE_HEALTH', JSON.stringify({version:h.version,ok:h.ok,encryption:h.encryption}));
+          if(h.version!=='0.2.1'||!h.ok||!h.encryption)throw Error('Expected deployed 0.2.1');
+          NODE
+          curl -kfsS --retry 3 --max-time 25 "$BASE/configure" >/tmp/caseycz-configure.html
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const vm=require('node:vm');
+          const s=fs.readFileSync('/tmp/caseycz-configure.html','utf8');
+          for(const needle of ['Všechny zdroje.','Jedno místo.','id="sktonline"','id="sktorrent"','id="bombuj"','id="sosacSettings"','class="addons"','@media(max-width: 650px)']) {
+            if(!s.includes(needle))throw Error('Missing deployed responsive UI: '+needle);
+          }
+          const script=s.match(/<script>([\s\S]*?)<\/script>/i);
+          if(!script)throw Error('Inline UI Javascript missing');
+          new vm.Script(script[1]);
+          console.log('LIVE_UI_RESPONSIVE_OK', s.length);
+          NODE
+          curl -kfsS --retry 3 --max-time 15 "https://130.61.49.108/stremio-bombuj/manifest.json" >/tmp/caseycz-bombuj.json
+          node - <<'NODE'
+          const b=require('/tmp/caseycz-bombuj.json');
+          if(!b.catalogs?.length)throw Error('Bombuj native catalog missing');
+          console.log('LIVE_NATIVE_BOMBUJ_OK',b.version,b.catalogs.length);
+          NODE
