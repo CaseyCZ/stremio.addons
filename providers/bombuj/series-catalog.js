@@ -104,7 +104,12 @@ function parseSeriesCards(html, { verifiedCatalog = false } = {}) {
     const url = absolute(match[1]);
     const slug = slugFromUrl(url);
     if (!slug) continue;
-    links.push({ url, slug, index: match.index, end: match.index + match[0].length, inner: match[2] });
+    // Search suggestions append "#serial" to an otherwise canonical show
+    // page. Drop the client-side fragment before checking the URL against
+    // source-identity's strict allow-list and remembering its IMDb mapping.
+    const canonical = new URL(url);
+    canonical.hash = '';
+    links.push({ url: canonical.toString(), slug, index: match.index, end: match.index + match[0].length, inner: match[2] });
   }
 
   const cards = [];
