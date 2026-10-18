@@ -10,7 +10,7 @@ const { subtitleTracks: customSubtitleUrls, formatBombujStream: customStreamDisp
 const {
   movieImdbId, seriesImdbId, fetchCinemetaById, mergeCinemeta,
   enrichCinemetaSeries, enrichCinemetaEpisode,
-  seriesSearchName, selectCinemetaSeriesCandidate
+  seriesSearchName, selectCinemetaSeriesCandidate, sharedCinemetaSeriesCatalogMeta
 } = require('./bombuj-cinemeta.js');
 const { rememberSource } = require('./source-identity.js');
 
@@ -507,12 +507,15 @@ async function enrichedSeriesCatalog(payload, options) {
     const cinemeta = await resolveSeriesCinemeta(slug, undefined, {
       name: item.name, aliases: item.aliases, releaseInfo: item.releaseInfo
     });
-    if (cinemeta?.poster) return mergeCinemeta(item, cinemeta);
+    // Standard IMDb IDs let Sosac, SKTOnline and SKTorrent contribute streams
+    // when a series is opened from Bombuj's own search/browse catalogues.
+    // Keep Bombuj's native ID for unverified/anthology season mappings.
+    if (cinemeta?.poster) return sharedCinemetaSeriesCatalogMeta(item, cinemeta);
     // Even series not indexed by Cinemeta have a local cover on Bombuj.
-    if (item.poster) return cinemeta ? mergeCinemeta(item, cinemeta) : item;
+    if (item.poster) return cinemeta ? sharedCinemetaSeriesCatalogMeta(item, cinemeta) : item;
     const detail = await seriesService.detail(slug).catch(() => null);
     const local = detail?.poster ? { ...item, poster: detail.poster } : item;
-    return cinemeta ? mergeCinemeta(local, cinemeta) : local;
+    return cinemeta ? sharedCinemetaSeriesCatalogMeta(local, cinemeta) : local;
   });
   return { ...payload, metas };
 }
