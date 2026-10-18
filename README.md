@@ -15,9 +15,8 @@
 </p>
 
 <p align="center">
-  <a href="https://130.61.49.108/stremio-sktonline/configure"><img src="https://img.shields.io/badge/Instalovat-SKTOnline%20Direct-198CC8?style=for-the-badge&labelColor=14263B" alt="Instalovat SKTOnline Direct" /></a>
-  <a href="https://130.61.49.108/stremio-sktonline/configure"><img src="https://img.shields.io/badge/Instalovat-SKTorrent%20P2P-1F9D82?style=for-the-badge&labelColor=14263B" alt="Instalovat SKTorrent P2P" /></a>
-  <a href="https://130.61.49.108/stremio-bombuj/manifest.json"><img src="https://img.shields.io/badge/Instalovat-Bombuj-AD6CAF?style=for-the-badge&labelColor=14263B" alt="Instalovat Bombuj" /></a>
+  <a href="https://130.61.49.108/stremio-sktonline/configure"><img src="https://img.shields.io/badge/Otev%C5%99%C3%ADt-Spole%C4%8Dnou%20konfiguraci-198CC8?style=for-the-badge&labelColor=14263B" alt="Otevřít konfiguraci všech tří doplňků" /></a>
+  <a href="https://130.61.49.108/stremio-bombuj/manifest.json"><img src="https://img.shields.io/badge/Bombuj-P%C5%99%C3%ADm%C3%A1%20instalace-AD6CAF?style=for-the-badge&labelColor=14263B" alt="Bombuj – přímá instalace bez přihlášení" /></a>
 </p>
 
 ## O projektu
@@ -46,15 +45,13 @@ Všechny tři doplňky i konfigurátor jsou spravovány v [CaseyCZ/stremio.addon
 
 ## Instalace doplňků
 
-| Doplněk | Odkaz | Jak funguje instalace |
-| --- | --- | --- |
-| 🎬 **SKTOnline Direct** | **[Otevřít instalaci SKTOnline](https://130.61.49.108/stremio-sktonline/configure)** | Na společném konfiguračním webu vytvoříš vlastní manifestační odkaz bez přihlášení. |
-| 🧲 **SKTorrent P2P** | **[Otevřít instalaci SKTorrent](https://130.61.49.108/stremio-sktonline/configure)** | Vyplníš svůj účet SKTorrent; po úspěšném ověření se vytvoří šifrovaný manifestační odkaz. |
-| 🍿 **Bombuj** | **[Instalovat Bombuj](https://130.61.49.108/stremio-bombuj/manifest.json)** | Samostatný manifest bez přihlášení. Volitelně lze použít společnou konfiguraci pro propojení se Sosáčem. |
+**Společná konfigurace** slouží k instalaci všech tří doplňků:
 
-**[Otevřít společnou konfigurační stránku pro všechny doplňky](https://130.61.49.108/stremio-sktonline/configure)**
+1. **SKTOnline Direct** – vybereš instalaci bez přihlášení.
+2. **SKTorrent P2P** – zadáš svůj SKTorrent účet a po ověření získáš šifrovaný instalační odkaz.
+3. **Bombuj** – nainstaluješ bez přihlášení; případně můžeš zapnout volitelné propojení se Sosáčem.
 
-Doplňky jsou nezávislé a můžeš nainstalovat jeden, dva nebo všechny tři. SKTOnline a SKTorrent mají vlastní šifrované instalační odkazy, proto na ně nejde použít jeden společný veřejný manifest.
+Samostatné tlačítko **Bombuj – Přímá instalace** nad tímto textem vede rovnou na jeho veřejný manifest. Doplňky můžeš instalovat nezávisle v libovolné kombinaci.
 
 ## Volitelné propojení se Sosáčem
 
