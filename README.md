@@ -16,48 +16,49 @@
 
 ## O projektu
 
-**SKTOnline + SKTorrent** přidává do Stremia přímé SKTOnline streamy, dostupné titulky a volitelné P2P zdroje ze SKTorrentu.
+**CaseyCZ Stremio Addons** nabízí na jedné konfigurační stránce tři odděleně instalovatelné doplňky. Každý má vlastní manifest a funguje samostatně.
 
-Addon umí pracovat také s položkami z katalogu **Sosáč**. Pomocí vlastní překladové vrstvy dohledá odpovídající titul a nabídne k němu své SKTOnline a SKTorrent zdroje. Samotný Sosáč addon ani jeho repo se nijak nemění.
+| Doplněk | Zdroje | Přihlášení |
+| --- | --- | --- |
+| 🎬 **SKTOnline Direct** | Přímé streamy a dostupné titulky | Nepotřebuje |
+| 🧲 **SKTorrent P2P** | Torrentové zdroje se seedery a kvalitou | Vlastní účet SKTorrent |
+| 🍿 **Bombuj** | Filmy, seriály, přehrávače a Cinemeta | Nepotřebuje |
 
 ## Hlavní funkce
 
-- 🎬 přímé SKTOnline streamy
-- 📺 výběr dostupných kvalit videa
-- 💬 dostupné titulky ve Stremio přehrávači
-- 🌍 zobrazení rozpoznaného jazyka zdroje
-- 🧲 volitelné SKTorrent P2P zdroje
-- 📝 původní název torrentového releasu
-- 👥 počet seederů a velikost torrentu
-- 🔗 podpora položek z katalogu Sosáč přes vlastní overlay
-- ⚡ rychlejší opakované načítání díky cache
-- 📱 použití na běžných Stremio klientech na desktopu, Androidu / Google TV a Apple zařízeních
+- 🎬 přímé video zdroje SKTOnline
+- 🧲 samostatně instalovatelné P2P torrenty SKTorrent
+- 🍿 samostatný Bombuj s filmovými a seriálovými katalogy
+- 💬 dostupné titulky a rozpoznaný jazyk přehrávání
+- 🔗 kompatibilita titulů přes IMDb/Cinemeta i vlastní ID Bombuj
+- ⚡ rychlejší opakované vyhledávání díky dočasné cache
+- 📱 podpora běžných Stremio klientů podle možností jejich přehrávačů
 
-## Přímé streamy a torrenty
+## Jak instalovat
 
-SKTOnline zdroje se přehrávají jako **Direct** streamy. Video jde přímo ze zdroje do Stremia.
+Na společném webu si vybereš, které doplňky chceš používat. Můžeš nainstalovat libovolnou kombinaci:
 
-SKTorrent zdroje jsou zobrazené samostatně jako **P2P**. U nich si Stremio stáhne data přímo přes torrentovou síť.
+- **SKTOnline Direct:** vytvoříš instalační odkaz bez přihlášení.
+- **SKTorrent P2P:** zadáš účet SKTorrent. Instalační manifest se zobrazí až po ověření přihlášení.
+- **Bombuj:** běžný manifest je dostupný bez přihlášení.
 
-Díky tomu jsou Direct a P2P zdroje v seznamu přehledně oddělené a uživatel si může vybrat, co chce použít.
+## Volitelné propojení se Sosáčem
 
-## Soukromí a konfigurace
+Můžeš zadat své údaje Sosáč pro rozpoznání položek z jeho katalogu. Každý doplněk pak nabídne své vlastní dostupné streamy také u podporovaných titulů Sosáč.
 
-Pro SKTorrent P2P je potřeba vlastní účet na SKTorrentu. Přihlašovací údaje jsou uložené uvnitř šifrované instalační konfigurace a addon je používá jen pro získání potřebných torrentových údajů.
+**Samotný Sosáč ani jeho repozitář neupravujeme.** Bez přihlašovacích údajů k Sosáči všechny tři doplňky nadále fungují se svými podporovanými tituly.
 
-Když přihlášení na SKTorrent vyprší, addon se pokusí přihlásit znovu automaticky — není potřeba addon přeinstalovávat.
+Bombuj používá při volitelném propojení šifrovaný instalační manifest; bez propojení zůstává na svém samostatném serverovém procesu.
 
-Údaje k Sosáči jsou volitelné a slouží pouze pro vlastní překladovou vrstvu `sosac_* → IMDb/Cinemeta`.
+## Soukromí a přehrávání
 
-V konfigurátoru lze heslo dočasně **zobrazit** a znovu **skrýt**.
+Údaje k SKTorrentu a volitelně k Sosáči se ukládají do šifrované instalační konfigurace. **Instalační odkazy obsahující konfiguraci nesdílej veřejně.**
 
-Instalační odkaz je citlivý a neměl by se veřejně sdílet.
+Videa z SKTOnline a Bombuj neprocházejí serverem doplňků. Torrenty jsou samostatné P2P zdroje. Některé webové přehrávače Bombuj nemusí být kompatibilní se všemi Stremio klienty.
 
 ## Důležité
 
-Projekt je neoficiální komunitní addon a není oficiálně spojen ani podporován službami Stremio, SKTorrent, SKTOnline ani Sosáč.
-
-Repozitář nehostuje video obsah ani torrentová data. Dostupnost jednotlivých zdrojů se může měnit.
+Projekt je neoficiální komunitní doplněk a není oficiálně spojen se službami Stremio, SKTOnline, SKTorrent, Bombuj ani Sosáč. Dostupnost zdrojů závisí na původních poskytovatelích.
 
 ## Podpora
 
