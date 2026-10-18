@@ -125,3 +125,21 @@ test('pagination never discards non-first-page episodes of a one-word show',asyn
   assert.equal(result.length,1);
   assert(pages.some(x=>x.page===4));
 });
+
+
+test('online searches use one shared session request at a time',async()=>{
+  let active=0,peak=0,calls=0;
+  const search=async()=>{
+    active++;peak=Math.max(active,peak);calls++;
+    await new Promise(resolve=>setTimeout(resolve,2));
+    active--;
+    return [];
+  };
+  const result=await findDirectOnlineByTitle(
+    ['Ted Lasso S01E01','Ted Lasso 1x01','Ted Lasso'],
+    ['Ted Lasso'],'series',1,1,search,async()=>[]
+  );
+  assert.deepEqual(result,[]);
+  assert.equal(peak,1);
+  assert(calls>=3);
+});
