@@ -8,6 +8,7 @@ const { SocksProxyAgent } = require('socks-proxy-agent');
 const { CinemetaApi, uniqueStrings } = require('./api/cinemeta');
 const { findOnlineStreams, findOnlineSourceBundle } = require('./api/sktonline');
 const { SosacOverlay } = require('./api/sosac-overlay');
+const { resolveBombujId } = require('./api/bombuj-overlay');
 const { getClient, findTorrentStreams, activeClientCount } = require('./api/sktorrent');
 
 const app = express();
@@ -92,12 +93,14 @@ function normalizeConfig(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const sktUsername = String(value.sktUsername || value.username || '').trim().slice(0, 128);
   const sktPassword = String(value.sktPassword || value.password || '').slice(0, 256);
-  const wantsTorrents = value.enableTorrents === true;
+  const addonType = ['sktonline', 'sktorrent'].includes(value.addonType) ? value.addonType : 'combined';
+  const wantsTorrents = addonType === 'sktorrent' || (addonType === 'combined' && value.enableTorrents === true);
   const sosacUsername = String(value.sosacUsername || '').trim().slice(0, 128);
   const sosacPassword = String(value.sosacPassword || '').slice(0, 256);
   return {
     uiLanguage: ['cs', 'sk', 'en'].includes(value.uiLanguage) ? value.uiLanguage : 'cs',
-    enableOnline: value.enableOnline !== false,
+    addonType,
+    enableOnline: addonType === 'sktorrent' ? false : value.enableOnline !== false,
     enableTorrents: wantsTorrents && Boolean(sktUsername && sktPassword),
     sktUsername: wantsTorrents ? sktUsername : '',
     sktPassword: wantsTorrents ? sktPassword : '',
@@ -108,6 +111,7 @@ function normalizeConfig(value) {
 
 function configFingerprint(cfg) {
   const material = JSON.stringify({
+    addonType: cfg.addonType, online: cfg.enableOnline,
     p2p: cfg.enableTorrents ? [cfg.sktUsername, cfg.sktPassword] : null,
     sosac: cfg.sosacUsername && cfg.sosacPassword ? [cfg.sosacUsername, cfg.sosacPassword] : null
   });
@@ -131,17 +135,36 @@ function labels(language) {
 }
 
 function buildManifest(cfg) {
-  const copy = labels(cfg.uiLanguage) || labels('cs');
+  const addonType = cfg.addonType || 'combined';
+  const legacy = labels(cfg.uiLanguage) || labels('cs');
+  const variants = {
+    sktonline: {
+      id: 'cz.caseycz.stremio.sktonline.direct',
+      name: 'SKTOnline Direct',
+      description: 'Přímé streamy a dostupné titulky ze SKTOnline.'
+    },
+    sktorrent: {
+      id: 'cz.caseycz.stremio.sktorrent.p2p',
+      name: 'SKTorrent P2P',
+      description: 'Samostatné SKTorrent P2P zdroje. Vyžaduje vlastní účet.'
+    },
+    combined: {
+      id: 'cz.caseycz.stremio.sktonline.direct',
+      ...legacy
+    }
+  };
+  const item = variants[addonType] || variants.combined;
   return {
-    id: 'cz.caseycz.stremio.sktonline.direct',
-    version: VERSION,
-    name: copy.name,
-    description: copy.description,
+    id: item.id, version: VERSION, name: item.name,
+    description: item.description,
     types: ['movie', 'series'],
-    idPrefixes: ['tt', 'sosac_m_', 'sosac_s_', 'sosac_ep_'],
-    resources: ['stream', 'subtitles'],
+    idPrefixes: [
+      'tt', 'sosac_m_', 'sosac_s_', 'sosac_ep_',
+      'bombuj-movie-', 'bombuj-series-', 'bombuj-episode-'
+    ],
+    resources: addonType === 'sktorrent' ? ['stream'] : ['stream', 'subtitles'],
     catalogs: [],
-    behaviorHints: { configurable: true, configurationRequired: false }
+    behaviorHints: {configurable: true, configurationRequired: false, p2p: addonType === 'sktorrent'}
   };
 }
 
@@ -293,6 +316,13 @@ function makeSosacOverlay(cfg) {
 async function resolveIncomingStremioId(cfg, type, id) {
   const direct = parseStremioId(id);
   if (direct) return direct;
+  if (/^bombuj-(?:movie-|series-|episode-)/i.test(String(id || ''))) {
+    try { return await resolveBombujId(type, id); }
+    catch (error) {
+      console.warn('[bombuj-overlay] ' + type + '/' + id + ': ' + error.message);
+      return null;
+    }
+  }
   if (!/^sosac_(?:m|s|ep)_\d+$/i.test(String(id || ''))) return null;
   if (!cfg.sosacUsername || !cfg.sosacPassword) return null;
 
@@ -440,7 +470,7 @@ app.post('/api/config-token', async (req, res) => {
   const body = req.body || {};
   const cfg = normalizeConfig(body);
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
-  if (body.enableTorrents === true && !cfg.enableTorrents) {
+  if ((body.enableTorrents === true || cfg.addonType === 'sktorrent') && !cfg.enableTorrents) {
     return res.status(400).json({ error: 'Pro torrenty vyplň uživatelské jméno a heslo SKTorrent.' });
   }
 
