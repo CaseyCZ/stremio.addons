@@ -41,6 +41,45 @@ jobs:
           node --check api/sosac-overlay.js
           node --check api/bombuj-overlay.js
           node --test test-bombuj-overlay.cjs
+          node - <<'NODE'
+          const fs = require('fs');
+          const vm = require('vm');
+          const html = fs.readFileSync('public/configure.html', 'utf8');
+          const script = html.match(/<script>([\s\S]*?)<\/script>/i);
+          if (!script) throw Error('Missing UI JavaScript');
+          new vm.Script(script[1], {filename:'configure-inline.js'});
+          for (const id of ['sktonline','sktorrent','bombuj']) {
+            if (!html.includes('id="'+id+'"')) throw Error('Missing card '+id);
+          }
+          console.log('Shared config UI: three addon cards and valid JavaScript');
+          NODE
+          CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa PORT=17233 node addon.js >/tmp/caseycz-staging-smoke.log 2>&1 &
+          SMOKE_PID=$!
+          trap 'kill "$SMOKE_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:17233/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          node - <<'NODE'
+          (async () => {
+            const base='http://127.0.0.1:17233';
+            const request=(body)=>fetch(base+'/api/config-token',{
+              method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)
+            });
+            const direct=await request({addonType:'sktonline',uiLanguage:'cs'});
+            if(!direct.ok) throw Error('Direct without login failed HTTP '+direct.status);
+            const token=(await direct.json()).token;
+            if(!token||!token.startsWith('enc1.'))throw Error('No encrypted direct config');
+            const installed=await fetch(base+'/'+token+'/manifest.json');
+            const manifest=await installed.json();
+            if(manifest.id!=='cz.caseycz.stremio.sktonline.direct')throw Error('Wrong Direct identity');
+            if(manifest.name!=='SKTOnline Direct')throw Error('Wrong Direct label');
+            if(!manifest.idPrefixes.includes('bombuj-series-'))throw Error('Bombuj ID missing');
+            const tor=await request({addonType:'sktorrent',uiLanguage:'cs'});
+            if(tor.status!==400)throw Error('Uncredentialed SKTorrent was accepted');
+            console.log('Direct install generated without login; SKTorrent correctly requires credentials');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
           bash -n deploy-server.sh
 
       - name: Deployment note
