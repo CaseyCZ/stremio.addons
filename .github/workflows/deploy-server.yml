@@ -6,6 +6,7 @@ on:
       - Master
       - feature/unified-stremio-addons
       - feature/web-redesign
+      - feature/migrate-bombuj-runtime
   workflow_dispatch:
 
 permissions:
@@ -133,6 +134,9 @@ jobs:
             console.log('Direct, protected Torrent, and configured Bombuj JSON routes verified');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
+          bash -n deploy-bombuj-unified.sh
+          node --check ecosystem.bombuj.config.cjs
+          node -e "const p=require('./ecosystem.bombuj.config.cjs').apps[0];if(p.name!=='stremio-bombuj'||p.env.PORT!=='7004'||!p.cwd.endsWith('/providers/bombuj'))throw Error('Wrong unified Bombuj PM2 definition')"
           bash -n deploy-server.sh
 
       - name: Deployment note
