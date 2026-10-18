@@ -976,13 +976,14 @@ async function findDirectOnlineByTitle(
     return dedupeStreams(all).slice(0, 12);
   };
 
-  // Try targeted queries first. Do not accept an arbitrary first search hit:
-  // it can have the requested S01E01 but belong to another TV show.
+  // SKTOnline's session cookies are shared across queries. Running several
+  // title searches concurrently can leave the site returning HTTP 200 with
+  // EMPTY pages. Search one at a time and stop at the first verified player.
+  // Never accept a match based only on the user's query string.
   const searchQueries = dedupe(queries || []).slice(0, 9);
-  for (let offset = 0; offset < searchQueries.length; offset += 3) {
-    const group = searchQueries.slice(offset, offset + 3);
-    const found = await Promise.all(group.map(query => search(query, titles, 1)));
-    const streams = await resolveMatches(found);
+  for (const query of searchQueries) {
+    const found = await search(query, titles, 1);
+    const streams = await resolveMatches([found]);
     if (streams.length) return streams;
   }
 
@@ -1000,12 +1001,13 @@ async function findDirectOnlineByTitle(
     .slice(0, 2);
 
   for (const showTitle of showQueries) {
-    for (let page = 2; page <= 8; page += 3) {
-      const pages = [page, page + 1, page + 2].filter(n => n <= 8);
-      const groups = await Promise.all(pages.map(n => search(showTitle, titles, n)));
-      const streams = await resolveMatches(groups);
+    let emptyPages = 0;
+    for (let page = 2; page <= 8; page += 1) {
+      const found = await search(showTitle, titles, page);
+      const streams = await resolveMatches([found]);
       if (streams.length) return streams;
-      if (groups.every(items => !items?.length)) break;
+      emptyPages = found?.length ? 0 : emptyPages + 1;
+      if (emptyPages >= 2) break;
     }
   }
   return [];
