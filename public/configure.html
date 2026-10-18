@@ -76,10 +76,10 @@
 <section class="addon" id="bombuj">
 <h2>🍿 Bombuj</h2>
 <p>Filmy, seriály, Cinemeta a dostupné přehrávače. Bez přihlášení. Doplněk zůstává nezávislý.</p>
-<div class="output" style="display:block">
+<div class="output native-output" style="display:block">
 <label>Manifest Bombuj</label><div class="result-row"><input readonly id="bombujUrl" aria-label="Bombuj manifest"><button type="button" class="copy">Kopírovat</button></div>
 <a id="bombujInstall" href="#">Instalovat Bombuj</a></div>
-<div class="note">Bez přihlášení používej původní Bombuj manifest výše. Pokud vyplníš údaje Sosáče, můžeš níže vytvořit také vlastní šifrovaný Bombuj manifest, který zpřístupní jeho zdroje i u titulů z katalogu Sosáč. Video zůstává přímo u poskytovatele.</div>
+<div class="note">Bez přihlášení použij běžný manifest Bombuj. Jakmile zadáš obě položky účtu Sosáč, zobrazí se místo něj možnost vytvořit šifrovaný Bombuj manifest s podporou Sosáče. Instaluj pouze jednu variantu Bombuj. Video zůstává u původního poskytovatele.</div>
 <button class="primary generate" type="button" data-addon="bombuj" id="bombujBridgeGenerate" hidden>Vytvořit Bombuj manifest s podporou Sosáče</button>
 <div class="feedback" role="status" aria-live="polite"></div>
 <div class="output bridge-output"><label>Bombuj + Sosáč manifest</label><div class="result-row"><input readonly aria-label="Bombuj s propojením na Sosáč"><button type="button" class="copy">Kopírovat</button></div><a class="install" href="#">Instalovat Bombuj s propojením</a></div>
@@ -105,6 +105,7 @@ document.getElementById('sktPassword').addEventListener('input',torrentValidatio
 function sosacValidation(){
   const filled=document.getElementById('sosacUsername').value.trim()&&document.getElementById('sosacPassword').value;
   document.getElementById('bombujBridgeGenerate').hidden=!filled;
+  document.querySelector('#bombuj .native-output').style.display=filled?'none':'block';
   document.querySelector('#bombuj .bridge-output').style.display='none';
   document.querySelector('#sktonline .output').style.display='none';
   document.querySelector('#sktorrent .output').style.display='none';
@@ -150,6 +151,7 @@ document.querySelectorAll('.generate').forEach(button=>button.addEventListener('
 const bombujPath='/stremio-bombuj/manifest.json';
 document.getElementById('bombujUrl').value=location.origin+bombujPath;
 document.getElementById('bombujInstall').href='stremio://'+location.host+bombujPath;
+sosacValidation();
 async function loadVersion(){
   for(const url of [...new Set([base()+'/health','/health'])]){
     try{const response=await fetch(url,{cache:'no-store'});if(!response.ok)continue;
