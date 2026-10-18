@@ -5,7 +5,7 @@ const {test} = require('node:test');
 const {
   movieImdbId, seriesImdbId, fetchCinemetaById, mergeCinemeta,
   cinemetaEpisodeTitle, enrichCinemetaSeries, enrichCinemetaEpisode,
-  seriesSearchName, selectCinemetaSeriesCandidate
+  seriesSearchName, selectCinemetaSeriesCandidate, sharedCinemetaSeriesCatalogMeta
 } = require('./bombuj-cinemeta.js');
 const {createSeriesService} = require('./series-catalog.js');
 
@@ -233,6 +233,37 @@ test('anthology year mismatch cannot assign unrelated episode titles or poster',
   assert.equal(result.name,source.name);
   assert.equal(result.poster,source.poster);
   assert.deepEqual(result.videos,source.videos);
+  assert.equal(result.imdb_id,remote.id);
+});
+
+
+test('Bombuj series catalogue uses verified IMDb ID for independent Sosac/SKTOnline addons', () => {
+  const source = {
+    id:'bombuj-series-ted-lasso',type:'series',name:'Ted Lasso',
+    releaseInfo:'2020',poster:'https://serialy.bombuj.si/ted.jpg'
+  };
+  const remote = {
+    id:'tt10986410',type:'series',name:'Ted Lasso',releaseInfo:'2020–',
+    poster:'https://cinemeta.example/ted.jpg'
+  };
+  const result=sharedCinemetaSeriesCatalogMeta(source,remote);
+  assert.equal(result.id,'tt10986410');
+  assert.equal(result.imdb_id,'tt10986410');
+  assert.equal(result.name,'Ted Lasso');
+  assert.equal(result.poster,remote.poster);
+  assert.equal(source.id,'bombuj-series-ted-lasso');
+  assert.equal(sharedCinemetaSeriesCatalogMeta(source,null).id,source.id);
+  assert.equal(sharedCinemetaSeriesCatalogMeta(source,{...remote,id:'wrong'}).id,source.id);
+});
+
+test('Bombuj anthology seasons with incompatible years preserve their source ID',()=>{
+  const source = {id:'bombuj-series-monster-lizzie-2026',type:'series',
+    name:'The Lizzie Borden Story',releaseInfo:'2026',poster:'https://bombuj.si/season.jpg'};
+  const remote = {id:'tt13207736',type:'series',name:'Monster',releaseInfo:'2022–',
+    poster:'https://cinemeta.example/old-series.jpg'};
+  const result = sharedCinemetaSeriesCatalogMeta(source,remote);
+  assert.equal(result.id,source.id);
+  assert.equal(result.poster,source.poster);
   assert.equal(result.imdb_id,remote.id);
 });
 
