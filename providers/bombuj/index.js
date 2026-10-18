@@ -3,7 +3,7 @@
 const { addonBuilder, serveHTTP } = require('stremio-addon-sdk');
 const { decodeAttribute, parseBombujPlayerGroups } = require('./player-groups.js');
 const { movieImdbId, seriesImdbId } = require('./bombuj-cinemeta.js');
-const { parseSeriesBrowseCards, parseEpisodeList, seriesBrowseUrl } = require('./series-catalog.js');
+const { parseSeriesCards, parseSeriesBrowseCards, parseEpisodeList, seriesBrowseUrl } = require('./series-catalog.js');
 const { rememberSource, findSource, sourceIdentity, normalizeTitle } = require('./source-identity.js');
 const { parseMovieCards } = require('./bombuj-listing.js');
 
@@ -156,7 +156,27 @@ async function searchBombujMovies(query) {
 }
 
 async function searchBombujSeries(query) {
-  return searchBombuj(query, BOMBUJ_SERIES_BASE, 'series');
+  // The series site uses a different search-card structure from the movie
+  // site. Parse it with the same robust parser used by Bombuj's catalogues.
+  // Otherwise the first IMDb lookup after a cold start returns no sources
+  // until someone opens the native Bombuj catalogue and warms the ID cache.
+  const key = `bombuj:search:series:${normalize(query)}`;
+  const cached = cacheGet(key);
+  if (cached) return cached;
+  const html = await fetchText(`${BOMBUJ_SERIES_BASE}/4154q37rpc4dsvbp.php`, {
+    method: 'POST',
+    headers: {
+      Referer: BOMBUJ_SERIES_BASE + '/',
+      Origin: BOMBUJ_SERIES_BASE,
+      'X-Requested-With': 'XMLHttpRequest',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'text/html, */*;q=0.1'
+    },
+    body: 'queryString=' + encodeURIComponent(query),
+    signal: AbortSignal.timeout(6500)
+  });
+  const matches = parseSeriesCards(html);
+  return cacheSet(key, matches, matches.length ? 10 * 60 * 1000 : 60 * 1000);
 }
 
 async function listBombujMovies({ page = 1, genre = null }) {
