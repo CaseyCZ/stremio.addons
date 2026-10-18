@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="readme-header.svg" alt="Stremio SKTOnline + SKTorrent by CaseyCZ" width="100%" />
+  <img src="readme-header.svg" alt="CaseyCZ Stremio Addons: SKTOnline, SKTorrent a Bombuj" width="100%" />
 </p>
 
 <p align="center">
@@ -7,11 +7,11 @@
 </p>
 
 <p align="center">
-  Neoficiální komunitní addon pro <strong>Stremio</strong>, který kombinuje přímé streamy ze <strong>SKTOnline</strong> a volitelné torrentové zdroje ze <strong>SKTorrent</strong>.
+  Neoficiální komunitní sada doplňků pro <strong>Stremio</strong>: <strong>SKTOnline Direct</strong>, <strong>SKTorrent P2P</strong> a <strong>Bombuj</strong>.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/package-json/v/CaseyCZ/stremio.sktonline?style=for-the-badge&label=VERZE&color=38BDF8&labelColor=0284C7" alt="Aktuální verze SKTOnline + SKTorrent" />
+  <img src="https://img.shields.io/github/package-json/v/CaseyCZ/stremio.addons?style=for-the-badge&label=VERZE&color=38BDF8&labelColor=0284C7" alt="Aktuální verze CaseyCZ Stremio Addons" />
 </p>
 
 ## O projektu
@@ -33,6 +33,10 @@
 - 🔗 kompatibilita titulů přes IMDb/Cinemeta i vlastní ID Bombuj
 - ⚡ rychlejší opakované vyhledávání díky dočasné cache
 - 📱 podpora běžných Stremio klientů podle možností jejich přehrávačů
+
+## Společný repozitář
+
+Všechny tři doplňky i konfigurátor jsou spravovány v [CaseyCZ/stremio.addons](https://github.com/CaseyCZ/stremio.addons). Bombuj se spouští z `providers/bombuj/`. Stávající místní pracovní adresář na Oracle (`/home/ubuntu/stremio.sktonline`) a veřejné instalační cesty `/stremio-sktonline/` a `/stremio-bombuj/` zůstávají kvůli kompatibilitě nezměněné.
 
 ## Jak instalovat
 
