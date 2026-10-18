@@ -1,0 +1,16 @@
+{
+  "name": "stremio-bombuj",
+  "version": "0.8.1",
+  "description": "Stremio addon for Bombuj.si catalogs and streams",
+  "main": "preflight-front.js",
+  "scripts": {
+    "start": "node preflight-front.js",
+    "check": "node --check preflight-front.js && node --check filtered-front.js && node --check front.js && node --check bootstrap.js && node --check index.js && node --check provider-compat.js && node --test test-provider-compat.cjs && node --check movie-catalog-config.js && node --test test-movie-catalog.cjs && node --check series-catalog.js && node --test test-series-catalog.cjs && node --check player-groups.js && node --test test-player-groups.cjs && node --check streamtape-link.js && node --test test-streamtape-link.cjs && node --check stream-display.js && node --test test-stream-display.cjs && node --check bombuj-cinemeta.js && node --test test-bombuj-cinemeta.cjs && node --check source-identity.js && node --test test-source-identity.cjs && node --check bombuj-listing.js && node --test test-bombuj-listing.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "stremio-addon-sdk": "1.6.10"
+  }
+}

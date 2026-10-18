@@ -17,7 +17,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 18
 
     steps:
       - name: Checkout
@@ -42,6 +42,18 @@ jobs:
           node --check api/bombuj-overlay.js
           node --check api/bombuj-bridge.js
           node --test test-bombuj-overlay.cjs test-bombuj-bridge.cjs
+          if [[ -f providers/bombuj/package.json ]]; then
+            npm install --prefix providers/bombuj --omit=dev --no-audit --no-fund --ignore-scripts
+            npm --prefix providers/bombuj run check
+            PORT=17235 node providers/bombuj/preflight-front.js >/tmp/caseycz-bombuj-monorepo-smoke.log 2>&1 &
+            BOMBUJ_PID=$!
+            for attempt in $(seq 1 35); do
+              if curl -fsS --max-time 3 http://127.0.0.1:17235/manifest.json >/tmp/caseycz-bombuj-monorepo-manifest.json; then break; fi
+              sleep 1
+            done
+            node -e "const m=require('/tmp/caseycz-bombuj-monorepo-manifest.json');if(!m.catalogs?.some(x=>x.type==='series')||!m.catalogs?.some(x=>x.type==='movie'))throw Error('Imported Bombuj startup lost catalog resources');console.log('Imported Bombuj server: movie + series manifest OK')"
+            kill "$BOMBUJ_PID" 2>/dev/null || true
+          fi
           node - <<'NODE'
           const fs = require('fs');
           const vm = require('vm');
