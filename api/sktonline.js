@@ -161,6 +161,37 @@ function titleMatchScore(candidate, wantedTitles) {
   return best;
 }
 
+// A search query is NOT proof that the returned video belongs to a show.
+// In particular, "Ted" is a different show from "Ted Lasso". Require an
+// actual full show title AND an explicit, matching episode in the release
+// name before resolving its SKTOnline player. Reject ambiguous season packs.
+function episodeIdentityMatches(candidate, wantedTitles, season, episode) {
+  if (!Number.isInteger(season) || season < 1 ||
+      !Number.isInteger(episode) || episode < 1) return false;
+  const name = normalize(candidate);
+  const raw = stripDiacritics(candidate).toLowerCase();
+  if (!name) return false;
+  const wanted = dedupe((wantedTitles || []).map(normalize)).filter(Boolean);
+  const unambiguous = wanted.filter(title => !wanted.some(other =>
+    other !== title && (' ' + other + ' ').includes(' ' + title + ' ')));
+  if (!unambiguous.some(title => (' ' + name + ' ').includes(' ' + title + ' '))) return false;
+
+  const episodePatterns = [
+    /(?:^|[^a-z0-9])s(?:eason)?[\s._-]*0*(\d+)[\s._-]*e(?:p(?:isode|izoda)?)?[\s._-]*0*(\d+)(?=$|[^a-z0-9])/gi,
+    /(?:^|[^a-z0-9])0*(\d+)\s*[x×]\s*0*(\d+)(?=$|[^a-z0-9])/gi,
+    /\bseason[\s._-]*0*(\d+)[\s._-]*episode[\s._-]*0*(\d+)\b/gi,
+    /(?:^|[^0-9])0*(\d+)\.\s*(?:seria|serie|rada)\s+0*(\d+)\.\s*(?:epizoda|epizody|dil)(?=$|[^a-z])/gi
+  ];
+  const episodes = [];
+  for (const pattern of episodePatterns) {
+    for (const match of raw.matchAll(pattern)) {
+      episodes.push([Number(match[1]), Number(match[2])]);
+    }
+  }
+  return episodes.length > 0 && episodes.every(([s, e]) =>
+    s === season && e === episode);
+}
+
 function buildQueries(titles, type, season, episode) {
   const queries = [];
   for (const raw of titles) {
@@ -169,7 +200,7 @@ function buildQueries(titles, type, season, episode) {
     const plain = stripDiacritics(base);
   const variants = type === 'movie'
     ? dedupe([stripYearTokens(base), stripYearTokens(plain), base, plain, shortTitle(stripYearTokens(plain), 3), shortTitle(stripYearTokens(plain), 2)])
-    : dedupe([base, plain, shortTitle(plain, 3), shortTitle(plain, 1)]);
+    : dedupe([base, plain, shortTitle(plain, 3)]);
     if (type === 'series' && Number.isInteger(season) && Number.isInteger(episode)) {
       const sxxexx = `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
       const x = `${season}x${String(episode).padStart(2, '0')}`;
@@ -901,7 +932,7 @@ async function streamsForDirectOnlineVideo(item) {
   }
 }
 
-async function findDirectOnlineByTitle(queries, titles) {
+async function findDirectOnlineByTitle(queries, titles, type, season, episode) {
   const seenPages = new Set();
   const searchQueries = dedupe(queries || []).slice(0, 9);
 
@@ -911,6 +942,7 @@ async function findDirectOnlineByTitle(queries, titles) {
     const fresh = [];
     for (const items of resultGroups) {
       for (const item of items) {
+        if (type === 'series' && !episodeIdentityMatches(item.title, titles, season, episode)) continue;
         const key = String(item.href || item.id || '');
         if (!key || seenPages.has(key)) continue;
         seenPages.add(key);
@@ -984,7 +1016,7 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
   }
 }
 
-async function findFromSktorrentDetails(queries, titles, imdbId, client = null) {
+async function findFromSktorrentDetails(queries, titles, imdbId, client = null, type = 'movie', season = null, episode = null) {
   // Collect every candidate returned by all useful title variants, then inspect
   // every candidate detail. A later torrent can be the one carrying the
   // SKTOnline iframe, so do not stop after the first Direct hit.
@@ -996,6 +1028,7 @@ async function findFromSktorrentDetails(queries, titles, imdbId, client = null) 
     const groups = await Promise.all(group.map(query => searchSktorrentDetails(query, titles)));
     for (const found of groups) {
       for (const item of found) {
+        if (type === 'series' && !episodeIdentityMatches(item.name, titles, season, episode)) continue;
         if (!candidates.has(item.id)) candidates.set(item.id, item);
       }
     }
@@ -1118,8 +1151,8 @@ async function findOnlineSourceBundle({ imdbId, titles, type, season, episode, s
   }
 
   const [fromDirectOnline, fromTorrentDetails] = await Promise.all([
-  directProviderWithin(findDirectOnlineByTitle(queries, titles), 18000, 'SKTOnline title search'),
-  directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient), 18000, 'SKTorrent detail players')
+  directProviderWithin(findDirectOnlineByTitle(queries, titles, type, season, episode), 18000, 'SKTOnline title search'),
+  directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient, type, season, episode), 18000, 'SKTorrent detail players')
 ]);
 
 const resolvedAll = dedupeStreams([
@@ -1145,5 +1178,7 @@ module.exports = {
   findOnlineStreams,
   findOnlineSourceBundle,
   findDirectOnlineByTitle,
-  findFromSktorrentDetails
+  findFromSktorrentDetails,
+  episodeIdentityMatches,
+  buildQueries
 };
