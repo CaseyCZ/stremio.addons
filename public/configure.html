@@ -2,160 +2,404 @@
 <html lang="cs">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CaseyCZ Stremio Addons</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1020">
+<meta name="description" content="CaseyCZ Stremio Addons – SKTOnline Direct, SKTorrent P2P a Bombuj na jednom místě.">
+<title>CaseyCZ Stremio | Doplňky a instalace</title>
 <style>
-    :root{color-scheme:dark;--bg:#0b1020;--panel:#111827;--panel2:#172033;--border:#2a3850;--text:#f8fafc;--muted:#94a3b8;--accent:#38bdf8;--accent2:#0284c7;--ok:#86efac;--err:#fca5a5}
-    *{box-sizing:border-box}
-    body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at top,#172554 0,#0b1020 42%,#070b14 100%);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text)}
-    .wrap{width:min(100%,760px)}
-    .card{background:rgba(17,24,39,.96);border:1px solid var(--border);border-radius:22px;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.45)}
-    .badges{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-    .badge{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid #1d4ed8;border-radius:999px;background:#0f1f46;color:#bfdbfe;font-size:.78rem;font-weight:700}
-    h1{margin:14px 0 6px;font-size:1.65rem;line-height:1.15}.lead{margin:0 0 24px;color:var(--muted);line-height:1.5}
-    .field{margin:16px 0}label{display:block;margin-bottom:7px;color:#dbeafe;font-size:.9rem;font-weight:650}
-    input,select{width:100%;min-height:46px;border:1px solid var(--border);border-radius:12px;background:#0b1220;color:var(--text);padding:0 13px;font:inherit;outline:none}
-    input:focus,select:focus{border-color:#0ea5e9;box-shadow:0 0 0 2px rgba(14,165,233,.15)}
-    .toggle{display:flex;align-items:flex-start;gap:11px;margin:18px 0;padding:14px;border:1px solid var(--border);border-radius:12px;background:#0b1220;cursor:pointer}.toggle input{width:20px;min-height:20px;height:20px;margin:1px 0 0;accent-color:#0284c7}.toggle strong{display:block;color:#dbeafe;font-size:.92rem}.toggle span{display:block;color:var(--muted);font-size:.8rem;line-height:1.4;margin-top:4px}
-    .auth{padding:2px 14px 12px;border:1px solid var(--border);border-radius:12px;background:rgba(23,32,51,.7);margin-bottom:16px}.auth[hidden]{display:none}
-    .result-row,.password-row{display:flex;gap:8px;align-items:stretch}.result-row input,.password-row input{min-width:0;flex:1}
-    button,.btn{border:0;border-radius:12px;background:var(--accent2);color:#fff;font:inherit;font-weight:750;cursor:pointer;text-decoration:none;text-align:center}
-    button:disabled{opacity:.55;cursor:wait}.copy,.show-password{flex:0 0 auto;padding:0 13px;background:#243149;border:1px solid var(--border)}.show-password{min-width:88px}
-    .primary{width:100%;min-height:48px;margin-top:10px;font-size:1rem}.note{margin:18px 0;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--panel2);color:#cbd5e1;font-size:.86rem;line-height:1.45}
-    .sources{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}.source{padding:14px;border:1px solid var(--border);border-radius:12px;background:#0b1220}.source strong{display:block;color:#dbeafe;font-size:.92rem}.source span{display:block;color:var(--muted);font-size:.8rem;line-height:1.4;margin-top:4px}
-    #result{display:none;margin-top:22px;padding-top:20px;border-top:1px solid var(--border)}#installUrl{font-size:.78rem}.btn{display:block;width:100%;padding:13px;margin-top:10px}#status{min-height:20px;margin-top:12px;color:var(--ok);font-size:.86rem}.error{color:var(--err)!important}.foot{margin:14px 4px 0;color:#64748b;text-align:center;font-size:.76rem}
-    @media(max-width:720px){.sources{grid-template-columns:1fr}}@media(max-width:520px){body{padding:14px}.card{padding:21px}.password-row{align-items:stretch}.show-password{min-width:82px;padding:0 10px}}
-  
-.addons{display:grid;gap:15px}.addon{padding:18px;border:1px solid var(--border);border-radius:15px;background:#0b1220}
-.addon h2{font-size:1.2rem;margin:0 0 8px}.addon p{font-size:.9rem;color:var(--muted);line-height:1.5;margin:0 0 14px}
-.addon .output{display:none;margin-top:15px}.addon .output input{font-size:.78rem}
-.addon .output a{display:block;padding:13px;margin-top:10px;background:var(--accent2);color:#fff;text-align:center;border-radius:12px;text-decoration:none;font-weight:700}
-.addon .feedback{font-size:.86rem;color:var(--ok);margin-top:10px;min-height:18px}.addon .feedback.error{color:var(--err)}
-.addon button.primary{margin-top:7px}
+:root {
+  color-scheme: dark;
+  --bg: #090e1b;
+  --panel: #131c2c;
+  --panel-hover: #172235;
+  --line: #29364a;
+  --text: #f1f5fb;
+  --muted: #a2afc1;
+  --soft: #7789a2;
+  --blue: #55bdff;
+  --blue-dark: #0879b6;
+  --good: #6fe5b8;
+  --bad: #ff9eaa;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(ellipse 80% 430px at 52% -160px, #193958 0%, rgba(15,32,56,.35) 54%, transparent 100%), var(--bg);
+  color: var(--text);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button,input,select { font: inherit; }
+button,a { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+a { color: inherit; }
+.page { max-width: 1120px; margin: auto; padding: 0 30px 34px; }
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 25px 0 22px; border-bottom: 1px solid rgba(123,150,181,.16);
+}
+.brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; font-size: 16px; font-weight: 750; letter-spacing: -.4px; }
+.brand-mark {
+  display: grid; place-items: center; width: 37px; height: 37px; border-radius: 11px;
+  background: linear-gradient(140deg,#71d0ff,#1874bc); box-shadow: 0 5px 24px rgba(42,170,239,.18);
+  color: #071320; font-weight: 900; font-size: 22px;
+}
+.brand small { margin-left: 5px; font-size: 10px; font-weight: 800; letter-spacing: 1.3px; color: #84a8c9; }
+.version { border: 1px solid #2c3c51; border-radius: 99px; padding: 6px 11px; font-size: 12px; font-weight: 650; color: #b2bfd0; white-space: nowrap; }
+.hero { padding: 52px 0 28px; }
+.eyebrow { margin: 0 0 12px; text-transform: uppercase; letter-spacing: 2px; font-size: 11px; font-weight: 800; color: #80bfe7; }
+h1 { margin: 0; font-size: clamp(32px,5vw,51px); letter-spacing: -1.8px; line-height: 1.11; font-weight: 800; }
+h1 span { color: #80ccff; }
+.lead { max-width: 690px; margin: 16px 0 23px; color: #b1bfd0; font-size: 16px; line-height: 1.75; }
+.hero-points { display: flex; gap: 8px; flex-wrap: wrap; }
+.hero-points span { font-size: 12px; font-weight: 700; color: #b7c5d7; border: 1px solid #26364a; background: #111b2b; padding: 7px 11px; border-radius: 99px; }
+.section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 20px 0 15px; }
+.section-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.4px; }
+.section-heading p { margin: 0; color: var(--soft); font-size: 12px; }
+.addons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; align-items: stretch; }
+.addon {
+  position: relative; display: flex; flex-direction: column; min-width: 0;
+  padding: 24px; border: 1px solid var(--line); border-radius: 19px; background: var(--panel);
+  box-shadow: 0 13px 35px rgba(0,0,0,.14);
+}
+.addon:hover { background: var(--panel-hover); border-color: #37506a; }
+.addon-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 21px; }
+.provider-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 15px; font-size: 24px; font-weight: 800; }
+#sktonline .provider-icon { background: #153654; color: #80cbff; }
+#sktorrent .provider-icon { background: #123a36; color: #83e8cf; }
+#bombuj .provider-icon { background: #3b283e; color: #f6b7e3; }
+.provider-pill { display: inline-flex; align-items: center; padding: 5px 9px; border: 1px solid #314159; border-radius: 99px; color: #b6c8dd; font-size: 10px; letter-spacing: .7px; font-weight: 800; }
+.addon h3 { margin: 0; font-size: 21px; line-height: 1.25; letter-spacing: -.7px; }
+.addon .sub { margin: 5px 0 13px; color: var(--muted); font-size: 13px; }
+.description { margin: 0 0 16px; color: #c0ccda; font-size: 14px; line-height: 1.7; }
+.features { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 26px; padding: 0; list-style: none; }
+.features li { color: #b3c1d3; background: #1a283b; border: 1px solid #2b3a4e; border-radius: 6px; padding: 4px 7px; font-size: 11px; font-weight: 600; }
+.card-bottom { margin-top: auto; }
+.account-note { display: flex; align-items: center; gap: 8px; margin: 0 0 11px; color: #aabbd0; font-size: 12px; }
+.account-note .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); flex: 0 0 auto; }
+.account-note.locked .dot { background: #f6bf76; }
+.action {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  width: 100%; min-height: 47px; padding: 11px 16px; border: 1px solid transparent;
+  border-radius: 11px; background: #258bca; text-align: center;
+  color: white; font-size: 13px; font-weight: 800; text-decoration: none;
+  transition: background .18s, transform .18s;
+}
+.action:not(:disabled):hover { background: #39a8eb; transform: translateY(-1px); }
+.action-secondary { background: #202e43; border-color: #38506b; color: #e3edf7; }
+.action-secondary:not(:disabled):hover { background: #2b415d; }
+.action:disabled { transform: none; }
+.feedback { margin: 10px 0 0; min-height: 0; font-size: 12px; color: var(--good); overflow-wrap: anywhere; }
+.feedback.error { color: var(--bad); }
+.output { margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--line); }
+.output label { margin-bottom: 8px; }
+.result-row { display: flex; gap: 6px; align-items: stretch; }
+.result-row input { min-width: 0; flex: 1; font-size: 11px; }
+.copy-btn { flex: 0 0 auto; padding: 0 10px; border: 1px solid #39526c; background: #22344b; color: #e5f1fb; border-radius: 9px; font-size: 12px; font-weight: 700; }
+.output .install { margin-top: 9px; }
+.field { margin: 0 0 14px; }
+.field label, .output label { display: block; font-weight: 650; font-size: 12px; color: #ccdae9; }
+.field label { margin-bottom: 6px; }
+input,select {
+  width: 100%; min-height: 43px; padding: 10px 12px; border: 1px solid #374b64;
+  border-radius: 10px; color: #e8f3ff; background: #0d1727; outline: none;
+}
+input::placeholder { color: #72869c; }
+input:focus, select:focus { border-color: #5eb9ed; }
+.password-row { display: flex; gap: 7px; }
+.password-row input { min-width: 0; flex: 1; }
+.reveal { flex: 0 0 auto; background: #22344a; color: #d8e7f6; border: 1px solid #344b64; border-radius: 10px; padding: 0 11px; font-size: 12px; font-weight: 700; }
+.torrent-fields { padding: 3px 0 1px; }
+.settings {
+  margin: 30px 0 0; background: #111c2d; border: 1px solid var(--line);
+  border-radius: 17px; overflow: hidden;
+}
+.settings summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 18px 21px; cursor: pointer; list-style: none;
+}
+.settings summary::-webkit-details-marker { display: none; }
+.settings-label { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.settings-icon { display: grid; place-items: center; flex: 0 0 auto; width: 40px; height: 40px; background: #1c3347; border-radius: 12px; font-size: 20px; }
+.settings-title { display: block; font-size: 14px; font-weight: 800; }
+.settings-sub { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.settings-state { margin-left: auto; font-size: 11px; font-weight: 800; white-space: nowrap; color: #97b6d2; }
+.chevron { color: #93b1c9; font-size: 17px; transition: transform .2s; }
+.settings[open] .chevron { transform: rotate(180deg); }
+.settings-content { padding: 0 21px 20px; border-top: 1px solid var(--line); }
+.settings-content > p { margin: 16px 0; font-size: 13px; color: var(--muted); }
+.settings-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.settings-hint { color: #94a8bd; font-size: 12px; margin: 0; }
+.settings-hint.warn { color: #ffca89; }
+.small-note { color: #97a8bc; font-size: 12px; line-height: 1.7; }
+.footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 25px 2px 4px; margin-top: 15px; border-top: 1px solid rgba(123,150,181,.16); color: #8090a6; font-size: 12px; }
+.footer a { color: #abcbe3; text-decoration: none; }
+@media(max-width: 950px) {
+  .addons { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  #bombuj { grid-column: 1/-1; }
+}
+@media(max-width: 650px) {
+  .page { padding: 0 16px 22px; }
+  .topbar { padding: 18px 0 17px; }
+  .hero { padding: 35px 0 26px; }
+  .lead { font-size: 14px; line-height: 1.7; }
+  h1 { letter-spacing: -1.3px; }
+  .section-heading { margin-top: 9px; }
+  .section-heading p { display: none; }
+  .addons { grid-template-columns: 1fr; gap: 12px; }
+  #bombuj { grid-column: auto; }
+  .addon { padding: 20px; }
+  .addon-top { margin-bottom: 16px; }
+  .features { margin-bottom: 19px; }
+  .settings { margin-top: 20px; }
+  .settings-fields { grid-template-columns: 1fr; gap: 0; }
+  .settings summary { padding: 16px; }
+  .settings-content { padding: 0 16px 16px; }
+  .settings-state { display: none; }
+  .footer { align-items: flex-start; flex-direction: column; }
+}
+@media(prefers-reduced-motion:reduce) { .action,.chevron { transition: none; } }
 </style>
 </head>
 <body>
-<main class="wrap">
-<section class="card">
-<div class="badges"><span class="badge">🎬 CaseyCZ Stremio</span><span class="badge" id="versionBadge">📦 Verze …</span></div>
-<h1>CaseyCZ Stremio Addons</h1>
-<p class="lead">Tři samostatné doplňky na jedné konfigurační stránce. Instaluj jeden, dva nebo všechny tři. Sosáč ani jeho doplněk se nemění.</p>
+<main class="page">
+  <header class="topbar">
+    <a class="brand" href="/stremio-sktonline/configure" aria-label="CaseyCZ Stremio – domů">
+      <span class="brand-mark" aria-hidden="true">C</span> CaseyCZ <small>STREMIO</small>
+    </a>
+    <span class="version" id="versionBadge">Verze …</span>
+  </header>
 
-<div class="field"><label for="uiLanguage">Jazyk doplňků</label>
-<select id="uiLanguage"><option value="cs">Čeština</option><option value="sk">Slovenština</option><option value="en">English</option></select></div>
+  <section class="hero">
+    <p class="eyebrow">TVŮJ STREMIO HUB</p>
+    <h1>Všechny zdroje.<br><span>Jedno místo.</span></h1>
+    <p class="lead">Vyber si doplňky, které chceš používat. Každý se instaluje zvlášť, ale filmy a epizody umí rozpoznávat mezi sebou.</p>
+    <div class="hero-points"><span>✓ 3 samostatné doplňky</span><span>✓ Direct i P2P</span><span>✓ Bez zbytečných účtů</span></div>
+  </section>
 
-<div class="auth">
-  <div class="field"><label for="sosacUsername">Sosáč – uživatelské jméno (volitelné)</label>
-  <input id="sosacUsername" autocomplete="username" placeholder="Bez údajů fungují SKTOnline i Bombuj"></div>
-  <div class="field"><label for="sosacPassword">Sosáč – heslo (volitelné)</label>
-  <div class="password-row"><input type="password" id="sosacPassword" autocomplete="current-password">
-  <button type="button" class="show-password" data-target="sosacPassword">Zobrazit</button></div></div>
-  <div class="note">Volitelné údaje rozpoznají vlastní ID Sosáče u všech tří doplňků. Sosáč samotný se nemění. Každý vygenerovaný odkaz má šifrovanou vlastní konfiguraci; instalační URL nikdy veřejně nesdílej.</div>
-</div>
+  <div class="section-heading">
+    <h2>Dostupné doplňky</h2>
+    <p>Instalovat můžeš jeden, dva nebo všechny tři.</p>
+  </div>
 
-<div class="addons">
-<section class="addon" id="sktonline">
-<h2>🎬 SKTOnline Direct</h2>
-<p>Přímé video, rozpoznané jazyky a dostupné titulky. Bez přihlášení. Rozpozná také podporovaná ID Bombuj.</p>
-<button class="primary generate" type="button" data-addon="sktonline">Vytvořit instalační odkaz SKTOnline</button>
-<div class="feedback" role="status" aria-live="polite"></div>
-<div class="output"><label>Manifest SKTOnline</label><div class="result-row"><input readonly aria-label="SKTOnline manifest"><button type="button" class="copy">Kopírovat</button></div><a class="install" href="#">Instalovat SKTOnline</a></div>
-</section>
+  <section class="addons" aria-label="Doplňky Stremio">
+    <article class="addon" id="sktonline">
+      <div class="addon-top"><span class="provider-icon" aria-hidden="true">▶</span><span class="provider-pill">DIRECT</span></div>
+      <h3>SKTOnline</h3><p class="sub">Přímé přehrávání</p>
+      <p class="description">Vyhledá přímá videa, rozpozná dostupné kvality, jazyky a titulky.</p>
+      <ul class="features"><li>Video Direct</li><li>CZ / SK</li><li>Titulky</li></ul>
+      <div class="card-bottom">
+        <p class="account-note"><span class="dot"></span> Bez přihlášení</p>
+        <button class="action generate" data-addon="sktonline" type="button">Vytvořit instalační odkaz <span aria-hidden="true">→</span></button>
+        <p class="feedback" role="status" aria-live="polite"></p>
+        <div class="output" hidden>
+          <label for="sktonlineUrl">Instalační manifest</label>
+          <div class="result-row"><input id="sktonlineUrl" readonly aria-label="SKTOnline manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
+          <a class="action install" href="#">Instalovat SKTOnline</a>
+        </div>
+      </div>
+    </article>
 
-<section class="addon" id="sktorrent">
-<h2>🧲 SKTorrent P2P</h2>
-<p>Torrentové zdroje oddělené od Direct streamů. Pro vytvoření manifestu musí být účet SKTorrent ověřený.</p>
-<div class="field"><label for="sktUsername">SKTorrent uživatelské jméno</label><input id="sktUsername" autocomplete="username"></div>
-<div class="field"><label for="sktPassword">SKTorrent heslo</label>
-<div class="password-row"><input id="sktPassword" type="password" autocomplete="current-password"><button class="show-password" type="button" data-target="sktPassword">Zobrazit</button></div></div>
-<button id="torrentGenerate" class="primary generate" type="button" data-addon="sktorrent" disabled>Ověřit účet a vytvořit manifest</button>
-<div class="feedback" role="status" aria-live="polite">Manifest se zpřístupní po vyplnění a ověření účtu.</div>
-<div class="output"><label>Manifest SKTorrent</label><div class="result-row"><input readonly aria-label="SKTorrent manifest"><button type="button" class="copy">Kopírovat</button></div><a class="install" href="#">Instalovat SKTorrent</a></div>
-</section>
+    <article class="addon" id="sktorrent">
+      <div class="addon-top"><span class="provider-icon" aria-hidden="true">⌁</span><span class="provider-pill">P2P</span></div>
+      <h3>SKTorrent</h3><p class="sub">Torrentové zdroje</p>
+      <p class="description">Samostatné P2P streamy s původním názvem releasu, kvalitou a počtem seederů.</p>
+      <ul class="features"><li>Magnet / P2P</li><li>Seeders</li><li>Releasy</li></ul>
+      <div class="card-bottom">
+        <p class="account-note locked"><span class="dot"></span> Vyžaduje účet SKTorrent</p>
+        <div class="torrent-fields">
+          <div class="field"><label for="sktUsername">Uživatelské jméno</label><input id="sktUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="SKTorrent účet"></div>
+          <div class="field"><label for="sktPassword">Heslo</label><div class="password-row"><input id="sktPassword" type="password" autocomplete="current-password" placeholder="Heslo SKTorrent"><button type="button" class="reveal show-password" data-target="sktPassword" aria-pressed="false">Zobrazit</button></div></div>
+        </div>
+        <button class="action generate" data-addon="sktorrent" id="torrentGenerate" type="button" disabled>Ověřit účet a instalovat <span aria-hidden="true">→</span></button>
+        <p class="feedback" role="status" aria-live="polite"></p>
+        <div class="output" hidden>
+          <label for="sktorrentUrl">Šifrovaný instalační manifest</label>
+          <div class="result-row"><input id="sktorrentUrl" readonly aria-label="SKTorrent manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
+          <a class="action install" href="#">Instalovat SKTorrent</a>
+        </div>
+      </div>
+    </article>
 
-<section class="addon" id="bombuj">
-<h2>🍿 Bombuj</h2>
-<p>Filmy, seriály, Cinemeta a dostupné přehrávače. Bez přihlášení. Doplněk zůstává nezávislý.</p>
-<div class="output native-output" style="display:block">
-<label>Manifest Bombuj</label><div class="result-row"><input readonly id="bombujUrl" aria-label="Bombuj manifest"><button type="button" class="copy">Kopírovat</button></div>
-<a id="bombujInstall" href="#">Instalovat Bombuj</a></div>
-<div class="note">Bez přihlášení použij běžný manifest Bombuj. Jakmile zadáš obě položky účtu Sosáč, zobrazí se místo něj možnost vytvořit šifrovaný Bombuj manifest s podporou Sosáče. Instaluj pouze jednu variantu Bombuj. Video zůstává u původního poskytovatele.</div>
-<button class="primary generate" type="button" data-addon="bombuj" id="bombujBridgeGenerate" hidden>Vytvořit Bombuj manifest s podporou Sosáče</button>
-<div class="feedback" role="status" aria-live="polite"></div>
-<div class="output bridge-output"><label>Bombuj + Sosáč manifest</label><div class="result-row"><input readonly aria-label="Bombuj s propojením na Sosáč"><button type="button" class="copy">Kopírovat</button></div><a class="install" href="#">Instalovat Bombuj s propojením</a></div>
-</section>
-</div>
+    <article class="addon" id="bombuj">
+      <div class="addon-top"><span class="provider-icon" aria-hidden="true">▣</span><span class="provider-pill">FILMY & SERIÁLY</span></div>
+      <h3>Bombuj</h3><p class="sub">Filmy, seriály a přehrávače</p>
+      <p class="description">Vlastní katalogy filmů a seriálů s Cinemetou a dostupnými přehrávači.</p>
+      <ul class="features"><li>Katalogy</li><li>Cinemeta</li><li>Web / Direct</li></ul>
+      <div class="card-bottom">
+        <p class="account-note"><span class="dot"></span> Bez přihlášení k Bombuj</p>
+        <div class="native-output" id="bombujNative">
+          <a class="action" id="bombujInstall" href="#">Instalovat Bombuj <span aria-hidden="true">→</span></a>
+          <div class="output" style="margin-top:10px;padding-top:0;border:0">
+            <div class="result-row"><input id="bombujUrl" readonly aria-label="Bombuj manifest"><button class="copy-btn copy" type="button">Kopírovat odkaz</button></div>
+          </div>
+        </div>
+        <div id="bombujLinked" hidden>
+          <button class="action generate" data-addon="bombuj" type="button">Vytvořit instalační odkaz <span aria-hidden="true">→</span></button>
+          <p class="feedback" role="status" aria-live="polite"></p>
+          <div class="output bridge-output" hidden>
+            <label for="bombujBridgeUrl">Bombuj + volitelné propojení Sosáč</label>
+            <div class="result-row"><input id="bombujBridgeUrl" readonly aria-label="Bombuj s propojením na Sosáč"><button class="copy-btn copy" type="button">Kopírovat</button></div>
+            <a class="action install" href="#">Instalovat Bombuj</a>
+          </div>
+        </div>
+      </div>
+    </article>
+  </section>
 
-<div class="note">Video nejde přes server doplňků. SKTOnline Direct, SKTorrent P2P a Bombuj zůstávají samostatné zdroje.</div>
-</section>
-<div class="foot">CaseyCZ Stremio Addons · Neoficiální komunitní projekt</div>
+  <details class="settings" id="sosacSettings">
+    <summary>
+      <span class="settings-label">
+        <span class="settings-icon" aria-hidden="true">🔗</span>
+        <span><span class="settings-title">Volitelné propojení se Sosáčem</span><span class="settings-sub">Rozpoznávání filmů a epizod z katalogu Sosáč</span></span>
+      </span>
+      <span class="settings-state" id="sosacState">Nenastaveno</span><span class="chevron" aria-hidden="true">⌄</span>
+    </summary>
+    <div class="settings-content">
+      <p>Sosáč nijak neupravujeme. Údaje se využijí pouze pro převod jeho vlastních ID na IMDb. Po změně údajů si vytvoř nové instalační odkazy.</p>
+      <div class="settings-fields">
+        <div class="field"><label for="sosacUsername">Sosáč – uživatelské jméno</label><input id="sosacUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Volitelné"></div>
+        <div class="field"><label for="sosacPassword">Sosáč – heslo</label><div class="password-row"><input id="sosacPassword" type="password" autocomplete="current-password" placeholder="Volitelné"><button class="reveal show-password" data-target="sosacPassword" type="button" aria-pressed="false">Zobrazit</button></div></div>
+      </div>
+      <p class="settings-hint" id="sosacHint">Bez vyplnění budou všechny tři doplňky fungovat se svými běžnými zdroji.</p>
+    </div>
+  </details>
+
+  <footer class="footer">
+    <span>© CaseyCZ · Neoficiální doplňky pro Stremio</span>
+    <span>Streamy se přehrávají ze zdroje. Instalační odkazy s přihlášením nesdílej.</span>
+  </footer>
 </main>
+
 <script>
-const versionBadge=document.getElementById('versionBadge');
-function base(){return location.pathname.replace(/\/configure\/?$/,'').replace(/\/enc1\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2}$/,'').replace(/\/$/,'')}
-function baseInstall(){return base()||'/stremio-sktonline'}
-function feedback(card,message,error){const box=card.querySelector('.feedback');box.textContent=message;box.classList.toggle('error',!!error)}
-function torrentValidation(){
-  const filled=document.getElementById('sktUsername').value.trim()&&document.getElementById('sktPassword').value;
-  document.getElementById('torrentGenerate').disabled=!filled;
-  document.querySelector('#sktorrent .output').style.display='none';
+'use strict';
+const $ = id => document.getElementById(id);
+const cards = ['sktonline','sktorrent','bombuj'];
+const defaultBombujPath = '/stremio-bombuj/manifest.json';
+
+function base() {
+  return location.pathname.replace(/\/configure\/?$/,'')
+    .replace(/\/enc1\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2}$/,'')
+    .replace(/\/$/,'');
 }
-document.getElementById('sktUsername').addEventListener('input',torrentValidation);
-document.getElementById('sktPassword').addEventListener('input',torrentValidation);
-function sosacValidation(){
-  const filled=document.getElementById('sosacUsername').value.trim()&&document.getElementById('sosacPassword').value;
-  document.getElementById('bombujBridgeGenerate').hidden=!filled;
-  document.querySelector('#bombuj .native-output').style.display=filled?'none':'block';
-  document.querySelector('#bombuj .bridge-output').style.display='none';
-  document.querySelector('#sktonline .output').style.display='none';
-  document.querySelector('#sktorrent .output').style.display='none';
+function baseInstall() { return base() || '/stremio-sktonline'; }
+function feedback(card,message,error=false) {
+  const node=card.querySelector('.feedback');
+  if (!node) return;
+  node.textContent=message;
+  node.classList.toggle('error',error);
 }
-document.getElementById('sosacUsername').addEventListener('input',sosacValidation);
-document.getElementById('sosacPassword').addEventListener('input',sosacValidation);
-document.querySelectorAll('.show-password').forEach(button=>button.addEventListener('click',()=>{
-  const input=document.getElementById(button.dataset.target);
-  const show=input.type==='password';input.type=show?'text':'password';button.textContent=show?'Skrýt':'Zobrazit';
-}));
-document.querySelectorAll('.copy').forEach(button=>button.addEventListener('click',async()=>{
-  const input=button.closest('.result-row').querySelector('input');if(!input.value)return;
-  try{await navigator.clipboard.writeText(input.value);button.textContent='Zkopírováno';}
-  catch(_){input.focus();input.select();button.textContent='Označeno';}
-}));
-async function generate(addonType){
-  const card=document.getElementById(addonType),button=card.querySelector('.generate');
-  const output=addonType==='bombuj'?card.querySelector('.bridge-output'):card.querySelector('.output');
-  output.style.display='none';button.disabled=true;feedback(card,addonType==='sktorrent'?'Ověřuji přihlášení…':'Vytvářím instalační odkaz…');
+function clearResult(addon) {
+  const card=$(addon);
+  const panel=addon==='bombuj'?card.querySelector('.bridge-output'):card.querySelector('.output');
+  if (panel) { panel.hidden=true; const input=panel.querySelector('input'); if (input) input.value=''; }
+  feedback(card,'');
+}
+function refreshTorrent() {
+  const hasLogin=$('sktUsername').value.trim() && $('sktPassword').value;
+  $('torrentGenerate').disabled=!hasLogin;
+}
+function refreshSosac() {
+  const user=$('sosacUsername').value.trim(),pass=$('sosacPassword').value;
+  const linked=Boolean(user && pass);
+  const partial=Boolean(user || pass) && !linked;
+  $('sosacState').textContent=linked?'Připraveno':partial?'Vyplň obě pole':'Nenastaveno';
+  $('sosacHint').textContent=partial
+    ? 'Vyplň jméno i heslo, jinak se propojení nepoužije.'
+    : linked
+      ? 'Údaje se přidají do nově vytvořených šifrovaných instalačních odkazů. U Bombuj nyní vytvoř propojený manifest.'
+      : 'Bez vyplnění budou všechny tři doplňky fungovat se svými běžnými zdroji.';
+  $('sosacHint').classList.toggle('warn',partial);
+  $('bombujNative').hidden=linked;
+  $('bombujLinked').hidden=!linked;
+  cards.forEach(clearResult);
+}
+function refreshLanguage() { cards.forEach(clearResult); }
+function credentials() {
+  return {sosacUsername:$('sosacUsername').value.trim(),sosacPassword:$('sosacPassword').value};
+}
+function showResult(addon,token) {
+  const card=$(addon);
+  const output=addon==='bombuj'?card.querySelector('.bridge-output'):card.querySelector('.output');
+  const route=addon==='bombuj'?'/bombuj/manifest.json':'/manifest.json';
+  const path=baseInstall()+'/'+token+route;
+  output.querySelector('input').value=location.origin+path;
+  output.querySelector('.install').href='stremio://'+location.host+path;
+  output.hidden=false;
+}
+async function generate(addon) {
+  const card=$(addon);
+  const button=card.querySelector('.generate');
+  const sosac=credentials();
+  if ((sosac.sosacUsername && !sosac.sosacPassword) || (!sosac.sosacUsername && sosac.sosacPassword)) {
+    $('sosacSettings').open=true;
+    feedback(card,'Pro propojení se Sosáčem vyplň obě pole, nebo je obě nech prázdná.',true);
+    return;
+  }
+  const body={addonType:addon,uiLanguage:'cs',...sosac};
+  if (addon==='sktorrent') {
+    body.sktUsername=$('sktUsername').value.trim();
+    body.sktPassword=$('sktPassword').value;
+    if (!body.sktUsername || !body.sktPassword) return;
+  }
+  clearResult(addon);
+  button.disabled=true;
+  const oldText=button.innerHTML;
+  button.textContent=addon==='sktorrent'?'Ověřuji přihlášení…':'Vytvářím odkaz…';
   try {
-    const cfg={
-      addonType,
-      uiLanguage:document.getElementById('uiLanguage').value,
-      sosacUsername:document.getElementById('sosacUsername').value.trim(),
-      sosacPassword:document.getElementById('sosacPassword').value,
-      sktUsername:addonType==='sktorrent'?document.getElementById('sktUsername').value.trim():'',
-      sktPassword:addonType==='sktorrent'?document.getElementById('sktPassword').value:''
-    };
-    if(addonType==='sktorrent'&&(!cfg.sktUsername||!cfg.sktPassword))throw Error('Zadej účet SKTorrent.');
     const response=await fetch(base()+'/api/config-token',{
-      method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify(cfg)
+      method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'},
+      cache:'no-store',body:JSON.stringify(body)
     });
-    const result=await response.json();
-    if(!response.ok||!result.token)throw Error(result.error||'Nepodařilo se vytvořit manifest.');
-    const path=baseInstall()+'/'+result.token+(addonType==='bombuj'?'/bombuj/manifest.json':'/manifest.json');
-    output.querySelector('input').value=location.origin+path;
-    output.querySelector('.install').href='stremio://'+location.host+path;
-    output.style.display='block';feedback(card,addonType==='sktorrent'?'✓ SKTorrent přihlášení ověřeno.':addonType==='bombuj'?'✓ Bombuj manifest s propojením připraven.':'✓ Instalační odkaz připraven.');
-  }catch(e){feedback(card,e.message||'Chyba konfigurace',true);}
-  finally{button.disabled=false;if(addonType==='sktorrent')torrentValidation();}
+    const data=await response.json().catch(()=>({}));
+    if (!response.ok || !data.token) throw Error(data.error||'Instalační odkaz se nepodařilo vytvořit.');
+    showResult(addon,data.token);
+    feedback(card,addon==='sktorrent'?'Účet ověřen. Manifest je připravený.':'Manifest je připravený.');
+  } catch (error) {
+    feedback(card,error.message||'Nepodařilo se vytvořit odkaz.',true);
+  } finally {
+    button.innerHTML=oldText;
+    button.disabled=addon==='sktorrent'?!($('sktUsername').value.trim()&&$('sktPassword').value):false;
+  }
 }
-document.querySelectorAll('.generate').forEach(button=>button.addEventListener('click',()=>generate(button.dataset.addon)));
-const bombujPath='/stremio-bombuj/manifest.json';
-document.getElementById('bombujUrl').value=location.origin+bombujPath;
-document.getElementById('bombujInstall').href='stremio://'+location.host+bombujPath;
-sosacValidation();
-async function loadVersion(){
-  for(const url of [...new Set([base()+'/health','/health'])]){
-    try{const response=await fetch(url,{cache:'no-store'});if(!response.ok)continue;
-      const json=await response.json();if(json.version){versionBadge.textContent='📦 Verze '+json.version;return}
+for(const button of document.querySelectorAll('.generate')) {
+  button.addEventListener('click',()=>generate(button.dataset.addon));
+}
+for(const id of ['sktUsername','sktPassword']) {
+  $(id).addEventListener('input',()=>{clearResult('sktorrent');refreshTorrent();});
+}
+for(const id of ['sosacUsername','sosacPassword']) $(id).addEventListener('input',refreshSosac);
+for(const button of document.querySelectorAll('.show-password')) {
+  button.addEventListener('click',()=>{
+    const input=$(button.dataset.target),show=input.type==='password';
+    input.type=show?'text':'password';
+    button.textContent=show?'Skrýt':'Zobrazit';
+    button.setAttribute('aria-pressed',show?'true':'false');
+  });
+}
+for(const button of document.querySelectorAll('.copy')) {
+  button.addEventListener('click',async()=>{
+    const input=button.closest('.result-row').querySelector('input');
+    if(!input?.value)return;
+    try { await navigator.clipboard.writeText(input.value); button.textContent='Zkopírováno'; }
+    catch (_) { input.focus();input.select();button.textContent='Označeno'; }
+  });
+}
+$('bombujUrl').value=location.origin+defaultBombujPath;
+$('bombujInstall').href='stremio://'+location.host+defaultBombujPath;
+refreshTorrent();
+async function loadVersion() {
+  for(const url of [...new Set([base()+'/health','/health'])]) {
+    try {
+      const response=await fetch(url,{cache:'no-store'});
+      if(!response.ok)continue;
+      const result=await response.json();
+      if(result.version){$('versionBadge').textContent='Verze '+result.version;return;}
     }catch(_){}
   }
 }
