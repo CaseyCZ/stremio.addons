@@ -9,6 +9,7 @@ on:
       - feature/migrate-bombuj-runtime
       - feature/fix-sktorrent-auth-search
       - feature/fix-bombuj-episode-names
+      - feature/cross-catalog-imdb-identity
   workflow_dispatch:
 
 permissions:
