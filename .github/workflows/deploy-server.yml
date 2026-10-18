@@ -7,6 +7,7 @@ on:
       - feature/unified-stremio-addons
       - feature/web-redesign
       - feature/migrate-bombuj-runtime
+      - feature/fix-sktorrent-auth-search
   workflow_dispatch:
 
 permissions:
@@ -43,7 +44,7 @@ jobs:
           node --check api/sosac-overlay.js
           node --check api/bombuj-overlay.js
           node --check api/bombuj-bridge.js
-          node --test test-bombuj-overlay.cjs test-bombuj-bridge.cjs
+          node --test test-bombuj-overlay.cjs test-bombuj-bridge.cjs test-sktorrent-auth.cjs
           if [[ -f providers/bombuj/package.json ]]; then
             npm install --prefix providers/bombuj --omit=dev --no-audit --no-fund --ignore-scripts
             npm --prefix providers/bombuj run check
