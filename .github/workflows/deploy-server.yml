@@ -40,7 +40,8 @@ jobs:
           node --check api/sktorrent.js
           node --check api/sosac-overlay.js
           node --check api/bombuj-overlay.js
-          node --test test-bombuj-overlay.cjs
+          node --check api/bombuj-bridge.js
+          node --test test-bombuj-overlay.cjs test-bombuj-bridge.cjs
           node - <<'NODE'
           const fs = require('fs');
           const vm = require('vm');

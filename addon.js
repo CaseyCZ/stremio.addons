@@ -9,6 +9,7 @@ const { CinemetaApi, uniqueStrings } = require('./api/cinemeta');
 const { findOnlineStreams, findOnlineSourceBundle } = require('./api/sktonline');
 const { SosacOverlay } = require('./api/sosac-overlay');
 const { resolveBombujId } = require('./api/bombuj-overlay');
+const { getBombujJson, bombujManifest, bombujRequestPath } = require('./api/bombuj-bridge');
 const { getClient, findTorrentStreams, activeClientCount } = require('./api/sktorrent');
 
 const app = express();
@@ -93,14 +94,14 @@ function normalizeConfig(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const sktUsername = String(value.sktUsername || value.username || '').trim().slice(0, 128);
   const sktPassword = String(value.sktPassword || value.password || '').slice(0, 256);
-  const addonType = ['sktonline', 'sktorrent'].includes(value.addonType) ? value.addonType : 'combined';
+  const addonType = ['sktonline', 'sktorrent', 'bombuj'].includes(value.addonType) ? value.addonType : 'combined';
   const wantsTorrents = addonType === 'sktorrent' || (addonType === 'combined' && value.enableTorrents === true);
   const sosacUsername = String(value.sosacUsername || '').trim().slice(0, 128);
   const sosacPassword = String(value.sosacPassword || '').slice(0, 256);
   return {
     uiLanguage: ['cs', 'sk', 'en'].includes(value.uiLanguage) ? value.uiLanguage : 'cs',
     addonType,
-    enableOnline: addonType === 'sktorrent' ? false : value.enableOnline !== false,
+    enableOnline: addonType === 'sktorrent' || addonType === 'bombuj' ? false : value.enableOnline !== false,
     enableTorrents: wantsTorrents && Boolean(sktUsername && sktPassword),
     sktUsername: wantsTorrents ? sktUsername : '',
     sktPassword: wantsTorrents ? sktPassword : '',
@@ -526,6 +527,62 @@ app.get('/:cfg/manifest.json', (req, res) => {
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
   return res.json(buildManifest(cfg));
 });
+
+
+// Unified Bombuj is a JSON-only bridge to the independent Bombuj process.
+// External video and torrent streams remain strictly provider-direct.
+app.get('/:cfg/bombuj/manifest.json', async (req, res) => {
+  noCache(res);
+  const cfg = normalizeConfig(decryptConfig(req.params.cfg));
+  if (!cfg || cfg.addonType !== 'bombuj') return res.status(400).json({ error: 'Invalid Bombuj configuration' });
+  try {
+    const source = await getBombujJson('/manifest.json');
+    return res.json(bombujManifest(source, Boolean(cfg.sosacUsername && cfg.sosacPassword)));
+  } catch (error) {
+    console.warn('[bombuj-bridge] manifest: ' + error.message);
+    return res.status(503).json({ error: 'Bombuj service unavailable' });
+  }
+});
+
+async function handleBombujBridge(req, res) {
+  noCache(res);
+  const cfg = normalizeConfig(decryptConfig(req.params.cfg));
+  if (!cfg || cfg.addonType !== 'bombuj') return res.status(400).json({ error: 'Invalid Bombuj configuration' });
+  const resource = req.params.resource;
+  const type = req.params.type;
+  let id = req.params.id;
+  if (!['movie', 'series'].includes(type) || !['catalog', 'meta', 'stream', 'subtitles'].includes(resource)) {
+    return res.status(404).json({ error: 'Unknown resource' });
+  }
+  if (/^sosac_(?:m|s|ep)_\d+$/i.test(id)) {
+    if (!['stream', 'subtitles'].includes(resource)) return res.status(404).json({ error: 'Unsupported Sosac resource' });
+    const blank = resource === 'subtitles' ? { subtitles: [] } : { streams: [] };
+    if (!cfg.sosacUsername || !cfg.sosacPassword) return res.json(blank);
+    try {
+      const found = await makeSosacOverlay(cfg).resolve(type, id);
+      if (!found?.id) return res.json(blank);
+      id = found.id;
+    } catch (error) {
+      console.warn('[bombuj-bridge] Sosac lookup: ' + error.message);
+      return res.json(blank);
+    }
+  }
+  const path = bombujRequestPath(resource, type, id, req.params.extra);
+  if (!path) return res.status(404).json({ error: 'Invalid Bombuj ID' });
+  try {
+    const data = await getBombujJson(path);
+    return res.json(data);
+  } catch (error) {
+    console.warn('[bombuj-bridge] ' + resource + '/' + type + ': ' + error.message);
+    return res.status(502).json({ error: 'Bombuj source unavailable' });
+  }
+}
+
+app.get('/:cfg/bombuj/catalog/:type/:id/:extra.json', (req, res) => {
+  req.params.resource = 'catalog';
+  return handleBombujBridge(req, res);
+});
+app.get('/:cfg/bombuj/:resource/:type/:id.json', handleBombujBridge);
 
 app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   noCache(res);
