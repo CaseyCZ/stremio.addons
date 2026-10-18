@@ -833,12 +833,12 @@ function onlineSearchItemsFromHtml($, wantedTitles) {
     .slice(0, 20);
 }
 
-async function searchDirectOnlineVideos(query, wantedTitles) {
-  const key = `online-title-search-v4:${normalize(query)}`;
+async function searchDirectOnlineVideos(query, wantedTitles, page = 1) {
+  const key = `online-title-search-v5:${normalize(query)}:page:${page}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
 
-  if (resolverHttp) {
+  if (resolverHttp && page === 1) {
     try {
       const payload = await resolverPost('/v1/search', { query });
       const items = (Array.isArray(payload.items) ? payload.items : [])
@@ -865,13 +865,26 @@ async function searchDirectOnlineVideos(query, wantedTitles) {
         t: 'a',
         o: 'mr',
         search_query: query,
-        page: 1
+        page
       },
       headers: { Referer: `${ONLINE_BASE_URL}/` }
     });
-    const $ = cheerio.load(response.data);
+    let html = String(response.data || '');
+    if (!html.trim()) {
+      // The search endpoint intermittently responds HTTP 200 with an empty
+      // body. Refresh its session and retry once rather than caching a
+      // false "no matches" result for many films/episodes.
+      await primeOnlineSession(true).catch(() => {});
+      const retried = await onlineGet('/search/videos', {
+        params: { type: 'public', t: 'a', o: 'mr', search_query: query, page },
+        headers: { Referer: `${ONLINE_BASE_URL}/` }
+      });
+      html = String(retried.data || '');
+    }
+    if (!html.trim()) return [];
+    const $ = cheerio.load(html);
     const items = onlineSearchItemsFromHtml($, wantedTitles);
-    cache.set(key, items, items.length ? 5 * 60 : 45);
+    cache.set(key, items, items.length ? 5 * 60 : 25);
     return items;
   } catch (error) {
     console.warn(`[direct-online] search "${query}": ${error.message}`);
@@ -932,39 +945,70 @@ async function streamsForDirectOnlineVideo(item) {
   }
 }
 
-async function findDirectOnlineByTitle(queries, titles, type, season, episode) {
+async function findDirectOnlineByTitle(
+  queries, titles, type, season, episode,
+  search = searchDirectOnlineVideos, resolve = streamsForDirectOnlineVideo
+) {
   const seenPages = new Set();
-  const searchQueries = dedupe(queries || []).slice(0, 9);
+  const accept = (item) => type !== 'series' ||
+    episodeIdentityMatches(item.title, titles, season, episode);
 
-  for (let offset = 0; offset < searchQueries.length; offset += 3) {
-    const group = searchQueries.slice(offset, offset + 3);
-    const resultGroups = await Promise.all(group.map(query => searchDirectOnlineVideos(query, titles)));
+  const resolveMatches = async (groups) => {
     const fresh = [];
-    for (const items of resultGroups) {
-      for (const item of items) {
-        if (type === 'series' && !episodeIdentityMatches(item.title, titles, season, episode)) continue;
+    for (const items of groups) {
+      for (const item of items || []) {
+        if (!accept(item)) continue;
         const key = String(item.href || item.id || '');
         if (!key || seenPages.has(key)) continue;
         seenPages.add(key);
         fresh.push(item);
       }
     }
-    if (!fresh.length) continue;
-
-    fresh.sort((a, b) => (Number(b.score || 0) - Number(a.score || 0)));
+    fresh.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
     const all = [];
     for (const item of fresh.slice(0, 4)) {
-      const streams = await streamsForDirectOnlineVideo(item);
+      const streams = await resolve(item);
       all.push(...streams);
       const unique = dedupeStreams(all);
       if (unique.length >= 4) return unique.slice(0, 12);
     }
-    const unique = dedupeStreams(all);
-    if (unique.length) return unique.slice(0, 12);
+    return dedupeStreams(all).slice(0, 12);
+  };
+
+  // Try targeted queries first. Do not accept an arbitrary first search hit:
+  // it can have the requested S01E01 but belong to another TV show.
+  const searchQueries = dedupe(queries || []).slice(0, 9);
+  for (let offset = 0; offset < searchQueries.length; offset += 3) {
+    const group = searchQueries.slice(offset, offset + 3);
+    const found = await Promise.all(group.map(query => search(query, titles, 1)));
+    const streams = await resolveMatches(found);
+    if (streams.length) return streams;
+  }
+
+  if (type !== 'series' || !Number.isInteger(season) || !Number.isInteger(episode)) return [];
+
+  // Episode-specific searches are often empty even though the site's normal
+  // show search has the episode on page 2+. Previously only page 1 was read,
+  // favouring new seasons and hiding older episodes such as Ted Lasso S01E01.
+  // Search full, unambiguous show titles only (never "Ted" for "Ted Lasso").
+  const showQueries = dedupe((titles || [])
+    .map(value => stripYearTokens(String(value || '').replace(/\s*\([^)]*\)\s*/g, ' ').trim()))
+    .filter(value => normalize(value).length >= 3))
+    .filter(title => !(titles || []).some(other => normalize(other) !== normalize(title) &&
+      (' ' + normalize(other) + ' ').includes(' ' + normalize(title) + ' ')))
+    .slice(0, 2);
+
+  for (const showTitle of showQueries) {
+    for (let page = 2; page <= 8; page += 3) {
+      const pages = [page, page + 1, page + 2].filter(n => n <= 8);
+      const groups = await Promise.all(pages.map(n => search(showTitle, titles, n)));
+      const streams = await resolveMatches(groups);
+      if (streams.length) return streams;
+      if (groups.every(items => !items?.length)) break;
+    }
   }
   return [];
 }
-
 async function streamsFromSktorrentDetail(candidate, client = null) {
   const key = `skt-detail-direct-v3:${client ? client.clientKey : 'anon'}:${candidate.id}`;
   const cached = cache.get(key);
