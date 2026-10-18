@@ -8,6 +8,7 @@ on:
       - feature/web-redesign
       - feature/migrate-bombuj-runtime
       - feature/fix-sktorrent-auth-search
+      - feature/fix-bombuj-episode-names
   workflow_dispatch:
 
 permissions:
