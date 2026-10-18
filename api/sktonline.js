@@ -170,7 +170,7 @@ function episodeIdentityMatches(candidate, wantedTitles, season, episode) {
       !Number.isInteger(episode) || episode < 1) return false;
   const name = normalize(candidate);
   const raw = stripDiacritics(candidate).toLowerCase();
-  if (!name) return false;
+  if (!name || /\b(?:parody|parodie|spoof|trailer|teaser|review|reaction|recap)\b/.test(raw)) return false;
   const wanted = dedupe((wantedTitles || []).map(normalize)).filter(Boolean);
   const unambiguous = wanted.filter(title => !wanted.some(other =>
     other !== title && (' ' + other + ' ').includes(' ' + title + ' ')));
