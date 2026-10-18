@@ -113,15 +113,26 @@ function selectCinemetaSeriesCandidate(metas, name, year) {
     ? matches[0].meta : null;
 }
 
-// Cinemeta returns Stremio videos as { season, number, name } (rather than
-// { season, episode, title }). Support BOTH formats, but only enrich the
-// same numbered episode; never remap Bombuj IDs or use array positions.
-function cinemetaEpisodeTitle(meta, season, episode) {
-  if (!Number.isInteger(season) || !Number.isInteger(episode) ||
+// Both legacy and current Cinemeta episode schemas are supported.
+// A canonical playback ID is only safe when Cinemeta knows the exact
+// numbered episode of the correctly identified show.
+function cinemetaEpisodeVideo(meta, season, episode) {
+  if (!/^tt\d{5,12}$/i.test(String(meta?.id || '')) ||
+      !Number.isInteger(season) || season < 1 ||
+      !Number.isInteger(episode) || episode < 1 ||
       !Array.isArray(meta?.videos)) return null;
-  const video = meta.videos.find(item => item &&
+  return meta.videos.find(item => item &&
     Number(item.season) === season &&
-    Number(item.episode ?? item.number) === episode);
+    Number(item.episode ?? item.number) === episode) || null;
+}
+
+function cinemetaEpisodeVideoId(meta, season, episode) {
+  return cinemetaEpisodeVideo(meta, season, episode)
+    ? String(meta.id).toLowerCase() + ':' + season + ':' + episode : null;
+}
+
+function cinemetaEpisodeTitle(meta, season, episode) {
+  const video = cinemetaEpisodeVideo(meta, season, episode);
   if (!video) return null;
   for (const value of [video.name, video.title]) {
     const title = String(value || '').replace(/\s+/g, ' ').trim();
@@ -141,7 +152,9 @@ function enrichCinemetaSeries(source, meta) {
     ...merged,
     videos: source.videos.map(video => {
       const title = cinemetaEpisodeTitle(meta, video.season, video.episode);
-      return title ? { ...video, title } : video;
+      const sharedId = cinemetaEpisodeVideoId(meta, video.season, video.episode);
+      return { ...video, ...(title ? { title } : {}),
+        ...(sharedId ? { id: sharedId } : {}) };
     })
   };
 }
@@ -162,12 +175,23 @@ function enrichCinemetaEpisode(source, meta, season, episode) {
   const enriched = enrichCinemetaSeries(source, meta);
   if (mismatchedSeriesYear(source, meta)) return enriched;
   const title = cinemetaEpisodeTitle(meta, season, episode);
-  return title ? { ...enriched, name: source.name + ' – ' + title } : enriched;
+  const sharedId = cinemetaEpisodeVideoId(meta, season, episode);
+  return {
+    ...enriched,
+    ...(title && !String(source.name || '').endsWith(' – ' + title)
+      ? { name: source.name + ' – ' + title } : {}),
+    // Allow latest-episode catalogue cards (which do not have videos until
+    // their meta is loaded) to open the SAME shared stream ID too.
+    ...(sharedId ? { behaviorHints: {
+      ...(enriched.behaviorHints || {}), defaultVideoId: sharedId
+    } } : {})
+  };
 }
 
 module.exports = {
   movieImdbId, seriesImdbId, fetchCinemetaById, mergeCinemeta,
-  cinemetaEpisodeTitle, enrichCinemetaSeries, enrichCinemetaEpisode,
+  cinemetaEpisodeTitle, cinemetaEpisodeVideoId,
+  enrichCinemetaSeries, enrichCinemetaEpisode,
   sharedCinemetaSeriesCatalogMeta,
   seriesSearchName, selectCinemetaSeriesCandidate
 };
