@@ -134,7 +134,8 @@ test('latest episode gets the Cinemeta poster and real title, but keeps Bombuj I
   assert.equal(result.poster,cinemeta.poster);
   assert.equal(result.imdb_id,cinemeta.id);
   assert.equal(result.id,local.id);
-  assert.equal(result.videos[0].id,local.videos[0].id);
+  assert.equal(result.videos[0].id,'tt11540908:1:1');
+  assert.equal(result.behaviorHints.defaultVideoId,'tt11540908:1:1');
   assert.equal(result.videos[0].title,'Pilot');
   assert.equal(local.videos[0].title,'Epizoda 1×1');
 });
@@ -158,7 +159,7 @@ test('series episode list enriches titles only for exact season and episode',()=
   };
   const result=enrichCinemetaSeries(local,remote);
   assert.deepEqual(result.videos.map(v=>v.title),['Pilot','Epizoda 1×2','Epizoda 2×1']);
-  assert.deepEqual(result.videos.map(v=>v.id),local.videos.map(v=>v.id));
+  assert.deepEqual(result.videos.map(v=>v.id),['tt11540908:1:1','tt11540908:1:2','bombuj-series-carrie-2026:2:1']);
   assert.equal(cinemetaEpisodeTitle(remote,1,2),null);
   assert.equal(cinemetaEpisodeTitle(remote,2,1),null);
 });
@@ -183,7 +184,7 @@ test('real Cinemeta video format supplies series episode names by season and num
   };
   const enriched = enrichCinemetaSeries(bombuj, cinemeta);
   assert.deepEqual(enriched.videos.map(v=>v.title), ['Camp Crystal','Part 2','Epizoda 2×1']);
-  assert.deepEqual(enriched.videos.map(v=>v.id), bombuj.videos.map(v=>v.id));
+  assert.deepEqual(enriched.videos.map(v=>v.id),['tt23148340:1:1','tt23148340:1:2','bombuj-series-crystal-lake-2026:2:1']);
   assert.equal(enriched.poster,cinemeta.poster);
   assert.equal(enriched.imdb_id,'tt23148340');
   const individual = enrichCinemetaEpisode({
@@ -193,11 +194,12 @@ test('real Cinemeta video format supplies series episode names by season and num
   },cinemeta,1,1);
   assert.equal(individual.name,'Crystal Lake – 1×1 – Camp Crystal');
   assert.equal(individual.videos[0].title,'Camp Crystal');
-  assert.equal(individual.videos[0].id,bombuj.videos[0].id);
+  assert.equal(individual.videos[0].id,'tt23148340:1:1');
+  assert.equal(individual.behaviorHints.defaultVideoId,'tt23148340:1:1');
 });
 
 test('Cinemeta name/number and title/episode variants reject placeholder titles and wrong episodes', () => {
-  const meta={videos:[
+  const meta={id:'tt11540908',videos:[
     {season:1,number:1,name:'Episode 1',title:'Real Pilot'},
     {season:1,number:2,name:'Epizoda 1×2'},
     {season:1,episode:3,title:'Part III'},
@@ -208,6 +210,31 @@ test('Cinemeta name/number and title/episode variants reject placeholder titles 
   assert.equal(cinemetaEpisodeTitle(meta,1,3),'Part III');
   assert.equal(cinemetaEpisodeTitle(meta,2,1),'A New Chapter');
   assert.equal(cinemetaEpisodeTitle(meta,2,2),null);
+});
+
+
+test('latest Bombuj catalog card advertises shared video even before meta videos load',()=>{
+  const source={id:'bombuj-episode-ted-lasso-1x1',type:'series',
+    name:'Ted Lasso – 1×1',releaseInfo:'2020'};
+  const meta={id:'tt10986410',type:'series',name:'Ted Lasso',releaseInfo:'2020–',
+    videos:[{season:1,number:1,name:'Pilot'}]};
+  const result=enrichCinemetaEpisode(source,meta,1,1);
+  assert.equal(result.id,source.id);
+  assert.equal(result.name,'Ted Lasso – 1×1 – Pilot');
+  assert.equal(result.behaviorHints.defaultVideoId,'tt10986410:1:1');
+  assert.deepEqual(result.videos,undefined);
+});
+
+test('episodes not verified by Cinemeta keep playable native Bombuj source IDs',()=>{
+  const source={id:'bombuj-episode-carrie-2026-5x8',type:'series',
+    name:'Carrie – 5×8',releaseInfo:'2026',
+    videos:[{id:'bombuj-series-carrie-2026:5:8',season:5,episode:8,title:'Epizoda 5×8'}]};
+  const meta={id:'tt11540908',type:'series',releaseInfo:'2026',
+    videos:[{season:1,number:1,name:'Pilot'}]};
+  const result=enrichCinemetaEpisode(source,meta,5,8);
+  assert.equal(result.id,source.id);
+  assert.equal(result.behaviorHints,undefined);
+  assert.deepEqual(result.videos,source.videos);
 });
 
 test('missing Cinemeta episode title keeps original, without dropping poster',()=>{
