@@ -1,6 +1,6 @@
 {
   "name": "stremio-sktonline",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Three independently installable Stremio sources: SKTOnline Direct, SKTorrent P2P and Bombuj",
   "main": "addon.js",
