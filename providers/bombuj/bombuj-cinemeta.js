@@ -113,20 +113,24 @@ function selectCinemetaSeriesCandidate(metas, name, year) {
     ? matches[0].meta : null;
 }
 
-// Cinemeta's "videos" array carries episode titles. Match by numeric
-// season and episode, never by position or remote episode IDs.
+// Cinemeta returns Stremio videos as { season, number, name } (rather than
+// { season, episode, title }). Support BOTH formats, but only enrich the
+// same numbered episode; never remap Bombuj IDs or use array positions.
 function cinemetaEpisodeTitle(meta, season, episode) {
-  const video = Array.isArray(meta?.videos)
-    ? meta.videos.find(item => Number.isInteger(item?.season) &&
-        Number.isInteger(item?.episode) &&
-        item.season === season && item.episode === episode)
-    : null;
-  const title = String(video?.title || '').replace(/\s+/g, ' ').trim();
-  if (!title || title.length > 160 ||
-      /^(?:episode|epizoda|epizóda|ep\.?)\s*#?\s*(?:\d+(?:\.\d+)?|[ivxlcdm]+)$/i.test(title)) {
-    return null;
+  if (!Number.isInteger(season) || !Number.isInteger(episode) ||
+      !Array.isArray(meta?.videos)) return null;
+  const video = meta.videos.find(item => item &&
+    Number(item.season) === season &&
+    Number(item.episode ?? item.number) === episode);
+  if (!video) return null;
+  for (const value of [video.name, video.title]) {
+    const title = String(value || '').replace(/\s+/g, ' ').trim();
+    if (title && title.length <= 160 &&
+        !/^(?:episode|epizoda|epizóda|ep\.?)\s*#?\s*(?:\d+(?:[.×x]\d+)?|[ivxlcdm]+)$/i.test(title)) {
+      return title;
+    }
   }
-  return title;
+  return null;
 }
 
 function enrichCinemetaSeries(source, meta) {
