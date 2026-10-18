@@ -5,6 +5,7 @@ on:
     branches:
       - Master
       - feature/unified-stremio-addons
+      - feature/web-redesign
   workflow_dispatch:
 
 permissions:
@@ -62,6 +63,9 @@ jobs:
           if (!script) throw Error('Missing UI JavaScript');
           new vm.Script(script[1], {filename:'configure-inline.js'});
           if (!html.includes('/bombuj/manifest.json')) throw Error('Bombuj configured manifest link is missing');
+          if (!html.includes('id="uiLanguage"') || !html.includes('id="sosacSettings"')) throw Error('Settings controls missing');
+          if (!html.includes("button.disabled=addon==='sktorrent'")) throw Error('Torrent button state missing');
+          if (!html.includes('refreshTorrent();')) throw Error('Missing SKTorrent credential validation');
           for (const id of ['sktonline','sktorrent','bombuj']) {
             if (!html.includes('id="'+id+'"')) throw Error('Missing card '+id);
           }

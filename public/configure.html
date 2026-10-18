@@ -115,8 +115,10 @@ input:focus, select:focus { border-color: #5eb9ed; }
 .password-row input { min-width: 0; flex: 1; }
 .reveal { flex: 0 0 auto; background: #22344a; color: #d8e7f6; border: 1px solid #344b64; border-radius: 10px; padding: 0 11px; font-size: 12px; font-weight: 700; }
 .torrent-fields { padding: 3px 0 1px; }
+.language-setting { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 15px 0 0; color: #aebfd0; font-size: 12px; }
+.language-setting select { width: auto; min-width: 158px; min-height: 37px; font-size: 12px; }
 .settings {
-  margin: 30px 0 0; background: #111c2d; border: 1px solid var(--line);
+  margin: 18px 0 0; background: #111c2d; border: 1px solid var(--line);
   border-radius: 17px; overflow: hidden;
 }
 .settings summary {
@@ -252,6 +254,10 @@ input:focus, select:focus { border-color: #5eb9ed; }
     </article>
   </section>
 
+  <div class="language-setting">
+    <label for="uiLanguage">Jazyk doplňků</label>
+    <select id="uiLanguage"><option value="cs">Čeština</option><option value="sk">Slovenština</option><option value="en">English</option></select>
+  </div>
   <details class="settings" id="sosacSettings">
     <summary>
       <span class="settings-label">
@@ -341,7 +347,7 @@ async function generate(addon) {
     feedback(card,'Pro propojení se Sosáčem vyplň obě pole, nebo je obě nech prázdná.',true);
     return;
   }
-  const body={addonType:addon,uiLanguage:'cs',...sosac};
+  const body={addonType:addon,uiLanguage:$('uiLanguage').value,...sosac};
   if (addon==='sktorrent') {
     body.sktUsername=$('sktUsername').value.trim();
     body.sktPassword=$('sktPassword').value;
@@ -374,6 +380,7 @@ for(const id of ['sktUsername','sktPassword']) {
   $(id).addEventListener('input',()=>{clearResult('sktorrent');refreshTorrent();});
 }
 for(const id of ['sosacUsername','sosacPassword']) $(id).addEventListener('input',refreshSosac);
+$('uiLanguage').addEventListener('change',refreshLanguage);
 for(const button of document.querySelectorAll('.show-password')) {
   button.addEventListener('click',()=>{
     const input=$(button.dataset.target),show=input.type==='password';
