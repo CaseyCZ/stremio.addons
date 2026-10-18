@@ -55,6 +55,15 @@ test('series list parser keeps deduplicated titles and poster URLs from Bombuj H
   assert.equal(cards[1].title,'Carrie');
 });
 
+test('series search strips #serial fragment so IMDb source identity can verify the page',()=>{
+  const html='<a href="/serial-ted-lasso#serial"><span class="nazov">Ted Lasso (2020)</span></a>';
+  const cards=parseSeriesCards(html);
+  assert.equal(cards.length,1);
+  assert.equal(cards[0].slug,'ted-lasso');
+  assert.equal(cards[0].detailUrl,'https://serialy.bombuj.si/serial-ted-lasso');
+  assert.equal(cards[0].title,'Ted Lasso (2020)');
+});
+
 test('episode parser records season, episode and language without duplicates', () => {
   const html = [
     '<a href="/serial/visionquest-2026-1x1"><span>Epizóda 1x1</span><div style="float:right">CZ</div></a>',
