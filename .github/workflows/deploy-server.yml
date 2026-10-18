@@ -10,6 +10,7 @@ on:
       - feature/fix-sktorrent-auth-search
       - feature/fix-bombuj-episode-names
       - feature/cross-catalog-imdb-identity
+      - feature/shared-imdb-episode-playback
   workflow_dispatch:
 
 permissions:
