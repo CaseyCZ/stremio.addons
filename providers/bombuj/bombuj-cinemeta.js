@@ -146,6 +146,17 @@ function enrichCinemetaSeries(source, meta) {
   };
 }
 
+// Native Bombuj catalogue IDs cannot be queried by independent addons such
+// as Sosac (which supports IMDb IDs). Prefer a VERIFIED shared IMDb identity
+// for show catalogue cards. Preserve native IDs whenever mapping or season
+// identity is unavailable; individual latest-episode cards remain untouched.
+function sharedCinemetaSeriesCatalogMeta(source, meta) {
+  const merged = mergeCinemeta(source, meta);
+  if (!meta || !/^tt\d{5,12}$/i.test(String(meta.id || '')) ||
+      mismatchedSeriesYear(source, meta)) return merged;
+  return { ...merged, id: String(meta.id).toLowerCase() };
+}
+
 function enrichCinemetaEpisode(source, meta, season, episode) {
   if (!source || !meta) return source;
   const enriched = enrichCinemetaSeries(source, meta);
@@ -157,5 +168,6 @@ function enrichCinemetaEpisode(source, meta, season, episode) {
 module.exports = {
   movieImdbId, seriesImdbId, fetchCinemetaById, mergeCinemeta,
   cinemetaEpisodeTitle, enrichCinemetaSeries, enrichCinemetaEpisode,
+  sharedCinemetaSeriesCatalogMeta,
   seriesSearchName, selectCinemetaSeriesCandidate
 };
