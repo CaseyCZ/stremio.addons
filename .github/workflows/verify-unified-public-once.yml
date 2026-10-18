@@ -1,0 +1,47 @@
+name: Verify unified public Stremio configuration (one time)
+
+on:
+  push:
+    branches: [Master]
+    paths:
+      - '.github/workflows/verify-unified-public-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check live shared setup and three manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://130.61.49.108/stremio-sktonline'
+          BOMBUJ='https://130.61.49.108/stremio-bombuj'
+          curl -kfsS --max-time 20 "$BASE/health" >/tmp/unified-health.json
+          node -e "const x=require('/tmp/unified-health.json');if(x.version!=='0.2.0'||!x.encryption)throw Error('Unified service not healthy v0.2.0');console.log('Live version='+x.version+', encryption=yes')"
+          curl -kfsS --max-time 25 "$BASE/configure" >/tmp/unified-config.html
+          for needle in 'CaseyCZ Stremio Addons' 'SKTOnline Direct' 'SKTorrent P2P' 'Bombuj'; do
+            grep -Fq "$needle" /tmp/unified-config.html
+          done
+          echo 'Live configuration page: three addon cards found'
+          curl -kfsS --max-time 20 "$BOMBUJ/manifest.json" >/tmp/unified-bombuj-native.json
+          node -e "const d=require('/tmp/unified-bombuj-native.json');if(!d.catalogs?.length)throw Error('Bombuj native catalogs missing');console.log('Bombuj independent service ready')"
+          DIRECT=$(curl -kfsS --max-time 20 -H 'Content-Type: application/json' \
+            -d '{"addonType":"sktonline","uiLanguage":"cs"}' \
+            "$BASE/api/config-token" | node -e "let t='';process.stdin.on('data',x=>t+=x).on('end',()=>{const d=JSON.parse(t);if(!d.token?.startsWith('enc1.'))process.exit(1);process.stdout.write(d.token)})")
+          curl -kfsS --max-time 20 "$BASE/$DIRECT/manifest.json" >/tmp/unified-direct.json
+          node -e "const d=require('/tmp/unified-direct.json');if(d.id!=='cz.caseycz.stremio.sktonline.direct'||!d.idPrefixes.includes('bombuj-series-'))throw Error('Invalid Direct manifest');console.log('SKTOnline Direct: manifest OK')"
+          TOR_STATUS=$(curl -ksS -o /tmp/unified-torrent-reject.json -w '%{http_code}' --max-time 20 -H 'Content-Type: application/json' \
+            -d '{"addonType":"sktorrent","uiLanguage":"cs"}' \
+            "$BASE/api/config-token")
+          test "$TOR_STATUS" = 400
+          echo 'SKTorrent without valid account: manifest correctly rejected'
+          BRIDGE=$(curl -kfsS --max-time 20 -H 'Content-Type: application/json' \
+            -d '{"addonType":"bombuj","uiLanguage":"cs","sosacUsername":"smoke-example","sosacPassword":"smoke-placeholder"}' \
+            "$BASE/api/config-token" | node -e "let t='';process.stdin.on('data',x=>t+=x).on('end',()=>{const d=JSON.parse(t);if(!d.token?.startsWith('enc1.'))process.exit(1);process.stdout.write(d.token)})")
+          curl -kfsS --max-time 35 "$BASE/$BRIDGE/bombuj/manifest.json" >/tmp/unified-bombuj-bridge.json
+          node -e "const d=require('/tmp/unified-bombuj-bridge.json');if(d.id!=='cz.caseycz.stremio.bombuj.unified'||!d.catalogs?.length||!d.resources.find(x=>x.name==='stream')?.idPrefixes.includes('sosac_ep_'))throw Error('Invalid configured Bombuj manifest');console.log('Configured Bombuj: catalogs + Sosac overlay prefixes OK')"
+          echo 'LIVE_UNIFIED_SMOKE_SUCCESS'
