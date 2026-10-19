@@ -30,8 +30,8 @@ if sudo -n grep -Fq "$marker" "$site"; then
 fi
 
 backup="$(sudo -n mktemp /var/tmp/stremio-nginx-configure.XXXXXXXX)"
-sudo -n chmod 600 "$backup"
 sudo -n cp -p -- "$site" "$backup"
+sudo -n chmod 600 "$backup"
 changed=0
 rollback() {
   status=$?
