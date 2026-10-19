@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="https://130.61.49.108/stremio-addons/configure"><img src="https://img.shields.io/badge/Otev%C5%99%C3%ADt-Spole%C4%8Dnou%20konfiguraci-198CC8?style=for-the-badge&labelColor=14263B" alt="Otevřít konfiguraci všech čtyř doplňků" /></a>
-  <a href="https://130.61.49.108/stremio-bombuj/manifest.json"><img src="https://img.shields.io/badge/Bombuj-P%C5%99%C3%ADm%C3%A1%20instalace-AD6CAF?style=for-the-badge&labelColor=14263B" alt="Bombuj – přímá instalace bez přihlášení" /></a>
+  <a href="https://130.61.49.108/stremio-addons/bombuj/manifest.json"><img src="https://img.shields.io/badge/Bombuj-P%C5%99%C3%ADm%C3%A1%20instalace-AD6CAF?style=for-the-badge&labelColor=14263B" alt="Bombuj – přímá instalace bez přihlášení" /></a>
 </p>
 
 ## O projektu
@@ -43,7 +43,7 @@
 
 ## Společný repozitář
 
-Všechny čtyři doplňky i konfigurátor jsou spravovány v [CaseyCZ/stremio.addons](https://github.com/CaseyCZ/stremio.addons). Bombuj se spouští z `providers/bombuj/`. Pracovní adresář na Oracle je `/home/ubuntu/stremio.addons`. **Nová hlavní veřejná adresa je `/stremio-addons/`**. Původní veřejná `/stremio-sktonline/` se ruší bez aliasu; už nainstalované doplňky z této cesty je proto nutné ve Stremiu nahradit nově vygenerovanými odkazy. Samostatná `/stremio-bombuj/` zůstává beze změny. Interní PM2 proces i šifrovací klíče zůstávají stejné.
+Všechny čtyři doplňky i konfigurátor jsou spravovány v [CaseyCZ/stremio.addons](https://github.com/CaseyCZ/stremio.addons). Bombuj se spouští z `providers/bombuj/`. Pracovní adresář na Oracle je `/home/ubuntu/stremio.addons`. **Nová hlavní veřejná adresa je `/stremio-addons/`**. Původní veřejná `/stremio-sktonline/` se ruší bez aliasu; už nainstalované doplňky z této cesty je proto nutné ve Stremiu nahradit nově vygenerovanými odkazy. Původní veřejná `/stremio-bombuj/` se rovněž ruší; Bombuj bez propojení se Sosáčem je nyní pod `/stremio-addons/bombuj/manifest.json`, zatímco propojená instalace se Sosáčem používá `/stremio-addons/<šifrovaný-token>/manifest.json`. Interní Bombuj stále běží odděleně na portu 7004. Interní PM2 proces i šifrovací klíče zůstávají stejné.
 
 ## Instalace doplňků
 
@@ -54,7 +54,7 @@ Všechny čtyři doplňky i konfigurátor jsou spravovány v [CaseyCZ/stremio.ad
 3. **Bombuj** – nainstaluješ bez přihlášení; případně můžeš zapnout volitelné propojení se Sosáčem.
 4. **Přehraj.to Direct** – bez přihlášení na `/stremio-addons/prehrajto/manifest.json`; pro položky z katalogu Sosáč vyplň údaje v sekci **Propojení se Sosáčem** a vytvoř šifrovaný instalační odkaz.
 
-Samostatné tlačítko **Bombuj – Přímá instalace** nad tímto textem vede rovnou na jeho veřejný manifest. Doplňky můžeš instalovat nezávisle v libovolné kombinaci.
+Tlačítko **Bombuj – Přímá instalace** používá také sjednocenou cestu `/stremio-addons/bombuj/manifest.json`. Doplňky můžeš instalovat nezávisle v libovolné kombinaci.
 
 ## Volitelné propojení se Sosáčem
 
