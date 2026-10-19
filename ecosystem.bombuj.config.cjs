@@ -14,6 +14,8 @@ module.exports = {
     max_memory_restart: '512M',
     env: {
       NODE_ENV: 'production',
+      // PM2 services must survive GitHub Actions job cleanup.
+      RUNNER_TRACKING_ID: '',
       PORT: '7004',
       // Cross-network CDN requests return 403; keep VOE in its web player.
       BOMBUJ_DIRECT_VOE: '0'
