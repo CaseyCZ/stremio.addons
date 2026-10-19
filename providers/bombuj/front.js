@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('http');
+const { qualityLabel } = require('./stream-quality.js');
 const { subtitleTracks, audioLabel, subtitleLabel, providerLabel } = require('./stream-display.js');
 const { testUnblockAllowed, testDirectVoeAllowed } = require('./embed-test-policy.js');
 
@@ -49,17 +50,6 @@ function uniqueSubtitles(streams) {
   return subtitleTracks(streams);
 }
 
-function qualityLabel(stream) {
-  const text = `${stream?.name || ''} ${stream?.title || ''} ${stream?.description || ''} ${stream?.url || ''}`;
-  const match = text.match(/\b(2160|1440|1080|720|480|360|240)p?\b/i);
-  if (match) return `${match[1]}p`;
-  if (/\b(?:4k|uhd)\b/i.test(text)) return '4K';
-  if (/\bhdr\b/i.test(text)) return 'HDR';
-  if (/\bfull\s*hd\b|\bfhd\b/i.test(text)) return '1080p';
-  if (/\bhd\b/i.test(text)) return 'HD';
-  if (/\bsd\b/i.test(text)) return 'SD';
-  return 'Direct';
-}
 
 function displayDirect(stream) {
   const quality = qualityLabel(stream);
@@ -67,7 +57,7 @@ function displayDirect(stream) {
   return {
     ...stream,
     name: `Bombuj • ${quality}`,
-    title: `🎧 ${audioLabel(stream)}\n💬 ${subtitleLabel(stream)}\n🎬 ${quality} • ${provider}`,
+    title: `🎧 ${audioLabel(stream)}\n💬 ${subtitleLabel(stream)}\n🎬 ${quality}`,
     description: undefined,
     externalUrl: undefined
   };

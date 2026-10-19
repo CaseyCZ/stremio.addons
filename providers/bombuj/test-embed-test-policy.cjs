@@ -47,11 +47,11 @@ test('VOE opt-in keeps the original embed as fallback and preserves language',as
   vm.runInNewContext(fs.readFileSync(file,'utf8'),{
     require:p=>p==='stremio-addon-sdk'?sdk:p==='./embed-test-policy.js'?{testDirectVoeAllowed:u=>testDirectVoeAllowed(u,{BOMBUJ_TEST_DIRECT_VOE:'1'})}:local(p),
     module:mod,process:{env:{}},console:{log(){},error(){},warn(){}},URL,URLSearchParams,AbortSignal,Buffer,Uint8Array,
-    fetch:async()=>new Response('<script type="application/json">"https://cdn.example/movie.m3u8"</script>')
+    fetch:async url=>new Response(String(url).includes('cdn.example') ? '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1,RESOLUTION=1920x1080\nhttps://cdn.example/1080p/index.m3u8' : '<script type="application/json">"https://cdn.example/movie.m3u8"</script>')
   });
   const embed='https://voe.sx/e/fixture?subtitles='+encodeURIComponent('CZSK;cs;https://www.bombuj.si/titulky/fixture.vtt');
   const out=await mod.exports.playersToStreams([{provider:'voe2.sx',language:'CZ dabing',resolvedUrl:embed}],'https://www.bombuj.si/online-film-temny-rytir');
-  assert.equal(out.length,2);assert.equal(out[0].url,'https://cdn.example/movie.m3u8');
+  assert.equal(out.length,2);assert.equal(out[0].url,'https://cdn.example/1080p/index.m3u8');
   assert.match(out[0].description,/CZ dabing/);assert.equal(out[1].externalUrl,embed);
   assert.equal(out[0].subtitles[0].lang,'ces');assert.equal(out[1].subtitles[0].url,'https://www.bombuj.si/titulky/fixture.vtt');
   const variants=await mod.exports.playersToStreams([

@@ -57,8 +57,10 @@ if(apps.length!==1||apps[0].pm2_env?.pm_exec_path!==process.argv[3]||apps[0].pm2
 fs.writeFileSync(process.argv[4],String(apps[0].pm2_env.BOMBUJ_DIRECT_VOE??apps[0].pm2_env.BOMBUJ_TEST_DIRECT_VOE??'0'));
 NODE
 PREVIOUS_VOE="$(cat "$STATE/previous-voe")"
+DESIRED_VOE="$(node -e "process.stdout.write(String(require(process.argv[1]).apps.find(x=>x.name==='stremio-bombuj').env.BOMBUJ_DIRECT_VOE??'0'))" "$CONF")"
+[[ "$DESIRED_VOE" =~ ^[01]$ ]] || { echo 'Invalid VOE switch in config.' >&2; exit 1; }
 REVISION="$( { git rev-parse HEAD:providers/bombuj; sha256sum "$CONF" "$ROOT/deploy-bombuj-runtime.sh"; } | sha256sum | cut -d' ' -f1 )"
-if [[ "$PREVIOUS_VOE" == 1 && -f "$STAMP" && "$(cat "$STAMP")" == "$REVISION" ]] && curl -fsS --max-time 5 http://127.0.0.1:7004/manifest.json >/dev/null; then
+if [[ "$PREVIOUS_VOE" == "$DESIRED_VOE" && -f "$STAMP" && "$(cat "$STAMP")" == "$REVISION" ]] && curl -fsS --max-time 5 http://127.0.0.1:7004/manifest.json >/dev/null; then
   echo 'Bombuj runtime revision unchanged; no restart needed.'
   exit 0
 fi
@@ -73,7 +75,7 @@ const net=require('node:net'),servers=[];
  await new Promise((ok,no)=>s.once('error',no).listen(p,'127.0.0.1',ok));
 }}catch{process.exitCode=1;}finally{for(const s of servers)s.close();}})();
 NODE
-PORT="$STAGE_PORT" BOMBUJ_DIRECT_VOE=1 node "$EXPECTED" > "$STATE/staging.log" 2>&1 &
+PORT="$STAGE_PORT" BOMBUJ_DIRECT_VOE="$DESIRED_VOE" node "$EXPECTED" > "$STATE/staging.log" 2>&1 &
 STAGE_PID=$!
 READY=0
 for _ in $(seq 1 20); do
@@ -99,11 +101,11 @@ done
 # Keep rollback enabled until runtime path, count and VOE switch are verified.
 HEALTHY=0
 pm2 jlist > "$STATE/pm2.json"
-node - "$STATE/pm2.json" "$EXPECTED" <<'NODE'
+node - "$STATE/pm2.json" "$EXPECTED" "$DESIRED_VOE" <<'NODE'
 const fs=require('node:fs'),apps=JSON.parse(fs.readFileSync(process.argv[2])).filter(x=>x.name==='stremio-bombuj');
-if(apps.length!==1||apps[0].pm2_env?.status!=='online'||apps[0].pm2_env?.pm_exec_path!==process.argv[3]||apps[0].pm2_env?.BOMBUJ_DIRECT_VOE!=='1')throw Error('Bombuj runtime/VOE switch verification failed');
+if(apps.length!==1||apps[0].pm2_env?.status!=='online'||apps[0].pm2_env?.pm_exec_path!==process.argv[3]||apps[0].pm2_env?.BOMBUJ_DIRECT_VOE!==process.argv[4])throw Error('Bombuj runtime/VOE switch verification failed');
 NODE
 pm2 save >/dev/null
 printf '%s\n' "$REVISION" > "$STAMP"
 HEALTHY=1
-echo 'Bombuj updated from unified provider; direct VOE enabled; existing port 7004 preserved.'
+echo "Bombuj updated from unified provider; direct VOE=$DESIRED_VOE; existing port 7004 preserved."

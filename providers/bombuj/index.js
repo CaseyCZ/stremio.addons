@@ -7,6 +7,7 @@ const { parseSeriesCards, parseSeriesBrowseCards, parseEpisodeList, seriesBrowse
 const { rememberSource, findSource, sourceIdentity, normalizeTitle } = require('./source-identity.js');
 const { parseMovieCards } = require('./bombuj-listing.js');
 const { testDirectVoeAllowed } = require('./embed-test-policy.js');
+const { inspectHls } = require('./stream-quality.js');
 const { subtitleTracks } = require('./stream-display.js');
 
 const BOMBUJ_BASE = 'https://www.bombuj.si';
@@ -507,7 +508,15 @@ async function resolveVoe(embedUrl, sourcePageUrl) {
     if (!page) return null;
     const finalUrl = page.finalUrl || current;
     const streamUrl = extractVoeObfuscatedStream(page.text);
-    if (streamUrl) return { url: streamUrl, referer: finalUrl, type: streamUrl.includes('.m3u8') ? 'hls' : 'mp4' };
+    if (streamUrl) {
+      const type = directUrlType(streamUrl);
+      if (type === 'hls') {
+        const media = await inspectHls(streamUrl, { fetchImpl: fetch, headers: { 'User-Agent': USER_AGENT, Referer: finalUrl }, timeoutMs: deadline - Date.now() }).catch(() => null);
+        if (!media) return null;
+        return { ...media, referer: finalUrl, type };
+      }
+      return type ? { url: streamUrl, referer: finalUrl, type } : null;
+    }
     const redirect = extractScriptRedirect(page.text, finalUrl);
     if (!redirect || redirect === current) return null;
     referer = finalUrl;
@@ -587,7 +596,7 @@ function makeDirectStream(player, direct, index, tracks) {
   const extension = direct.type === 'hls' ? 'm3u8' : 'mp4';
   return {
     name: `Bombuj • ${provider}`,
-    description: `${language} • přímý ${direct.type === 'hls' ? 'HLS' : 'MP4'}`,
+    description: `${language} • přímý ${direct.type === 'hls' ? 'HLS' : 'MP4'}${direct.quality ? ' • ' + direct.quality : ''}`,
     url: direct.url,
     behaviorHints: {
       notWebReady: true,
