@@ -5,7 +5,7 @@ const { spawn } = require('node:child_process');
 
 const PORT = 17987;
 const BASE = 'http://127.0.0.1:' + PORT;
-const bootstrap = String.raw\`
+const bootstrap = String.raw`
   const { SosacOverlay } = require('./api/sosac-overlay');
   const { CinemetaApi } = require('./api/cinemeta');
   const overlay = require('./api/bombuj-overlay');
@@ -36,7 +36,7 @@ const bootstrap = String.raw\`
     subtitles: []
   }];
   require('./addon.js');
-\`;
+`;
 const child = spawn(process.execPath, ['-e', bootstrap], {
   cwd: require('node:path').resolve(__dirname, '..'),
   env: {
