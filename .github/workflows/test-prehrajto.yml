@@ -14,6 +14,8 @@ on:
       - 'scripts/test-nginx-stremio-configure-root.py'
       - 'scripts/install-nginx-stremio-addons-path.sh'
       - 'scripts/test-nginx-stremio-addons-path.py'
+      - 'scripts/install-nginx-unified-bombuj-path.sh'
+      - 'scripts/test-nginx-unified-bombuj-path.py'
       - '.github/workflows/test-prehrajto.yml'
   workflow_dispatch:
 
@@ -38,6 +40,8 @@ jobs:
           python3 scripts/test-nginx-stremio-configure-root.py
           bash -n scripts/install-nginx-stremio-addons-path.sh
           python3 scripts/test-nginx-stremio-addons-path.py
+          bash -n scripts/install-nginx-unified-bombuj-path.sh
+          python3 scripts/test-nginx-unified-bombuj-path.py
           node --check api/prehrajto.js
           node --check addon.js
           node --test test-prehrajto.cjs test-prehrajto-sosac.cjs
