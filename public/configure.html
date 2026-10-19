@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0b1020">
-<meta name="description" content="CaseyCZ Stremio Addons – SKTOnline Direct, SKTorrent P2P a Bombuj na jednom místě.">
+<meta name="description" content="CaseyCZ Stremio Addons – SKTOnline Direct, SKTorrent P2P, Bombuj a Přehraj.to na jednom místě.">
 <title>CaseyCZ Stremio | Doplňky a instalace</title>
 <style>
 :root {
@@ -61,7 +61,7 @@ h1 span { color: #80ccff; }
 .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 20px 0 15px; }
 .section-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.4px; }
 .section-heading p { margin: 0; color: var(--soft); font-size: 12px; }
-.addons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; align-items: stretch; }
+.addons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 15px; align-items: stretch; }
 .addon {
   position: relative; display: flex; flex-direction: column; min-width: 0;
   padding: 24px; border: 1px solid var(--line); border-radius: 19px; background: var(--panel);
@@ -73,6 +73,7 @@ h1 span { color: #80ccff; }
 #sktonline .provider-icon { background: #153654; color: #80cbff; }
 #sktorrent .provider-icon { background: #123a36; color: #83e8cf; }
 #bombuj .provider-icon { background: #3b283e; color: #f6b7e3; }
+#prehrajto .provider-icon { background: #393520; color: #f7dfa0; }
 .provider-pill { display: inline-flex; align-items: center; padding: 5px 9px; border: 1px solid #314159; border-radius: 99px; color: #b6c8dd; font-size: 10px; letter-spacing: .7px; font-weight: 800; }
 .addon h3 { margin: 0; font-size: 21px; line-height: 1.25; letter-spacing: -.7px; }
 .addon .sub { margin: 5px 0 13px; color: var(--muted); font-size: 13px; }
@@ -143,7 +144,6 @@ input:focus, select:focus { border-color: #5eb9ed; }
 .footer a { color: #abcbe3; text-decoration: none; }
 @media(max-width: 950px) {
   .addons { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  #bombuj { grid-column: 1/-1; }
 }
 @media(max-width: 650px) {
   .page { padding: 0 16px 22px; }
@@ -249,6 +249,20 @@ input:focus, select:focus { border-color: #5eb9ed; }
             <div class="result-row"><input id="bombujBridgeUrl" readonly aria-label="Bombuj s propojením na Sosáč"><button class="copy-btn copy" type="button">Kopírovat</button></div>
             <a class="action install" href="#">Instalovat Bombuj</a>
           </div>
+        </div>
+      </div>
+    </article>
+    <article class="addon" id="prehrajto">
+      <div class="addon-top"><span class="provider-icon" aria-hidden="true">▶</span><span class="provider-pill">MP4 DIRECT</span></div>
+      <h3>Přehraj.to</h3><p class="sub">Přímé streamy a titulky</p>
+      <p class="description">Vyhledávání českých i zahraničních filmů a epizod. MP4 z CDN přímo do Stremia, s dostupnými titulky CZ, SK a EN.</p>
+      <ul class="features"><li>Bez účtu</li><li>MP4 direct</li><li>CZ / SK titulky</li></ul>
+      <div class="card-bottom">
+        <p class="account-note"><span class="dot"></span> Bez registrace; dostupnost závisí na externích API</p>
+        <a class="action" id="prehrajtoInstall" href="#">Instalovat Přehraj.to <span aria-hidden="true">→</span></a>
+        <div class="output" style="display:block;margin-top:10px">
+          <label for="prehrajtoUrl">Instalační manifest</label>
+          <div class="result-row"><input id="prehrajtoUrl" readonly aria-label="Přehraj.to manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
         </div>
       </div>
     </article>
@@ -399,6 +413,9 @@ for(const button of document.querySelectorAll('.copy')) {
 }
 $('bombujUrl').value=location.origin+defaultBombujPath;
 $('bombujInstall').href='stremio://'+location.host+defaultBombujPath;
+const prehrajtoPath=baseInstall()+'/prehrajto/manifest.json';
+$('prehrajtoUrl').value=location.origin+prehrajtoPath;
+$('prehrajtoInstall').href='stremio://'+location.host+prehrajtoPath;
 refreshTorrent();
 async function loadVersion() {
   for(const url of [...new Set([base()+'/health','/health'])]) {
