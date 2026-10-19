@@ -86,6 +86,7 @@ fi
 if command -v nginx >/dev/null 2>&1; then
   bash "$PWD/scripts/install-nginx-stremio-configure-root.sh"
   bash "$PWD/scripts/install-nginx-stremio-addons-path.sh"
+  bash "$PWD/scripts/install-nginx-unified-bombuj-path.sh"
 fi
 
 # Verify the public/local reverse proxy no longer exposes the stale service.
