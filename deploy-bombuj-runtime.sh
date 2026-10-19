@@ -2,7 +2,7 @@
 # Update only an already-unified Bombuj runtime. Never use the former clone.
 set -Eeuo pipefail
 umask 077
-ROOT=/home/ubuntu/stremio.sktonline
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 PROVIDER="$ROOT/providers/bombuj"
 EXPECTED="$PROVIDER/preflight-front.js"
 CONF="$ROOT/ecosystem.bombuj.config.cjs"

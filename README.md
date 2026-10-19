@@ -41,7 +41,7 @@
 
 ## Společný repozitář
 
-Všechny tři doplňky i konfigurátor jsou spravovány v [CaseyCZ/stremio.addons](https://github.com/CaseyCZ/stremio.addons). Bombuj se spouští z `providers/bombuj/`. Stávající místní pracovní adresář na Oracle (`/home/ubuntu/stremio.sktonline`) a veřejné instalační cesty `/stremio-sktonline/` a `/stremio-bombuj/` zůstávají kvůli kompatibilitě nezměněné.
+Všechny tři doplňky i konfigurátor jsou spravovány v [CaseyCZ/stremio.addons](https://github.com/CaseyCZ/stremio.addons). Bombuj se spouští z `providers/bombuj/`. Pracovní adresář na Oracle je `/home/ubuntu/stremio.addons`. Veřejné instalační cesty `/stremio-sktonline/` a `/stremio-bombuj/` zůstávají kvůli kompatibilitě nezměněné.
 
 ## Instalace doplňků
 

@@ -4,7 +4,7 @@
 set -Eeuo pipefail
 umask 077
 
-ROOT="/home/ubuntu/stremio.sktonline"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 PROVIDER="$ROOT/providers/bombuj"
 CONF="$ROOT/ecosystem.bombuj.config.cjs"
 OLD_CONF="/home/ubuntu/stremio.bombuj/ecosystem.config.cjs"
@@ -102,9 +102,9 @@ if [[ "$STAGING_READY" != "1" ]]; then
   tail -n 35 /tmp/caseycz-bombuj-unified-staging.log || true
   false
 fi
-node - <<'NODE'
+node - "$PROVIDER/package.json" <<'NODE'
 const m=require('/tmp/caseycz-bombuj-unified-staging.json');
-const expected=require('/home/ubuntu/stremio.sktonline/providers/bombuj/package.json').version;
+const expected=require(process.argv[2]).version;
 if(m.version!==expected)throw Error('staging Bombuj version mismatch');
 for(const [type,id] of [['movie','bombuj-movies-search'],['series','bombuj-series-search']]) {
   const c=m.catalogs.find(x=>x.type===type&&x.id===id);
