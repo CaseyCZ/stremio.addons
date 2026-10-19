@@ -7,6 +7,7 @@ const NodeCache = require('node-cache');
 const { SocksProxyAgent } = require('socks-proxy-agent');
 const { CinemetaApi, uniqueStrings } = require('./api/cinemeta');
 const { findOnlineStreams, findOnlineSourceBundle } = require('./api/sktonline');
+const { findPrehrajtoStreams } = require('./api/prehrajto');
 const { SosacOverlay } = require('./api/sosac-overlay');
 const { resolveBombujId } = require('./api/bombuj-overlay');
 const { getBombujJson, bombujManifest, bombujRequestPath } = require('./api/bombuj-bridge');
@@ -519,6 +520,46 @@ app.get('/manifest.json', (req, res) => {
     types: [], resources: [], catalogs: [],
     behaviorHints: { configurable: true, configurationRequired: true }
   });
+});
+
+// Fourth, independently installable addon. No credentials, no reconfiguration of
+// SKTOnline/SKTorrent/Bombuj, and no video bytes relayed through this server.
+app.get('/prehrajto/manifest.json', (req, res) => {
+  noCache(res);
+  res.json({
+    id: 'cz.caseycz.stremio.prehrajto.direct',
+    version: VERSION,
+    name: 'Přehraj.to Direct',
+    description: 'Přímé MP4 streamy z Přehraj.to s titulky CZ/SK/EN, pokud jsou dostupné.',
+    types: ['movie', 'series'],
+    idPrefixes: ['tt'],
+    resources: ['stream'],
+    catalogs: [],
+    behaviorHints: { configurable: false, configurationRequired: false }
+  });
+});
+
+app.get('/prehrajto/stream/:type/:id.json', async (req, res) => {
+  noCache(res);
+  const type = req.params.type;
+  const id = String(req.params.id || '');
+  const parsed = parseStremioId(id);
+  const empty = { streams: [], cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 };
+  if (!parsed || !['movie', 'series'].includes(type) ||
+      (type === 'series' && (!Number.isInteger(parsed.season) || !Number.isInteger(parsed.episode)))) {
+    return res.json(empty);
+  }
+  try {
+    const meta = await cinemeta.getMeta(type, parsed.imdbId);
+    if (!meta) return res.json(empty);
+    const streams = await resolveWithin(findPrehrajtoStreams({
+      meta, type, season: parsed.season, episode: parsed.episode
+    }), 30000, 'prehrajto');
+    return res.json({ ...empty, streams: Array.isArray(streams) ? streams : [] });
+  } catch (error) {
+    console.warn('[prehrajto] stream lookup failed: ' + error.message);
+    return res.json(empty);
+  }
 });
 
 app.get('/:cfg/manifest.json', (req, res) => {
