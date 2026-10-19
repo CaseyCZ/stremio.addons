@@ -510,6 +510,30 @@ app.get('/:cfg/configure', (req, res) => {
   return res.sendFile(path.join(__dirname, 'public', 'configure.html'));
 });
 
+// Stremio's Configure action opens the directory of an installed manifest,
+// NOT necessarily /configure. For encrypted manifests that directory is one of:
+//   /enc1.<iv>.<cipher>.<tag>
+//   /enc1.<iv>.<cipher>.<tag>/bombuj
+//   /enc1.<iv>.<cipher>.<tag>/prehrajto
+// Validate the token and its provider before redirecting. A relative Location
+// keeps the public nginx mount prefix (e.g. /stremio-sktonline/) unchanged,
+// while removing credentials from the final browser address.
+const CONFIGURE_INSTALL_ROOT = /^\/enc1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?:\/(?:bombuj|prehrajto))?\/?$/;
+app.get(CONFIGURE_INSTALL_ROOT, (req, res) => {
+  noCache(res);
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  const segments = req.path.split('/').filter(Boolean);
+  const cfg = normalizeConfig(decryptConfig(segments[0]));
+  if (!cfg) return res.status(404).send('Configuration not found');
+  const provider = segments[1];
+  if (provider && cfg.addonType !== provider) return res.status(404).send('Configuration not found');
+  const trailingSlash = req.path.endsWith('/');
+  const relative = provider
+    ? (trailingSlash ? '../../configure' : '../configure')
+    : (trailingSlash ? '../configure' : './configure');
+  return res.redirect(302, relative);
+});
+
 app.get('/manifest.json', (req, res) => {
   noCache(res);
   res.json({

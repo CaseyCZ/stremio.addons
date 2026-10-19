@@ -101,6 +101,43 @@ async function token(payload) {
     assert.ok(linked.body.idPrefixes.includes('sosac_s_'));
     assert.ok(linked.body.idPrefixes.includes('sosac_ep_'));
 
+    // Stremio's Configure button opens the installed manifest directory.
+    // Every configured provider must redirect to the same public setup page,
+    // without leaking the encrypted token into the redirect URL.
+    async function configurationLink(installedPath) {
+      const response = await fetch(BASE + installedPath, { redirect: 'manual' });
+      assert.equal(response.status, 302);
+      assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+      const location = response.headers.get('location');
+      assert.ok(location);
+      assert.ok(!location.includes('enc1.'), 'Redirect must not expose config token');
+      const target = new URL(location, BASE + installedPath);
+      assert.equal(target.pathname, '/configure');
+      const page = await fetch(target);
+      assert.equal(page.status, 200);
+      assert.match(await page.text(), /Propojení se Sosáčem/);
+    }
+    await configurationLink('/' + credToken);
+    await configurationLink('/' + credToken + '/');
+    await configurationLink('/' + credToken + '/prehrajto');
+    await configurationLink('/' + credToken + '/prehrajto/');
+
+    const bombujToken = await token({
+      addonType:'bombuj', sosacUsername:'test', sosacPassword:'fake-pass'
+    });
+    await configurationLink('/' + bombujToken);
+    await configurationLink('/' + bombujToken + '/bombuj');
+    await configurationLink('/' + bombujToken + '/bombuj/');
+
+    const directToken = await token({ addonType:'sktonline' });
+    await configurationLink('/' + directToken);
+    await configurationLink('/' + directToken + '/');
+
+    const badProviderRoot = await fetch(BASE + '/' + credToken + '/bombuj', { redirect:'manual' });
+    assert.equal(badProviderRoot.status, 404);
+    const invalidConfigureRoot = await fetch(BASE + '/enc1.not-a-valid.token.hmac', { redirect:'manual' });
+    assert.equal(invalidConfigureRoot.status, 404);
+
     const movie = await json(prefix + '/stream/movie/sosac_m_123.json');
     assert.equal(movie.status, 200);
     assert.equal(movie.body.streams.length, 1);
