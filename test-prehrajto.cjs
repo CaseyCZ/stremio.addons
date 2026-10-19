@@ -157,10 +157,101 @@ test('matching and resolution work without live third-party API calls', async ()
       success:true,video_url:cdn('mp4'), subtitles: [{lang:'cze',label:'CZE',url:cdn('vtt')}]
     }; }
   });
-  assert.equal(searched, 1);
+  assert.equal(searched, 2); // parallel title+year and title-only searches
   assert.equal(resolved, 1);
   assert.equal(results.length, 1);
   assert.equal(results[0].subtitles[0].lang, 'ces');
+});
+
+test('eight streams maximum, four concurrent resolvers, duplicate links ignored', async () => {
+  const movies = Array.from({ length: 14 }, (_, i) => ({
+    title: 'The Dark Knight 2008 2160p BluRay',
+    url: 'https://prehraj.to/film-' + i + '/' + (i + 1).toString(16).padStart(16, '0')
+  }));
+  let inFlight = 0;
+  let peak = 0;
+  let attempts = 0;
+  const queries = [];
+  const streams = await findPrehrajtoStreams({
+    meta: { name: 'The Dark Knight', year: 2008 }, type: 'movie'
+  }, {
+    search: async query => { queries.push(query); return movies; },
+    resolve: async url => {
+      attempts++;
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise(done => setTimeout(done, 3));
+      inFlight--;
+      const file = url.split('/').pop();
+      return { video_url: 'https://pf-storage6.premiumcdn.net/123/' + file +
+        '.mp4?expires=' + (Math.floor(Date.now() / 1000) + 3600) };
+    }
+  });
+  assert.equal(queries.length, 2);
+  assert.equal(streams.length, 8);
+  assert.ok(attempts >= 8 && attempts <= 11);
+  assert.ok(peak > 1 && peak <= 4);
+  assert.equal(new Set(streams.map(s => s.url)).size, 8);
+  assert.ok(streams.every(s => !Object.hasOwn(s, 'description')));
+});
+
+test('searches later title variants after earlier match and tolerates resolver errors', async () => {
+  const movie = i => ({ title: 'Example Film 2008 1080p',
+    url: 'https://prehraj.to/film/' + i.toString(16).padStart(16, '0') });
+  const requested = [];
+  let attempts = 0;
+  const streams = await findPrehrajtoStreams({
+    meta: { name: 'Example Film', year: 2008 }, type: 'movie'
+  }, {
+    search: async query => {
+      requested.push(query);
+      return query.includes('2008') ? [movie(1), movie(2)] : [movie(1), movie(3)];
+    },
+    resolve: async url => {
+      attempts++;
+      if (url.endsWith('0000000000000002')) throw Error('temporary failure');
+      return { video_url: 'https://pf-storage6.premiumcdn.net/123/' +
+        url.split('/').pop() + '.mp4?expires=' + (Math.floor(Date.now() / 1000) + 3600) };
+    }
+  });
+  assert.equal(requested.length, 2);
+  assert.equal(attempts, 3); // duplicate page 1 is resolved only once
+  assert.equal(streams.length, 2);
+});
+
+test('returns ready streams by deadline even if another resolver never completes', async () => {
+  const movie = i => ({ title: 'Deadline Film 2008 1080p',
+    url: 'https://prehraj.to/film/' + i.toString(16).padStart(16, '0') });
+  const start = Date.now();
+  const streams = await findPrehrajtoStreams({
+    meta: { name: 'Deadline Film', year: 2008 }, type: 'movie'
+  }, {
+    budgetMs: 80,
+    search: async () => [movie(1), movie(2)],
+    resolve: url => url.endsWith('0000000000000001')
+      ? Promise.resolve({ video_url: cdn('mp4') })
+      : new Promise(() => {})
+  });
+  assert.equal(streams.length, 1);
+  assert.ok(Date.now() - start < 800);
+});
+
+test('still excludes wrong films before parallel resolving', async () => {
+  const files = [
+    { title: 'The Dark Knight Rises 2012 1080p',
+      url: 'https://prehraj.to/other/0000000000000001' },
+    { title: 'The.Dark.Knight.2008.2160p.BluRay.REMUX.HEVC.DTS-HD.MA.5.1-CZ.EN-TNT',
+      url: 'https://prehraj.to/film/0000000000000002' }
+  ];
+  let attempts = 0;
+  const streams = await findPrehrajtoStreams({
+    meta: { name: 'The Dark Knight', year: 2008 }, type: 'movie'
+  }, {
+    search: async () => files,
+    resolve: async () => { attempts++; return { video_url: cdn('mp4') }; }
+  });
+  assert.equal(attempts, 1);
+  assert.equal(streams.length, 1);
 });
 
 test('API errors never produce fabricated playable streams', async () => {

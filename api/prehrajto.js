@@ -305,19 +305,25 @@ function makeQueries(titles, type, year, season, episode) {
   return [...new Set(queries)].slice(0, 4);
 }
 
-async function searchApi(query) {
+const MAX_STREAMS = 8;
+const MAX_RESOLVE_ATTEMPTS = 12;
+const RESOLVE_CONCURRENCY = 4;
+const LOOKUP_BUDGET_MS = 22000;
+
+// Upstream lookup shares one deadline and aborts unfinished HTTP requests.
+async function searchApi(query, { signal } = {}) {
   const key = normalize(query);
   const found = cache.get(key);
   if (found !== undefined) return found;
-  const resp = await http.get(SEARCH_API, { params: { q: query } });
+  const resp = await http.get(SEARCH_API, { params: { q: query }, signal });
   if (!resp.data || resp.data.success !== true || !Array.isArray(resp.data.movies)) throw Error('search API returned no valid movie list');
   const movies = resp.data.movies.slice(0, 40);
   cache.set(key, movies, movies.length ? 60 : 10);
   return movies;
 }
 
-async function resolveApi(pageUrl) {
-  const resp = await http.get(RESOLVE_API, { params: { url: pageUrl } });
+async function resolveApi(pageUrl, { signal } = {}) {
+  const resp = await http.get(RESOLVE_API, { params: { url: pageUrl }, signal });
   if (!resp.data || resp.data.success !== true) throw Error('resolver did not return a playable source');
   return resp.data;
 }
@@ -405,32 +411,78 @@ async function findPrehrajtoStreams({ meta, type, season, episode }, injected = 
   const year = type === 'movie' ? yearFromMeta(meta) : '';
   const search = injected.search || searchApi;
   const resolve = injected.resolve || resolveApi;
-  const visited = new Set();
-  let attempts = 0;
-  const streams = [];
-  for (const query of makeQueries(titles, type, year, season, episode)) {
-    let movies;
-    try { movies = await search(query); }
-    catch (error) {
-      console.warn('[prehrajto] search unavailable: ' + error.message);
-      continue;
+  // Test-only override; production requests always have a 22s deadline.
+  const budgetMs = Number.isInteger(injected.budgetMs) && injected.budgetMs > 0 &&
+    injected.budgetMs <= LOOKUP_BUDGET_MS ? injected.budgetMs : LOOKUP_BUDGET_MS;
+  const controller = new AbortController();
+  const resolved = [];
+  let timer;
+  const deadline = new Promise(done => {
+    timer = setTimeout(() => {
+      controller.abort();
+      done(resolved.filter(Boolean).slice(0, MAX_STREAMS));
+    }, budgetMs);
+  });
+
+  async function lookup() {
+    const queries = makeQueries(titles, type, year, season, episode);
+    // Search all title variants concurrently without changing their priority.
+    const groups = await Promise.all(queries.map(async query => {
+      try { return await search(query, { signal: controller.signal }); }
+      catch (error) {
+        if (!controller.signal.aborted)
+          console.warn('[prehrajto] search unavailable: ' + error.message);
+        return [];
+      }
+    }));
+    if (controller.signal.aborted) return [];
+
+    const candidates = [];
+    const visited = new Set();
+    for (const movies of groups) {
+      for (const item of Array.isArray(movies) ? movies : []) {
+        const pageUrl = validDetailUrl(item && item.url);
+        if (!pageUrl || visited.has(pageUrl) ||
+            !acceptsCandidate(item.title, titles, type, year, season, episode)) continue;
+        visited.add(pageUrl);
+        candidates.push({ item, pageUrl });
+        if (candidates.length >= MAX_RESOLVE_ATTEMPTS) break;
+      }
+      if (candidates.length >= MAX_RESOLVE_ATTEMPTS) break;
     }
-    for (const item of Array.isArray(movies) ? movies : []) {
-      const pageUrl = validDetailUrl(item && item.url);
-      if (!pageUrl || visited.has(pageUrl)) continue;
-      visited.add(pageUrl);
-      if (!acceptsCandidate(item.title, titles, type, year, season, episode)) continue;
-      if (++attempts > 3) return streams;
-      try {
-        const result = makeStream(item, pageUrl, await resolve(pageUrl));
-        if (result) streams.push(result);
-      } catch (error) {
-        console.warn('[prehrajto] resolver unavailable: ' + error.message);
+
+    let next = 0;
+    let found = 0;
+    async function worker() {
+      while (next < candidates.length && found < MAX_STREAMS && !controller.signal.aborted) {
+        const index = next++;
+        const { item, pageUrl } = candidates[index];
+        try {
+          const data = await resolve(pageUrl, { signal: controller.signal });
+          if (controller.signal.aborted) return;
+          const stream = makeStream(item, pageUrl, data);
+          if (stream) {
+            resolved[index] = stream;
+            found++;
+          }
+        } catch (error) {
+          if (!controller.signal.aborted)
+            console.warn('[prehrajto] resolver unavailable: ' + error.message);
+        }
       }
     }
-    if (streams.length) break;
+    await Promise.all(Array.from(
+      { length: Math.min(RESOLVE_CONCURRENCY, candidates.length) },
+      () => worker()
+    ));
+    return resolved.filter(Boolean).slice(0, MAX_STREAMS);
   }
-  return streams;
+
+  try {
+    return await Promise.race([lookup(), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 module.exports = {
