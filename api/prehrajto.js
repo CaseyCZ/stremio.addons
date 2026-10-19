@@ -178,21 +178,59 @@ function mapSubtitle(item, uploadId, index) {
   };
 }
 
+// Quality below is a release-name label, NOT a measured video resolution.
+function releaseQuality(title) {
+  const value = String(title || '');
+  if (/\b(?:2160p|4k|uhd)\b/i.test(value)) return '2160p';
+  if (/\b1440p\b/i.test(value)) return '1440p';
+  if (/\b(?:1080p|fhd)\b|\bfull[\s._-]*hd\b/i.test(value)) return '1080p';
+  if (/\b720p\b/i.test(value)) return '720p';
+  if (/\b(?:480p|576p)\b/i.test(value)) return /\b576p\b/i.test(value) ? '576p' : '480p';
+  if (/\b360p\b/i.test(value)) return '360p';
+  if (/\bhd\b/i.test(value)) return 'HD';
+  if (/\bsd\b/i.test(value)) return 'SD';
+  return 'Direct';
+}
+
+// Only call an audio language when the release title explicitly says DAB/DUB.
+// "CZ titulky" alone must not be treated as Czech dubbing.
+function releaseAudio(title) {
+  const value = normalize(title);
+  const dub = '(?:dab|dabing|dub|dubbed)';
+  const languages = [
+    ['(?:cz|cs|cze|ces|cesky|cestina)', '🇨🇿 CZ'],
+    ['(?:sk|slo|slk|slovensky|slovencina)', '🇸🇰 SK'],
+    ['(?:en|eng|english|anglicky)', '🇬🇧 EN']
+  ];
+  const found = languages.filter(([code]) =>
+    new RegExp('(?:^| )' + code + ' ' + dub + '(?: |$)|(?:^| )' + dub + ' ' + code + '(?: |$)').test(value)
+  ).map(([, flag]) => flag);
+  return found.length ? found.join(' • ') : 'Neuvedeno';
+}
+
 function makeStream(item, pageUrl, resolved) {
   const url = validCdnUrl(resolved && (resolved.video_url || resolved.videoUrl), 'mp4');
   if (!url) return null;
   const id = new URL(pageUrl).pathname.split('/').filter(Boolean).pop();
   const subtitles = (Array.isArray(resolved.subtitles) ? resolved.subtitles : [])
     .slice(0, 20).map((sub, index) => mapSubtitle(sub, id, index)).filter(Boolean);
-  const languages = [...new Set(subtitles.map(sub => sub.lang === 'ces' ? 'CZ' : sub.lang === 'slk' ? 'SK' : 'EN'))];
-  const title = String(item.title || '').trim().slice(0, 180);
+  const releaseTitle = String(item.title || '').trim().slice(0, 180);
+  const quality = releaseQuality(releaseTitle);
+  const subtitleFlags = { ces: '🇨🇿 CZ', slk: '🇸🇰 SK', eng: '🇬🇧 EN' };
+  const subtitleLanguages = [...new Set(subtitles.map(sub => sub.lang))]
+    .map(lang => subtitleFlags[lang] || lang);
   return {
-    name: 'Přehraj.to',
-    title: 'MP4 • kvalita nezjištěna\n💬 ' + (languages.join(' / ') || 'Bez ověřených titulků') + (title ? '\n' + title : ''),
-    description: title,
+    name: 'Přehraj.to • ' + quality,
+    // Stremio Core treats "title" as an alias for "description": NEVER send both.
+    title: [
+      '🎧 ' + releaseAudio(releaseTitle),
+      '💬 ' + (subtitleLanguages.join(' • ') || 'Bez titulků'),
+      '🎬 ' + quality,
+      releaseTitle ? '🎞 ' + releaseTitle : null
+    ].filter(Boolean).join('\n'),
     url,
     subtitles,
-    behaviorHints: { notWebReady: false, filename: title ? title + '.mp4' : undefined }
+    behaviorHints: { notWebReady: false, filename: releaseTitle ? releaseTitle + '.mp4' : undefined }
   };
 }
 

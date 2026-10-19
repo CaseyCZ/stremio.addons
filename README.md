@@ -68,7 +68,7 @@ Bombuj i Přehraj.to používají pro volitelné propojení Sosáče vlastní š
 
 Nezávislý zdroj podporuje IMDb/Cinemeta ID (`tt...` a u seriálů `tt...:sezóna:epizoda`) a vlastni ID Bombuj; s volitelnou šifrovanou konfigurací Sosáče také `sosac_m_*`, `sosac_s_*` a `sosac_ep_*`. Samotný seriál bez konkrétní epizody nevrací stream, aby nedošlo k záměně dílů. Před resolvem kontroluje úplný název, rok u filmů a přesnou epizodu u seriálů. Vyhledává přes externí službu Blaniok a obnovuje podepsanou MP4 URL přes `ceskarepublika.wiki/api/movies/video-url`. Obě služby jsou třetí strany; nemají garantovanou dostupnost ani veřejné SLA.
 
-MP4 i VTT se předávají jako přímé adresy CDN, **neprocházejí přes Oracle**. Titulky se připojují přímo ke konkrétnímu streamu. Jazyky `cze/slo/eng/ng1/ng2` se převádějí na ISO 639-2 `ces/slk/eng`. Není-li kvalita explicitně ověřená API, stream se **neoznačuje 1080p jen podle názvu souboru**. Externí služba může vrátit jen jednu MP4, ačkoli název uploadu naznačuje vyšší kvalitu.
+MP4 i VTT se předávají jako přímé adresy CDN, **neprocházejí přes Oracle**. Titulky se připojují přímo ke konkrétnímu streamu. Jazyky `cze/slo/eng/ng1/ng2` se převádějí na ISO 639-2 `ces/slk/eng`. Kvalita v popisku (například 1080p) je pouze **orientační štítek odvozený z názvu uploadu**, nikoli technicky ověřené rozlišení MP4. Není-li údaj v názvu, používá se označení `Direct`. Externí služba může vrátit jen jednu MP4, ačkoli název uploadu naznačuje vyšší kvalitu.
 
 Přehraj.to používá vlastní šifrovaný instalační token jen při propojení se Sosáčem. Jeho instalace nemění konfigurace ani resolvery SKTOnline, SKTorrent a Bombuj.
 

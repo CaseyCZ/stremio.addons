@@ -66,16 +66,41 @@ test('Mayday five caption tracks keep unique ids and correct ISO language codes'
   assert.match(tracks[4].label, /English 2/);
 });
 
-test('Mayday creates direct stream with track URLs and unknown quality, not fake 1080p', () => {
+test('Mayday uses the shared stream display style with actual subtitle tracks', () => {
   const stream = makeStream({title:'Mayday (2026) 1080p CZ a SK TITULKY'}, MAYDAY, {
     video_url: cdn('mp4'),
     subtitles: [{lang:'cze',label:'CZE',url:cdn('vtt')}, {lang:'slo',label:'SLO',url:cdn('vtt')}]
   });
-  assert.equal(stream.name, 'Přehraj.to');
-  assert.match(stream.title, /kvalita nezjištěna/);
+  assert.equal(stream.name, 'Přehraj.to • 1080p');
+  assert.match(stream.title, /^🎧 Neuvedeno\n💬 🇨🇿 CZ • 🇸🇰 SK\n🎬 1080p\n🎞 /);
+  assert.equal(Object.hasOwn(stream, 'description'), false);
   assert.equal(stream.subtitles.length, 2);
   assert.deepEqual(stream.subtitles.map(x => x.lang), ['ces','slk']);
   assert.equal(stream.url.startsWith('https://pf-storage6.premiumcdn.net/'), true);
+});
+
+test('Forrest Gump audio flags and release-quality labels never invent a resolution', () => {
+  const result = title => makeStream({ title }, MAYDAY, { video_url: cdn('mp4'), subtitles: [] });
+  const direct = result('Forrest Gump 1994 CZ dab');
+  assert.equal(direct.name, 'Přehraj.to • Direct');
+  assert.match(direct.title, /^🎧 🇨🇿 CZ\n💬 Bez titulků\n🎬 Direct\n🎞 Forrest Gump 1994 CZ dab$/);
+  assert.equal(Object.hasOwn(direct, 'description'), false);
+
+  const ultra = result('Forrest Gump (1994) CZ Dabing 2160p');
+  assert.equal(ultra.name, 'Přehraj.to • 2160p');
+  assert.match(ultra.title, /^🎧 🇨🇿 CZ\n💬 Bez titulků\n🎬 2160p/);
+
+  const fullHd = result('Forrest Gump 1994 CZ dabing 1080p FHD');
+  assert.equal(fullHd.name, 'Přehraj.to • 1080p');
+  assert.match(fullHd.title, /^🎧 🇨🇿 CZ\n💬 Bez titulků\n🎬 1080p/);
+});
+
+test('subtitle language alone does not imply dubbed audio', () => {
+  const stream = makeStream({title:'Mayday 2026 CZ a SK titulky'}, MAYDAY, {
+    video_url: cdn('mp4'),
+    subtitles: [{lang:'eng',label:'ENG',url:cdn('vtt')}]
+  });
+  assert.match(stream.title, /^🎧 Neuvedeno\n💬 🇬🇧 EN\n🎬 Direct/);
 });
 
 test('matching and resolution work without live third-party API calls', async () => {
