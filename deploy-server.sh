@@ -89,4 +89,10 @@ if curl -fsS http://127.0.0.1/health >/tmp/stremio-sktonline-public-health 2>/de
   fi
 fi
 
+# A provider-only update must also reload the separate Bombuj process.
+# Never run the former-clone migration or start another process on port 7004.
+if [[ -f "$PWD/providers/bombuj/preflight-front.js" ]]; then
+  BOMBUJ_PREVIOUS_REV="$before_sha" bash "$PWD/deploy-bombuj-runtime.sh"
+fi
+
 echo "stremio-sktonline deployed successfully from Master."
