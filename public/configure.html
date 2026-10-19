@@ -171,7 +171,7 @@ input:focus, select:focus { border-color: #5eb9ed; }
 <body>
 <main class="page">
   <header class="topbar">
-    <a class="brand" href="/stremio-sktonline/configure" aria-label="CaseyCZ Stremio – domů">
+    <a class="brand" href="/stremio-addons/configure" aria-label="CaseyCZ Stremio – domů">
       <span class="brand-mark" aria-hidden="true">C</span> CaseyCZ <small>STREMIO</small>
     </a>
     <span class="version" id="versionBadge">Verze …</span>
@@ -181,12 +181,12 @@ input:focus, select:focus { border-color: #5eb9ed; }
     <p class="eyebrow">TVŮJ STREMIO HUB</p>
     <h1>Všechny zdroje.<br><span>Jedno místo.</span></h1>
     <p class="lead">Vyber si doplňky, které chceš používat. Každý se instaluje zvlášť, ale filmy a epizody umí rozpoznávat mezi sebou.</p>
-    <div class="hero-points"><span>✓ 3 samostatné doplňky</span><span>✓ Direct i P2P</span><span>✓ Bez zbytečných účtů</span></div>
+    <div class="hero-points"><span>✓ 4 samostatné doplňky</span><span>✓ Direct i P2P</span><span>✓ Bez zbytečných účtů</span></div>
   </section>
 
   <div class="section-heading">
     <h2>Dostupné doplňky</h2>
-    <p>Instalovat můžeš jeden, dva nebo všechny tři.</p>
+    <p>Instalovat můžeš jeden až čtyři, každý zvlášť.</p>
   </div>
 
   <section class="addons" aria-label="Doplňky Stremio">
@@ -318,7 +318,8 @@ function base() {
     .replace(/\/enc1\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2}$/,'')
     .replace(/\/$/,'');
 }
-function baseInstall() { return base() || '/stremio-sktonline'; }
+// All new encrypted install links share the canonical /stremio-addons/ root.
+function baseInstall() { return '/stremio-addons'; }
 function feedback(card,message,error=false) {
   const node=card.querySelector('.feedback');
   if (!node) return;
