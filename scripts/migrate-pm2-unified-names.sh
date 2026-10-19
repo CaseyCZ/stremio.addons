@@ -30,8 +30,8 @@ wait_for_url() {
 }
 
 rollback() {
-  local status=$?
-  trap - ERR
+  local status="$1"
+  trap - ERR INT TERM
   if [[ "$CHANGED" == 1 && "$FINISHED" != 1 ]]; then
     echo 'PM2 migration failed; restoring original process names.' >&2
     pm2 delete stremio-addons >/dev/null 2>&1 || true
@@ -51,9 +51,9 @@ rollback() {
   exit "$status"
 }
 trap cleanup EXIT
-trap rollback ERR
-trap 'exit 130' INT
-trap 'exit 143' TERM
+trap 'rollback $?' ERR
+trap 'rollback 130' INT
+trap 'rollback 143' TERM
 
 # Required environment and strict ecosystem names.
 node - "$MAIN_CONF" "$BOMBUJ_CONF" <<'NODE'
