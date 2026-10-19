@@ -12,6 +12,8 @@ on:
       - 'deploy-server.sh'
       - 'scripts/install-nginx-stremio-configure-root.sh'
       - 'scripts/test-nginx-stremio-configure-root.py'
+      - 'scripts/install-nginx-stremio-addons-path.sh'
+      - 'scripts/test-nginx-stremio-addons-path.py'
       - '.github/workflows/test-prehrajto.yml'
   workflow_dispatch:
 
@@ -34,6 +36,8 @@ jobs:
         run: |
           bash -n deploy-server.sh scripts/install-nginx-stremio-configure-root.sh
           python3 scripts/test-nginx-stremio-configure-root.py
+          bash -n scripts/install-nginx-stremio-addons-path.sh
+          python3 scripts/test-nginx-stremio-addons-path.py
           node --check api/prehrajto.js
           node --check addon.js
           node --test test-prehrajto.cjs test-prehrajto-sosac.cjs
