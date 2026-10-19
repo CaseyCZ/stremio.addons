@@ -47,7 +47,12 @@ if [[ ! -s "$KEY_FILE" ]]; then
   echo "Created SKTOnline configuration encryption key."
 fi
 
-pm2 startOrReload ecosystem.config.js --only stremio-sktonline --update-env
+# Name migration must run BEFORE starting the new definitions: the old PM2
+# apps own the same 7003/7004 ports. The migration is idempotent and rolls
+# back to the old names if either provider fails its health checks.
+bash "$PWD/scripts/migrate-pm2-unified-names.sh"
+
+pm2 startOrReload ecosystem.config.js --only stremio-addons --update-env
 pm2 save
 
 healthy=0
@@ -60,7 +65,7 @@ for _ in $(seq 1 30); do
 done
 if [[ "$healthy" != "1" ]]; then
   echo "SKTOnline health check failed on 127.0.0.1:7003."
-  pm2 logs stremio-sktonline --lines 40 --nostream || true
+  pm2 logs stremio-addons --lines 40 --nostream || true
   exit 1
 fi
 
@@ -104,4 +109,4 @@ if [[ -f "$PWD/providers/bombuj/preflight-front.js" ]]; then
   BOMBUJ_PREVIOUS_REV="$before_sha" bash "$PWD/deploy-bombuj-runtime.sh"
 fi
 
-echo "stremio-sktonline deployed successfully from Master."
+echo "stremio-addons deployed successfully from Master."
