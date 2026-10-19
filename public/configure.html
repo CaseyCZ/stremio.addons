@@ -318,8 +318,7 @@ function base() {
     .replace(/\/enc1\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2}$/,'')
     .replace(/\/$/,'');
 }
-// Generate ALL new install links on the canonical public path, even when
-// someone opens the legacy configuration page through an old bookmark.
+// All new encrypted install links share the canonical /stremio-addons/ root.
 function baseInstall() { return '/stremio-addons'; }
 function feedback(card,message,error=false) {
   const node=card.querySelector('.feedback');
