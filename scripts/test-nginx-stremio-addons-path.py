@@ -56,8 +56,9 @@ with tempfile.TemporaryDirectory() as folder:
     assert 'location /stremio-bombuj/' in output
     assert 'proxy_pass http://127.0.0.1:7000;' in output
 
-    # The bash installer detects the marker and skips renderer on a second run.
-    assert run(site).returncode != 0, 'Renderer should refuse re-running over canonical path'
+    # The installer and its renderer are idempotent after the marker exists.
+    assert run(site).returncode == 0
+    assert site.read_text() == output, 'Second run must preserve nginx config exactly'
 
     other = Path(folder) / 'other'
     other.write_text(original.replace('proxy_pass http://127.0.0.1:7003/;',
