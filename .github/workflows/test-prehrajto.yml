@@ -16,6 +16,11 @@ on:
       - 'scripts/test-nginx-stremio-addons-path.py'
       - 'scripts/install-nginx-unified-bombuj-path.sh'
       - 'scripts/test-nginx-unified-bombuj-path.py'
+      - 'ecosystem.config.js'
+      - 'ecosystem.bombuj.config.cjs'
+      - 'deploy-bombuj-runtime.sh'
+      - 'scripts/migrate-pm2-unified-names.sh'
+      - 'scripts/test-pm2-name-contract.cjs'
       - '.github/workflows/test-prehrajto.yml'
   workflow_dispatch:
 
@@ -42,6 +47,8 @@ jobs:
           python3 scripts/test-nginx-stremio-addons-path.py
           bash -n scripts/install-nginx-unified-bombuj-path.sh
           python3 scripts/test-nginx-unified-bombuj-path.py
+          bash -n scripts/migrate-pm2-unified-names.sh
+          node scripts/test-pm2-name-contract.cjs
           node --check api/prehrajto.js
           node --check addon.js
           node --test test-prehrajto.cjs test-prehrajto-sosac.cjs
