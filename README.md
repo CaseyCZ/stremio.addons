@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://130.61.49.108/stremio-sktonline/configure"><img src="https://img.shields.io/badge/Otev%C5%99%C3%ADt-Spole%C4%8Dnou%20konfiguraci-198CC8?style=for-the-badge&labelColor=14263B" alt="Otevřít konfiguraci všech čtyř doplňků" /></a>
+  <a href="https://130.61.49.108/stremio-addons/configure"><img src="https://img.shields.io/badge/Otev%C5%99%C3%ADt-Spole%C4%8Dnou%20konfiguraci-198CC8?style=for-the-badge&labelColor=14263B" alt="Otevřít konfiguraci všech čtyř doplňků" /></a>
   <a href="https://130.61.49.108/stremio-bombuj/manifest.json"><img src="https://img.shields.io/badge/Bombuj-P%C5%99%C3%ADm%C3%A1%20instalace-AD6CAF?style=for-the-badge&labelColor=14263B" alt="Bombuj – přímá instalace bez přihlášení" /></a>
 </p>
 
@@ -43,16 +43,16 @@
 
 ## Společný repozitář
 
-Všechny čtyři doplňky i konfigurátor jsou spravovány v [CaseyCZ/stremio.addons](https://github.com/CaseyCZ/stremio.addons). Bombuj se spouští z `providers/bombuj/`. Pracovní adresář na Oracle je `/home/ubuntu/stremio.addons`. Veřejné instalační cesty `/stremio-sktonline/` a `/stremio-bombuj/` zůstávají kvůli kompatibilitě nezměněné.
+Všechny čtyři doplňky i konfigurátor jsou spravovány v [CaseyCZ/stremio.addons](https://github.com/CaseyCZ/stremio.addons). Bombuj se spouští z `providers/bombuj/`. Pracovní adresář na Oracle je `/home/ubuntu/stremio.addons`. **Nová hlavní veřejná adresa je `/stremio-addons/`**. Stará `/stremio-sktonline/` zůstává funkční pro již nainstalované doplňky, stejně jako samostatná `/stremio-bombuj/`. Interní PM2 proces a šifrovací klíče zatím neměníme, aby stávající odkazy fungovaly dál.
 
 ## Instalace doplňků
 
-**Společná konfigurace** slouží k instalaci všech čtyř doplňků:
+**Společná konfigurace:** [https://130.61.49.108/stremio-addons/](https://130.61.49.108/stremio-addons/) — pro instalaci všech čtyř doplňků:
 
 1. **SKTOnline Direct** – vybereš instalaci bez přihlášení.
 2. **SKTorrent P2P** – zadáš svůj SKTorrent účet a po ověření získáš šifrovaný instalační odkaz.
 3. **Bombuj** – nainstaluješ bez přihlášení; případně můžeš zapnout volitelné propojení se Sosáčem.
-4. **Přehraj.to Direct** – bez přihlášení na `/stremio-sktonline/prehrajto/manifest.json`; pro položky z katalogu Sosáč vyplň údaje v sekci **Propojení se Sosáčem** a vytvoř šifrovaný instalační odkaz.
+4. **Přehraj.to Direct** – bez přihlášení na `/stremio-addons/prehrajto/manifest.json`; pro položky z katalogu Sosáč vyplň údaje v sekci **Propojení se Sosáčem** a vytvoř šifrovaný instalační odkaz.
 
 Samostatné tlačítko **Bombuj – Přímá instalace** nad tímto textem vede rovnou na jeho veřejný manifest. Doplňky můžeš instalovat nezávisle v libovolné kombinaci.
 
