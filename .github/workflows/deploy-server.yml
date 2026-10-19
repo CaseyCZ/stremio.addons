@@ -149,6 +149,8 @@ jobs:
           bash -n relocate-addons-runtime.sh
           python3 scripts/test-relocate-addons-runtime.py
           bash -n deploy-bombuj-runtime.sh
+          bash -n scripts/migrate-pm2-unified-names.sh
+          node scripts/test-pm2-name-contract.cjs
           bash -n deploy-bombuj-unified.sh
           node --check ecosystem.bombuj.config.cjs
           node -e "for(const file of ['./ecosystem.config.js','./ecosystem.bombuj.config.cjs'])if(require(file).apps[0].env.RUNNER_TRACKING_ID!=='')throw Error('Persistent PM2 app must clear runner tracking')"
