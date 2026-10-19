@@ -50,8 +50,8 @@ test('direct streams retain their media URL, headers and quality metadata', () =
     behaviorHints:{proxyHeaders:{request:{Referer:'https://serialy.bombuj.si/'}}}
   };
   const out=formatBombujStream(input);
-  assert.equal(out.name,'Bombuj • Direct');
-  assert.equal(out.title,'🎧 🇬🇧 EN\n💬 Neuvedeny\n🎬 Direct • VOE');
+  assert.equal(out.name,'Bombuj • Kvalita neuvedena');
+  assert.equal(out.title,'🎧 🇬🇧 EN\n💬 Neuvedeny\n🎬 Kvalita neuvedena');
   assert.equal(out.url,input.url);
   assert.deepEqual(out.behaviorHints,input.behaviorHints);
 });

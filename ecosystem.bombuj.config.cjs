@@ -15,8 +15,8 @@ module.exports = {
     env: {
       NODE_ENV: 'production',
       PORT: '7004',
-      // Provider-direct HLS with the original web player kept as fallback.
-      BOMBUJ_DIRECT_VOE: '1'
+      // Cross-network CDN requests return 403; keep VOE in its web player.
+      BOMBUJ_DIRECT_VOE: '0'
     }
   }]
 };
