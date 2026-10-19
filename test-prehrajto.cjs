@@ -38,6 +38,44 @@ test('film title and year match, but spin-off and other-year uploads do not', ()
   assert.equal(acceptsCandidate('Mayday S01E01', ['Mayday'], 'movie', '2026'), false);
 });
 
+test('Dark Knight general movie release suffixes include modern encodes but not sequels', () => {
+  const accepted = [
+    'The.Dark.Knight.2008.1080p.BluRay',
+    'The.Dark.Knight.2008.2160p.BluRay.REMUX.HEVC.DTS-HD.MA.5.1-CZ.EN-TNT',
+    'The.Dark.Knight.2008.2160p.MAX.WEB-DL.DDP.5.1.DV.HDR.H.265-PiRaTeS (1)',
+    'The.Dark.Knight.2008.2160p.UHD.BluRay.X265-IAMABLE',
+    'The.Dark.Knight[2008]DvDrip-aXXo'
+  ];
+  for (const title of accepted) {
+    assert.equal(acceptsCandidate(title, ['The Dark Knight'], 'movie', '2008'), true, title);
+  }
+  for (const title of [
+    'The.Dark.Knight.Rises.2012.1080p.cz',
+    'The Dark Knight Rises',
+    'The.Dark.Knight.2008.Rises.1080p',
+    'The Dark Knight-Returns',
+    'The Dark Knight 2008-Returns',
+    'Batman.The.Dark.Knight.2008.1080p'
+  ]) {
+    assert.equal(acceptsCandidate(title, ['The Dark Knight'], 'movie', '2008'), false, title);
+  }
+});
+
+test('movie release matching is generic and preserves title/year boundaries', () => {
+  const cases = [
+    ['John.Wick.2014.1080p.BluRay.x264-SPARKS', ['John Wick'], '2014', true],
+    ['John.Wick.Chapter.2.2017.1080p.BluRay', ['John Wick'], '2014', false],
+    ['Ted.2012.1080p.BluRay.x264-GECKOS', ['Ted'], '2012', true],
+    ['Ted.Lasso.2012.1080p.BluRay', ['Ted'], '2012', false],
+    ['Ted 2012 2', ['Ted'], '2012', false],
+    ['Avatar.2009.Extended.2160p.UHD.BluRay.HEVC-RELEASE', ['Avatar'], '2009', true],
+    ['Avatar.The.Way.Of.Water.2009.2160p', ['Avatar'], '2009', false]
+  ];
+  for (const [title, wanted, year, accepted] of cases) {
+    assert.equal(acceptsCandidate(title, wanted, 'movie', year), accepted, title);
+  }
+});
+
 test('series match must include full show identity and exact episode', () => {
   assert.equal(acceptsCandidate('The Walking Dead Dead City S02E06 CZ DAB',
     ['The Walking Dead'], 'series', '', 2, 6), false);

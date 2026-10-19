@@ -84,6 +84,174 @@ function metadataOnly(text) {
   );
 }
 
+// Only accept release metadata after a COMPLETE movie title. Release groups
+// are allowed after a known format marker; sequel/spinoff words stay rejected.
+// Series matching intentionally keeps its existing stricter logic.
+const movieReleaseWords = new Set([
+  "2160p",
+  "1440p",
+  "1080p",
+  "720p",
+  "576p",
+  "480p",
+  "360p",
+  "240p",
+  "4k",
+  "uhd",
+  "fhd",
+  "hd",
+  "sd",
+  "web",
+  "dl",
+  "webrip",
+  "webdl",
+  "webcap",
+  "bluray",
+  "blu",
+  "ray",
+  "bdrip",
+  "brrip",
+  "bdremux",
+  "bd",
+  "rip",
+  "dvdrip",
+  "dvd",
+  "hdrip",
+  "hdtv",
+  "remux",
+  "repack",
+  "proper",
+  "internal",
+  "extended",
+  "uncut",
+  "remastered",
+  "theatrical",
+  "directors",
+  "director",
+  "cut",
+  "criterion",
+  "imax",
+  "edition",
+  "special",
+  "anniversary",
+  "hybrid",
+  "hevc",
+  "avc",
+  "av1",
+  "x264",
+  "x265",
+  "h264",
+  "h265",
+  "h266",
+  "h",
+  "xvid",
+  "divx",
+  "hdr",
+  "hdr10",
+  "hdr10plus",
+  "dv",
+  "dovi",
+  "dolby",
+  "vision",
+  "sdr",
+  "bit",
+  "8bit",
+  "10bit",
+  "12bit",
+  "fps",
+  "aac",
+  "ac3",
+  "eac3",
+  "dd",
+  "ddp",
+  "ddplus",
+  "dts",
+  "truehd",
+  "ma",
+  "atmos",
+  "flac",
+  "mp3",
+  "opus",
+  "pcm",
+  "cz",
+  "cs",
+  "cze",
+  "ces",
+  "sk",
+  "slo",
+  "slk",
+  "en",
+  "eng",
+  "czech",
+  "english",
+  "slovak",
+  "cesky",
+  "cestina",
+  "slovensky",
+  "slovencina",
+  "dab",
+  "dabing",
+  "dub",
+  "dubbed",
+  "sub",
+  "subs",
+  "subtitles",
+  "titulky",
+  "tit",
+  "srt",
+  "vtt",
+  "dual",
+  "multi",
+  "audio",
+  "audiotrack",
+  "original",
+  "forced",
+  "max",
+  "hmax",
+  "hbo",
+  "nf",
+  "netflix",
+  "amzn",
+  "amazon",
+  "dsnp",
+  "disney",
+  "atvp",
+  "itunes",
+  "hulu",
+  "apple",
+  "paramount"
+]);
+
+function movieReleaseMatches(candidate, title) {
+  const wanted = normalize(title);
+  if (!wanted) return false;
+  const raw = String(candidate || '');
+  // Accept hyphenated release-group tags only after a genuine format marker.
+  // This never treats an arbitrary extra film-title word as release metadata.
+  const group = raw.match(/[-–—][a-z][a-z0-9]{1,24}(?:\s*\(\d{1,2}\))?\s*$/i);
+  const prefix = group ? raw.slice(0, group.index) : raw;
+  const prefixNormalized = normalize(prefix);
+  const afterTitle = prefixNormalized.startsWith(wanted + ' ')
+    ? prefixNormalized.slice(wanted.length).trim().split(' ') : [];
+  const hasFormatMarker = afterTitle.some(word =>
+    /^(?:2160p|1440p|1080p|720p|576p|480p|360p|240p|4k|uhd|fhd|webrip|web|bluray|bdrip|dvdrip|remux|x264|x265|hevc|h264|h265|hdr|hdr10|dv|ddp|dts|aac|ac3)$/.test(word));
+  const withoutGroup = group && hasFormatMarker ? prefix : raw;
+  const source = normalize(withoutGroup);
+  if (source === wanted) return true;
+  if (!source.startsWith(wanted + ' ')) return false;
+  const remainder = source.slice(wanted.length).trim().split(' ');
+  let hasMediaTag = false;
+  for (const word of remainder) {
+    if (/^(?:19|20)\d{2}$/.test(word)) continue;
+    if (movieReleaseWords.has(word)) { hasMediaTag = true; continue; }
+    // Numeric codec/channel metadata only applies after a release tag,
+    // never immediately after the movie title (e.g. Ted vs Ted 2).
+    if (hasMediaTag && /^\d{1,3}$/.test(word)) continue;
+    return false;
+  }
+  return true;
+}
+
 function episodeTokens(text) {
   const source = String(text || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const tokens = [];
@@ -104,13 +272,7 @@ function acceptsCandidate(candidateTitle, titles, type, year, season, episode) {
   if (!raw || !titles.length || /\b(?:trailer|teaser|recap|review|reaction|parody)\b/i.test(raw)) return false;
   if (type === 'movie') {
     if (episodeTokens(raw).length || !hasMatchingYear(raw, year)) return false;
-    const source = normalize(raw);
-    return titles.some(title => {
-      const wanted = normalize(title);
-      if (source === wanted) return true;
-      if (!source.startsWith(wanted + ' ')) return false;
-      return metadataOnly(source.slice(wanted.length).trim());
-    });
+    return titles.some(title => movieReleaseMatches(raw, title));
   }
   if (type !== 'series' || !Number.isInteger(season) || season < 1 ||
       !Number.isInteger(episode) || episode < 1) return false;
