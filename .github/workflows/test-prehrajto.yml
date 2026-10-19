@@ -1,0 +1,56 @@
+name: Validate Prehraj.to provider
+
+on:
+  pull_request:
+    paths:
+      - 'api/prehrajto.js'
+      - 'addon.js'
+      - 'test-prehrajto.cjs'
+      - 'public/configure.html'
+      - '.github/workflows/test-prehrajto.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prehrajto:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --omit=dev --no-audit --no-fund
+      - name: Syntax and isolated resolver tests
+        run: |
+          node --check api/prehrajto.js
+          node --check addon.js
+          node --test test-prehrajto.cjs
+      - name: Verify standalone manifest route without external API traffic
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const vm = require('node:vm');
+          const script = fs.readFileSync('public/configure.html','utf8').match(/<script>([\s\S]*?)<\/script>/i);
+          if (!script) throw Error('Config UI script missing');
+          new vm.Script(script[1]);
+          if (!fs.readFileSync('public/configure.html','utf8').includes('id="prehrajto"')) throw Error('Install card missing');
+          NODE
+          CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa PORT=17987 node addon.js >/tmp/pt-addon-test.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:17987/prehrajto/manifest.json > /tmp/pt-manifest.json; then break; fi
+            sleep 1
+          done
+          node - <<'NODE'
+          const m = require('/tmp/pt-manifest.json');
+          if (m.id !== 'cz.caseycz.stremio.prehrajto.direct' || !m.resources.includes('stream') || !m.idPrefixes.includes('tt')) {
+            throw Error('Invalid standalone Prehraj.to manifest');
+          }
+          console.log('Standalone Prehraj.to manifest OK');
+          NODE
