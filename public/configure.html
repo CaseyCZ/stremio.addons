@@ -359,7 +359,8 @@ function credentials() {
 function showResult(addon,token) {
   const card=$(addon);
   const output=['bombuj','prehrajto'].includes(addon)?card.querySelector('.bridge-output'):card.querySelector('.output');
-  const route=addon==='bombuj'?'/bombuj/manifest.json':addon==='prehrajto'?'/prehrajto/manifest.json':'/manifest.json';
+  // All configured addons use the same token-root structure as SKTOnline/SKTorrent.
+  const route='/manifest.json';
   const path=baseInstall()+'/'+token+route;
   output.querySelector('input').value=location.origin+path;
   output.querySelector('.install').href='stremio://'+location.host+path;
