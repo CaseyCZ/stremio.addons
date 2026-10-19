@@ -29,7 +29,7 @@ rollback() {
     echo 'Bombuj health check failed; restoring previous provider revision.' >&2
     if [[ -s "$STATE/previous.tar" ]]; then
       tar -xf "$STATE/previous.tar" -C "$ROOT" || true
-      BOMBUJ_DIRECT_VOE="$PREVIOUS_VOE" pm2 restart stremio-bombuj --update-env >/dev/null 2>&1 || true
+      BOMBUJ_DIRECT_VOE="$PREVIOUS_VOE" pm2 restart stremio-addons-bombuj --update-env >/dev/null 2>&1 || true
       if curl -fsS --max-time 10 http://127.0.0.1:7004/manifest.json >/dev/null; then
         pm2 save >/dev/null 2>&1 || true
         echo 'Previous Bombuj runtime restored; rollback leaves tracked files to reconcile before another deploy.' >&2
@@ -51,13 +51,13 @@ git archive "$PREVIOUS" providers/bombuj ecosystem.bombuj.config.cjs > "$STATE/p
 pm2 jlist > "$STATE/pm2.json"
 node - "$STATE/pm2.json" "$EXPECTED" "$STATE/previous-voe" <<'NODE'
 const fs=require('node:fs');
-const apps=JSON.parse(fs.readFileSync(process.argv[2],'utf8')).filter(x=>x.name==='stremio-bombuj');
+const apps=JSON.parse(fs.readFileSync(process.argv[2],'utf8')).filter(x=>x.name==='stremio-addons-bombuj');
 if(apps.length!==1||apps[0].pm2_env?.pm_exec_path!==process.argv[3]||apps[0].pm2_env?.status!=='online')
   throw Error('Expected exactly one online Bombuj process from the unified provider');
 fs.writeFileSync(process.argv[4],String(apps[0].pm2_env.BOMBUJ_DIRECT_VOE??apps[0].pm2_env.BOMBUJ_TEST_DIRECT_VOE??'0'));
 NODE
 PREVIOUS_VOE="$(cat "$STATE/previous-voe")"
-DESIRED_VOE="$(node -e "process.stdout.write(String(require(process.argv[1]).apps.find(x=>x.name==='stremio-bombuj').env.BOMBUJ_DIRECT_VOE??'0'))" "$CONF")"
+DESIRED_VOE="$(node -e "process.stdout.write(String(require(process.argv[1]).apps.find(x=>x.name==='stremio-addons-bombuj').env.BOMBUJ_DIRECT_VOE??'0'))" "$CONF")"
 [[ "$DESIRED_VOE" =~ ^[01]$ ]] || { echo 'Invalid VOE switch in config.' >&2; exit 1; }
 REVISION="$( { git rev-parse HEAD:providers/bombuj; sha256sum "$CONF" "$ROOT/deploy-bombuj-runtime.sh"; } | sha256sum | cut -d' ' -f1 )"
 if [[ "$PREVIOUS_VOE" == "$DESIRED_VOE" && -f "$STAMP" && "$(cat "$STAMP")" == "$REVISION" ]] && curl -fsS --max-time 5 http://127.0.0.1:7004/manifest.json >/dev/null; then
@@ -92,7 +92,7 @@ kill "$STAGE_PID"
 wait "$STAGE_PID" 2>/dev/null || true
 STAGE_PID=""
 SWITCHED=1
-pm2 startOrReload "$CONF" --only stremio-bombuj --update-env >/dev/null
+pm2 startOrReload "$CONF" --only stremio-addons-bombuj --update-env >/dev/null
 for _ in $(seq 1 30); do
   if curl -fsS --max-time 2 http://127.0.0.1:7004/manifest.json > "$STATE/live.json" 2>/dev/null; then HEALTHY=1; break; fi
   sleep 1
@@ -102,7 +102,7 @@ done
 HEALTHY=0
 pm2 jlist > "$STATE/pm2.json"
 node - "$STATE/pm2.json" "$EXPECTED" "$DESIRED_VOE" <<'NODE'
-const fs=require('node:fs'),apps=JSON.parse(fs.readFileSync(process.argv[2])).filter(x=>x.name==='stremio-bombuj');
+const fs=require('node:fs'),apps=JSON.parse(fs.readFileSync(process.argv[2])).filter(x=>x.name==='stremio-addons-bombuj');
 if(apps.length!==1||apps[0].pm2_env?.status!=='online'||apps[0].pm2_env?.pm_exec_path!==process.argv[3]||apps[0].pm2_env?.BOMBUJ_DIRECT_VOE!==process.argv[4])throw Error('Bombuj runtime/VOE switch verification failed');
 NODE
 pm2 save >/dev/null

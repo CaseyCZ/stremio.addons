@@ -1,11 +1,11 @@
 'use strict';
 
-// Bombuj remains a separate PM2 process and public /stremio-bombuj/ route,
-// but its code now comes from the unified SKTOnline + Bombuj repository.
+// Bombuj runs as a separate internal PM2 process on port 7004;
+// its public manifest is under /stremio-addons/bombuj/ in the unified repository.
 const path = require('node:path');
 module.exports = {
   apps: [{
-    name: 'stremio-bombuj',
+    name: 'stremio-addons-bombuj',
     script: 'preflight-front.js',
     cwd: path.join(__dirname, 'providers', 'bombuj'),
     instances: 1,

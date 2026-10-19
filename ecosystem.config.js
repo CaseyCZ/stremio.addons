@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'stremio-sktonline',
+      name: 'stremio-addons',
       script: './addon.js',
       cwd: __dirname,
       autorestart: true,
