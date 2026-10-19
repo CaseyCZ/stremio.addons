@@ -9,6 +9,9 @@ on:
       - 'test-prehrajto-sosac.cjs'
       - 'scripts/test-prehrajto-sosac-http.cjs'
       - 'public/configure.html'
+      - 'deploy-server.sh'
+      - 'scripts/install-nginx-stremio-configure-root.sh'
+      - 'scripts/test-nginx-stremio-configure-root.py'
       - '.github/workflows/test-prehrajto.yml'
   workflow_dispatch:
 
@@ -29,6 +32,8 @@ jobs:
         run: npm ci --omit=dev --no-audit --no-fund
       - name: Syntax and isolated resolver tests
         run: |
+          bash -n deploy-server.sh scripts/install-nginx-stremio-configure-root.sh
+          python3 scripts/test-nginx-stremio-configure-root.py
           node --check api/prehrajto.js
           node --check addon.js
           node --test test-prehrajto.cjs test-prehrajto-sosac.cjs

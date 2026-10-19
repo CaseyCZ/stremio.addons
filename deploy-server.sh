@@ -80,6 +80,13 @@ if command -v nginx >/dev/null 2>&1; then
   fi
 fi
 
+# Root-level token links from Stremio's Configure action need an nginx
+# redirect before the broad legacy Sosac token handler. Idempotent and
+# rollback-safe; does not modify any stream/manifest routes.
+if command -v nginx >/dev/null 2>&1; then
+  bash "$PWD/scripts/install-nginx-stremio-configure-root.sh"
+fi
+
 # Verify the public/local reverse proxy no longer exposes the stale service.
 if curl -fsS http://127.0.0.1/health >/tmp/stremio-sktonline-public-health 2>/dev/null; then
   public_version="$(node -e "try{const x=JSON.parse(require('fs').readFileSync('/tmp/stremio-sktonline-public-health','utf8'));process.stdout.write(String(x.version||''))}catch(_){}")"
