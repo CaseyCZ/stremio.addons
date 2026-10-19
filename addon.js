@@ -95,7 +95,7 @@ function normalizeConfig(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const sktUsername = String(value.sktUsername || value.username || '').trim().slice(0, 128);
   const sktPassword = String(value.sktPassword || value.password || '').slice(0, 256);
-  const addonType = ['sktonline', 'sktorrent', 'bombuj'].includes(value.addonType) ? value.addonType : 'combined';
+  const addonType = ['sktonline', 'sktorrent', 'bombuj', 'prehrajto'].includes(value.addonType) ? value.addonType : 'combined';
   const wantsTorrents = addonType === 'sktorrent' || (addonType === 'combined' && value.enableTorrents === true);
   const sosacUsername = String(value.sosacUsername || '').trim().slice(0, 128);
   const sosacPassword = String(value.sosacPassword || '').slice(0, 256);
@@ -522,34 +522,47 @@ app.get('/manifest.json', (req, res) => {
   });
 });
 
-// Fourth, independently installable addon. No credentials, no reconfiguration of
-// SKTOnline/SKTorrent/Bombuj, and no video bytes relayed through this server.
-app.get('/prehrajto/manifest.json', (req, res) => {
-  noCache(res);
-  res.json({
+// Fourth, independently installable addon. No other provider or Sosac code is
+// modified. A new encrypted installer token optionally enables native Sosac IDs.
+function prehrajtoManifest(cfg = {}) {
+  const sosacLinked = Boolean(cfg.sosacUsername && cfg.sosacPassword);
+  return {
     id: 'cz.caseycz.stremio.prehrajto.direct',
     version: VERSION,
     name: 'Přehraj.to Direct',
     description: 'Přímé MP4 streamy z Přehraj.to s titulky CZ/SK/EN, pokud jsou dostupné.',
     types: ['movie', 'series'],
-    idPrefixes: ['tt'],
+    idPrefixes: [
+      'tt',
+      'bombuj-movie-', 'bombuj-series-', 'bombuj-episode-',
+      ...(sosacLinked ? ['sosac_m_', 'sosac_s_', 'sosac_ep_'] : [])
+    ],
     resources: ['stream'],
     catalogs: [],
-    behaviorHints: { configurable: false, configurationRequired: false }
-  });
+    behaviorHints: { configurable: sosacLinked, configurationRequired: false }
+  };
+}
+
+app.get('/prehrajto/manifest.json', (req, res) => {
+  noCache(res);
+  return res.json(prehrajtoManifest());
 });
 
-app.get('/prehrajto/stream/:type/:id.json', async (req, res) => {
+async function handlePrehrajtoStream(req, res, cfg = {}) {
   noCache(res);
   const type = req.params.type;
   const id = String(req.params.id || '');
-  const parsed = parseStremioId(id);
   const empty = { streams: [], cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 };
-  if (!parsed || !['movie', 'series'].includes(type) ||
-      (type === 'series' && (!Number.isInteger(parsed.season) || !Number.isInteger(parsed.episode)))) {
-    return res.json(empty);
-  }
+  if (!['movie', 'series'].includes(type)) return res.json(empty);
+
   try {
+    // The shared ID resolver handles IMDb, Bombuj's own IDs, and — only with
+    // encrypted Sosac credentials — sosac_m_*, sosac_s_*, sosac_ep_*.
+    const parsed = await resolveIncomingStremioId(cfg, type, id);
+    if (!parsed || (type === 'series' && (!Number.isInteger(parsed.season) ||
+        parsed.season < 1 || !Number.isInteger(parsed.episode) || parsed.episode < 1))) {
+      return res.json(empty);
+    }
     const meta = await cinemeta.getMeta(type, parsed.imdbId);
     if (!meta) return res.json(empty);
     const streams = await resolveWithin(findPrehrajtoStreams({
@@ -560,6 +573,26 @@ app.get('/prehrajto/stream/:type/:id.json', async (req, res) => {
     console.warn('[prehrajto] stream lookup failed: ' + error.message);
     return res.json(empty);
   }
+}
+
+app.get('/prehrajto/stream/:type/:id.json', (req, res) =>
+  handlePrehrajtoStream(req, res));
+
+// The encrypted config token belongs only to this standalone addon.
+// Existing direct, P2P and Bombuj install URLs and behavior stay unchanged.
+app.get('/:cfg/prehrajto/manifest.json', (req, res) => {
+  noCache(res);
+  const cfg = normalizeConfig(decryptConfig(req.params.cfg));
+  if (!cfg || cfg.addonType !== 'prehrajto')
+    return res.status(400).json({ error: 'Invalid Přehraj.to configuration' });
+  return res.json(prehrajtoManifest(cfg));
+});
+
+app.get('/:cfg/prehrajto/stream/:type/:id.json', (req, res) => {
+  const cfg = normalizeConfig(decryptConfig(req.params.cfg));
+  if (!cfg || cfg.addonType !== 'prehrajto')
+    return res.status(400).json({ error: 'Invalid Přehraj.to configuration' });
+  return handlePrehrajtoStream(req, res, cfg);
 });
 
 app.get('/:cfg/manifest.json', (req, res) => {
