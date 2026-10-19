@@ -152,7 +152,7 @@ jobs:
           bash -n deploy-bombuj-unified.sh
           node --check ecosystem.bombuj.config.cjs
           node -e "for(const file of ['./ecosystem.config.js','./ecosystem.bombuj.config.cjs'])if(require(file).apps[0].env.RUNNER_TRACKING_ID!=='')throw Error('Persistent PM2 app must clear runner tracking')"
-          node -e "const p=require('./ecosystem.bombuj.config.cjs').apps[0];if(p.name!=='stremio-bombuj'||p.env.PORT!=='7004'||!p.cwd.endsWith('/providers/bombuj'))throw Error('Wrong unified Bombuj PM2 definition')"
+          node -e "const p=require('./ecosystem.bombuj.config.cjs').apps[0];if(p.name!=='stremio-addons-bombuj'||p.env.PORT!=='7004'||!p.cwd.endsWith('/providers/bombuj'))throw Error('Wrong unified Bombuj PM2 definition')"
           bash -n deploy-server.sh
 
       - name: Deployment note
