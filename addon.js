@@ -518,7 +518,7 @@ app.get('/:cfg/configure', (req, res) => {
 // Validate the token and its provider before redirecting. A relative Location
 // keeps the public nginx mount prefix (e.g. /stremio-sktonline/) unchanged,
 // while removing credentials from the final browser address.
-const CONFIGURE_INSTALL_ROOT = /^\/enc1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?:\/(?:bombuj|prehrajto))?\/?$/;
+const CONFIGURE_INSTALL_ROOT = /^\/enc1\.[^/]+(?:\/(?:bombuj|prehrajto))?\/?$/;
 app.get(CONFIGURE_INSTALL_ROOT, (req, res) => {
   noCache(res);
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -619,11 +619,22 @@ app.get('/:cfg/prehrajto/stream/:type/:id.json', (req, res) => {
   return handlePrehrajtoStream(req, res, cfg);
 });
 
-app.get('/:cfg/manifest.json', (req, res) => {
+// Uniform flat encrypted-manifest structure, identical to SKTOnline/SKTorrent.
+// Nested legacy /<token>/bombuj and /<token>/prehrajto manifests still work.
+app.get('/:cfg/manifest.json', async (req, res) => {
   noCache(res);
   const cfg = normalizeConfig(decryptConfig(req.params.cfg));
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
-  if (cfg.addonType === 'bombuj') return res.status(404).json({ error: 'Use the Bombuj manifest route' });
+  if (cfg.addonType === 'prehrajto') return res.json(prehrajtoManifest(cfg));
+  if (cfg.addonType === 'bombuj') {
+    try {
+      const source = await getBombujJson('/manifest.json');
+      return res.json(bombujManifest(source, Boolean(cfg.sosacUsername && cfg.sosacPassword)));
+    } catch (error) {
+      console.warn('[bombuj-bridge] flat manifest: ' + error.message);
+      return res.status(503).json({ error: 'Bombuj service unavailable' });
+    }
+  }
   return res.json(buildManifest(cfg));
 });
 
@@ -683,10 +694,25 @@ app.get('/:cfg/bombuj/catalog/:type/:id/:extra.json', (req, res) => {
 });
 app.get('/:cfg/bombuj/:resource/:type/:id.json', handleBombujBridge);
 
+// Bombuj's catalog, meta, stream and subtitle resources are mounted at the
+// SAME flat token root as SKTOnline. Keep old nested links as aliases.
+function handleFlatBombujResource(req, res, resource) {
+  req.params.resource = resource;
+  return handleBombujBridge(req, res);
+}
+app.get('/:cfg/catalog/:type/:id/:extra.json', (req, res) =>
+  handleFlatBombujResource(req, res, 'catalog'));
+app.get('/:cfg/catalog/:type/:id.json', (req, res) =>
+  handleFlatBombujResource(req, res, 'catalog'));
+app.get('/:cfg/meta/:type/:id.json', (req, res) =>
+  handleFlatBombujResource(req, res, 'meta'));
+
 app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   noCache(res);
   const cfg = normalizeConfig(decryptConfig(req.params.cfg));
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
+  if (cfg.addonType === 'prehrajto') return handlePrehrajtoStream(req, res, cfg);
+  if (cfg.addonType === 'bombuj') return handleFlatBombujResource(req, res, 'stream');
   if (!['movie', 'series'].includes(req.params.type)) return res.json({ streams: [], cacheMaxAge: 0 });
   const parsed = await resolveIncomingStremioId(cfg, req.params.type, req.params.id);
   if (!parsed) return res.json({ streams: [], cacheMaxAge: 0 });
@@ -748,8 +774,18 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   }
 });
 
-app.get('/:cfg/subtitles/:type/:id.json', handleSubtitles);
-app.get('/:cfg/subtitles/:type/:id/:extra.json', handleSubtitles);
+function handleFlatSubtitles(req, res) {
+  const cfg = normalizeConfig(decryptConfig(req.params.cfg));
+  if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
+  if (cfg.addonType === 'bombuj') return handleFlatBombujResource(req, res, 'subtitles');
+  if (cfg.addonType === 'prehrajto') {
+    noCache(res);
+    return res.json({ subtitles: [] }); // VTTs are embedded in stream.subtitles.
+  }
+  return handleSubtitles(req, res);
+}
+app.get('/:cfg/subtitles/:type/:id.json', handleFlatSubtitles);
+app.get('/:cfg/subtitles/:type/:id/:extra.json', handleFlatSubtitles);
 
 app.get('/version', (req, res) => {
   noCache(res);
