@@ -259,10 +259,21 @@ input:focus, select:focus { border-color: #5eb9ed; }
       <ul class="features"><li>Bez účtu</li><li>MP4 direct</li><li>CZ / SK titulky</li></ul>
       <div class="card-bottom">
         <p class="account-note"><span class="dot"></span> Bez registrace; dostupnost závisí na externích API</p>
-        <a class="action" id="prehrajtoInstall" href="#">Instalovat Přehraj.to <span aria-hidden="true">→</span></a>
-        <div class="output" style="display:block;margin-top:10px">
-          <label for="prehrajtoUrl">Instalační manifest</label>
-          <div class="result-row"><input id="prehrajtoUrl" readonly aria-label="Přehraj.to manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
+        <div id="prehrajtoNative">
+          <a class="action" id="prehrajtoInstall" href="#">Instalovat Přehraj.to <span aria-hidden="true">→</span></a>
+          <div class="output" style="display:block;margin-top:10px">
+            <label for="prehrajtoUrl">Instalační manifest bez Sosáče</label>
+            <div class="result-row"><input id="prehrajtoUrl" readonly aria-label="Přehraj.to manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
+          </div>
+        </div>
+        <div id="prehrajtoLinked" hidden>
+          <button class="action generate" data-addon="prehrajto" type="button">Vytvořit odkaz se Sosáčem <span aria-hidden="true">→</span></button>
+          <p class="feedback" role="status" aria-live="polite"></p>
+          <div class="output bridge-output" hidden>
+            <label for="prehrajtoBridgeUrl">Přehraj.to + propojení Sosáč</label>
+            <div class="result-row"><input id="prehrajtoBridgeUrl" readonly aria-label="Přehraj.to se Sosáčem"><button class="copy-btn copy" type="button">Kopírovat</button></div>
+            <a class="action install" href="#">Instalovat Přehraj.to se Sosáčem <span aria-hidden="true">→</span></a>
+          </div>
         </div>
       </div>
     </article>
@@ -276,17 +287,17 @@ input:focus, select:focus { border-color: #5eb9ed; }
     <summary>
       <span class="settings-label">
         <span class="settings-icon" aria-hidden="true">🔗</span>
-        <span><span class="settings-title">Propojení se Sosáčem (4 zdroje)</span><span class="settings-sub">Aby SKTOnline, SKTorrent i Bombuj fungovaly také v katalogu Sosáč</span></span>
+        <span><span class="settings-title">Propojení se Sosáčem (4 zdroje)</span><span class="settings-sub">Aby SKTOnline, SKTorrent, Bombuj i Přehraj.to fungovaly také v katalogu Sosáč</span></span>
       </span>
       <span class="settings-state" id="sosacState">Nenastaveno</span><span class="chevron" aria-hidden="true">⌄</span>
     </summary>
     <div class="settings-content">
-      <p>Pro zobrazení všech čtyř zdrojů také u položek z katalogu Sosáč zadej svůj účet Sosáč a vytvoř znovu instalační odkazy pro <strong>SKTOnline Direct, SKTorrent P2P i Bombuj</strong>. Původní odkazy bez propojení nelze dodatečně změnit. Sosáč zůstává samostatně nainstalovaný a jeho kód neupravujeme. Údaje se v našich doplňcích používají pouze pro převod ID <code>sosac_*</code> na IMDb.</p>
+      <p>Pro zobrazení všech čtyř zdrojů také u položek z katalogu Sosáč zadej svůj účet Sosáč a vytvoř znovu instalační odkazy pro <strong>SKTOnline Direct, SKTorrent P2P, Bombuj i Přehraj.to Direct</strong>. Původní odkazy bez propojení nelze dodatečně změnit. Sosáč zůstává samostatně nainstalovaný a jeho kód neupravujeme. Údaje se v našich doplňcích používají pouze pro převod ID <code>sosac_*</code> na IMDb.</p>
       <div class="settings-fields">
         <div class="field"><label for="sosacUsername">Sosáč – uživatelské jméno</label><input id="sosacUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Volitelné"></div>
         <div class="field"><label for="sosacPassword">Sosáč – heslo</label><div class="password-row"><input id="sosacPassword" type="password" autocomplete="current-password" placeholder="Volitelné"><button class="reveal show-password" data-target="sosacPassword" type="button" aria-pressed="false">Zobrazit</button></div></div>
       </div>
-      <p class="settings-hint" id="sosacHint">Bez vyplnění budou všechny tři doplňky fungovat se svými běžnými zdroji.</p>
+      <p class="settings-hint" id="sosacHint">Bez vyplnění budou všechny čtyři doplňky fungovat se svými běžnými zdroji.</p>
     </div>
   </details>
 
@@ -299,7 +310,7 @@ input:focus, select:focus { border-color: #5eb9ed; }
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
-const cards = ['sktonline','sktorrent','bombuj'];
+const cards = ['sktonline','sktorrent','bombuj','prehrajto'];
 const defaultBombujPath = '/stremio-bombuj/manifest.json';
 
 function base() {
@@ -316,7 +327,7 @@ function feedback(card,message,error=false) {
 }
 function clearResult(addon) {
   const card=$(addon);
-  const panel=addon==='bombuj'?card.querySelector('.bridge-output'):card.querySelector('.output');
+  const panel=['bombuj','prehrajto'].includes(addon)?card.querySelector('.bridge-output'):card.querySelector('.output');
   if (panel) { panel.hidden=true; const input=panel.querySelector('input'); if (input) input.value=''; }
   feedback(card,'');
 }
@@ -332,11 +343,13 @@ function refreshSosac() {
   $('sosacHint').textContent=partial
     ? 'Vyplň jméno i heslo, jinak se propojení nepoužije.'
     : linked
-      ? 'Teď znovu vytvoř a nainstaluj všechny tři manifesty: SKTOnline, SKTorrent i propojený Bombuj. Staré instalace bez Sosáče toto propojení nemají.'
-      : 'Bez propojení fungují vlastní katalogy a Cinemeta. V katalogu Sosáč nemusí naše tři doplňky rozpoznat jeho vlastní ID.';
+      ? 'Teď znovu vytvoř a nainstaluj všechny čtyři manifesty: SKTOnline, SKTorrent, Bombuj i Přehraj.to. Staré instalace bez Sosáče toto propojení nemají.'
+      : 'Bez propojení funguje Cinemeta i vlastní katalogy. V Sosáči nemusí naše čtyři doplňky rozpoznat jeho vlastní ID.';
   $('sosacHint').classList.toggle('warn',partial);
   $('bombujNative').hidden=linked;
   $('bombujLinked').hidden=!linked;
+  $('prehrajtoNative').hidden=linked;
+  $('prehrajtoLinked').hidden=!linked;
   cards.forEach(clearResult);
 }
 function refreshLanguage() { cards.forEach(clearResult); }
@@ -345,8 +358,8 @@ function credentials() {
 }
 function showResult(addon,token) {
   const card=$(addon);
-  const output=addon==='bombuj'?card.querySelector('.bridge-output'):card.querySelector('.output');
-  const route=addon==='bombuj'?'/bombuj/manifest.json':'/manifest.json';
+  const output=['bombuj','prehrajto'].includes(addon)?card.querySelector('.bridge-output'):card.querySelector('.output');
+  const route=addon==='bombuj'?'/bombuj/manifest.json':addon==='prehrajto'?'/prehrajto/manifest.json':'/manifest.json';
   const path=baseInstall()+'/'+token+route;
   output.querySelector('input').value=location.origin+path;
   output.querySelector('.install').href='stremio://'+location.host+path;
@@ -416,6 +429,7 @@ $('bombujInstall').href='stremio://'+location.host+defaultBombujPath;
 const prehrajtoPath=baseInstall()+'/prehrajto/manifest.json';
 $('prehrajtoUrl').value=location.origin+prehrajtoPath;
 $('prehrajtoInstall').href='stremio://'+location.host+prehrajtoPath;
+refreshSosac();
 refreshTorrent();
 async function loadVersion() {
   for(const url of [...new Set([base()+'/health','/health'])]) {

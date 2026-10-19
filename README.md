@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="https://130.61.49.108/stremio-sktonline/configure"><img src="https://img.shields.io/badge/Otev%C5%99%C3%ADt-Spole%C4%8Dnou%20konfiguraci-198CC8?style=for-the-badge&labelColor=14263B" alt="Otevřít konfiguraci všech tří doplňků" /></a>
+  <a href="https://130.61.49.108/stremio-sktonline/configure"><img src="https://img.shields.io/badge/Otev%C5%99%C3%ADt-Spole%C4%8Dnou%20konfiguraci-198CC8?style=for-the-badge&labelColor=14263B" alt="Otevřít konfiguraci všech čtyř doplňků" /></a>
   <a href="https://130.61.49.108/stremio-bombuj/manifest.json"><img src="https://img.shields.io/badge/Bombuj-P%C5%99%C3%ADm%C3%A1%20instalace-AD6CAF?style=for-the-badge&labelColor=14263B" alt="Bombuj – přímá instalace bez přihlášení" /></a>
 </p>
 
@@ -47,12 +47,12 @@ Všechny čtyři doplňky i konfigurátor jsou spravovány v [CaseyCZ/stremio.ad
 
 ## Instalace doplňků
 
-**Společná konfigurace** slouží k instalaci všech tří doplňků:
+**Společná konfigurace** slouží k instalaci všech čtyř doplňků:
 
 1. **SKTOnline Direct** – vybereš instalaci bez přihlášení.
 2. **SKTorrent P2P** – zadáš svůj SKTorrent účet a po ověření získáš šifrovaný instalační odkaz.
 3. **Bombuj** – nainstaluješ bez přihlášení; případně můžeš zapnout volitelné propojení se Sosáčem.
-4. **Přehraj.to Direct** – nainstaluješ bez přihlášení. Manifest má samostatnou cestu `/stremio-sktonline/prehrajto/manifest.json`.
+4. **Přehraj.to Direct** – bez přihlášení na `/stremio-sktonline/prehrajto/manifest.json`; pro položky z katalogu Sosáč vyplň údaje v sekci **Propojení se Sosáčem** a vytvoř šifrovaný instalační odkaz.
 
 Samostatné tlačítko **Bombuj – Přímá instalace** nad tímto textem vede rovnou na jeho veřejný manifest. Doplňky můžeš instalovat nezávisle v libovolné kombinaci.
 
@@ -60,17 +60,17 @@ Samostatné tlačítko **Bombuj – Přímá instalace** nad tímto textem vede 
 
 Můžeš zadat své údaje Sosáč pro rozpoznání položek z jeho katalogu. Každý doplněk pak nabídne své vlastní dostupné streamy také u podporovaných titulů Sosáč.
 
-**Samotný Sosáč ani jeho repozitář neupravujeme.** Bez přihlašovacích údajů k Sosáči všechny tři doplňky nadále fungují se svými podporovanými tituly.
+**Samotný Sosáč ani jeho repozitář neupravujeme.** Bez přihlašovacích údajů k Sosáči všechny čtyři doplňky nadále fungují se svými podporovanými tituly.
 
-Bombuj používá při volitelném propojení šifrovaný instalační manifest; bez propojení zůstává na svém samostatném serverovém procesu.
+Bombuj i Přehraj.to mají pro volitelné propojení Sosáče vlastní šifrovaný instalační manifest. Přehraj.to bez propojení má stále samostatný veřejný manifest. Údaje Sosáče se nikdy nedoplňují do otevřené query části MP4 ani VTT odkazů; pro převod `sosac_*` ID používáme existující `SosacOverlay`. Starý instalační odkaz bez propojení je nutné nahradit novým.
 
 ## Přehraj.to Direct – technické poznámky
 
-Nový nezávislý zdroj funguje pouze pro IMDb/Cinemeta ID (`tt...` a u seriálů `tt...:sezóna:epizoda`). Před resolvem kontroluje úplný název, rok u filmů a přesnou epizodu u seriálů. Vyhledává přes externí službu Blaniok a obnovuje podepsanou MP4 URL přes `ceskarepublika.wiki/api/movies/video-url`. Obě služby jsou třetí strany; nemají garantovanou dostupnost ani veřejné SLA.
+Nezávislý zdroj podporuje IMDb/Cinemeta ID (`tt...` a u seriálů `tt...:sezóna:epizoda`) a vlastni ID Bombuj; s volitelnou šifrovanou konfigurací Sosáče také `sosac_m_*`, `sosac_s_*` a `sosac_ep_*`. Samotný seriál bez konkrétní epizody nevrací stream, aby nedošlo k záměně dílů. Před resolvem kontroluje úplný název, rok u filmů a přesnou epizodu u seriálů. Vyhledává přes externí službu Blaniok a obnovuje podepsanou MP4 URL přes `ceskarepublika.wiki/api/movies/video-url`. Obě služby jsou třetí strany; nemají garantovanou dostupnost ani veřejné SLA.
 
 MP4 i VTT se předávají jako přímé adresy CDN, **neprocházejí přes Oracle**. Titulky se připojují přímo ke konkrétnímu streamu. Jazyky `cze/slo/eng/ng1/ng2` se převádějí na ISO 639-2 `ces/slk/eng`. Není-li kvalita explicitně ověřená API, stream se **neoznačuje 1080p jen podle názvu souboru**. Externí služba může vrátit jen jednu MP4, ačkoli název uploadu naznačuje vyšší kvalitu.
 
-Přehraj.to není zahrnuto do stávajících šifrovaných konfigurací SKTOnline, SKTorrent či Bombuj. Jeho instalace nemění žádné již nainstalované doplňky.
+Přehraj.to používá vlastní šifrovaný instalační token jen při propojení se Sosáčem. Jeho instalace nemění konfigurace ani resolvery SKTOnline, SKTorrent a Bombuj.
 
 ## Soukromí a přehrávání
 
