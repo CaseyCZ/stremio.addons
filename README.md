@@ -62,7 +62,7 @@ Můžeš zadat své údaje Sosáč pro rozpoznání položek z jeho katalogu. Ka
 
 **Samotný Sosáč ani jeho repozitář neupravujeme.** Bez přihlašovacích údajů k Sosáči všechny čtyři doplňky nadále fungují se svými podporovanými tituly.
 
-Bombuj i Přehraj.to mají pro volitelné propojení Sosáče vlastní šifrovaný instalační manifest. Přehraj.to bez propojení má stále samostatný veřejný manifest. Údaje Sosáče se nikdy nedoplňují do otevřené query části MP4 ani VTT odkazů; pro převod `sosac_*` ID používáme existující `SosacOverlay`. Starý instalační odkaz bez propojení je nutné nahradit novým.
+Bombuj i Přehraj.to používají pro volitelné propojení Sosáče vlastní šifrovaný instalační token ve stejném tvaru jako fungující SKTOnline/SKTorrent: `/<token>/manifest.json`, `/<token>/stream/...`. Staré vnořené instalační cesty `/<token>/bombuj/manifest.json` a `/<token>/prehrajto/manifest.json` zůstávají zpětně kompatibilní. Přehraj.to bez propojení má stále samostatný veřejný manifest. Údaje Sosáče se nikdy nedoplňují do otevřené query části MP4 ani VTT odkazů; pro převod `sosac_*` ID používáme existující `SosacOverlay`. Starý instalační odkaz bez propojení je nutné nahradit novým.
 
 ## Přehraj.to Direct – technické poznámky
 
