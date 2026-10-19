@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('http');
+const { testDirectVoeAllowed } = require('./embed-test-policy.js');
 const {
   parseSeriesResource, parseEpisodeMetaPath, parseSeriesCatalogPath,
   catalogManifest: seriesCatalogManifest, createSeriesService
@@ -584,6 +585,9 @@ async function customMovieStreams(id, slug) {
   const rawStreams = await parser.playersToStreams(players, detailUrl);
   const streams = rawStreams.map(customStreamDisplay);
   console.log('[catalog-stream] ' + id + ': players=' + players.length + ' streams=' + streams.length);
+  // The lifetime/IP binding of VOE signatures is not established. Do not
+  // retain these media URLs in the existing five-minute movie cache.
+  if (players.some(player => testDirectVoeAllowed(player.resolvedUrl))) return streams;
   return cacheSet(customStreamsCache, id, streams, 5 * 60 * 1000);
 }
 

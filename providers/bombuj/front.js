@@ -1,6 +1,8 @@
 'use strict';
 
 const http = require('http');
+const { subtitleTracks, audioLabel, subtitleLabel, providerLabel } = require('./stream-display.js');
+const { testUnblockAllowed, testDirectVoeAllowed } = require('./embed-test-policy.js');
 
 const PUBLIC_PORT = Number(process.env.PORT || 7004);
 const MIDDLE_PORT = Number(process.env.BOMBUJ_MIDDLE_PORT || (PUBLIC_PORT + 1));
@@ -32,7 +34,7 @@ function keepExternalFallback(input, init = {}) {
 // Let index.js fall back to the original external player instead. Real direct
 // media URLs (.mp4/.m3u8/...) still pass through normally.
 global.fetch = async function preferWebFallback(input, init = {}) {
-  if (keepExternalFallback(input, init)) {
+  if (keepExternalFallback(input, init) && !testUnblockAllowed(rawUrlOf(input)) && !testDirectVoeAllowed(rawUrlOf(input))) {
     throw new Error('Keep original external player fallback');
   }
   return nativeFetch(input, init);
@@ -44,35 +46,7 @@ process.env.BOMBUJ_INTERNAL_PORT = String(INTERNAL_PORT);
 require('./bootstrap.js');
 
 function uniqueSubtitles(streams) {
-  const seen = new Set();
-  const out = [];
-  for (const stream of Array.isArray(streams) ? streams : []) {
-    const candidates = [];
-    for (const sub of Array.isArray(stream?.subtitles) ? stream.subtitles : []) {
-      if (sub?.url) candidates.push({ url: String(sub.url), lang: sub.lang || 'ces' });
-    }
-    for (const raw of [stream?.externalUrl, stream?.url]) {
-      try {
-        const parsed = new URL(String(raw || ''));
-        const keys = ['sub_url', 'sub_file', 'sub1'];
-        for (let i = 1; i <= 8; i += 1) keys.push(`c${i}_file`);
-        for (const key of keys) {
-          const value = parsed.searchParams.get(key);
-          if (value && /^https?:\/\//i.test(value)) candidates.push({ url: value, lang: 'ces' });
-        }
-      } catch {}
-    }
-    for (const candidate of candidates) {
-      if (!candidate.url || seen.has(candidate.url)) continue;
-      seen.add(candidate.url);
-      out.push({ id: `bombuj-sub-${out.length + 1}`, url: candidate.url, lang: candidate.lang || 'ces' });
-    }
-  }
-  return out;
-}
-
-function providerLabel(stream) {
-  return String(stream?.name || '').replace(/^Bombuj\s*•\s*/i, '').trim() || 'Zdroj';
+  return subtitleTracks(streams);
 }
 
 function qualityLabel(stream) {
@@ -85,23 +59,6 @@ function qualityLabel(stream) {
   if (/\bhd\b/i.test(text)) return 'HD';
   if (/\bsd\b/i.test(text)) return 'SD';
   return 'Direct';
-}
-
-function subtitleLabel(stream) {
-  const text = `${stream?.description || ''} ${stream?.title || ''}`;
-  const subtitles = uniqueSubtitles([stream]);
-  if (/CZ\s*\/\s*SK|CZ-SK/i.test(text)) return '🇨🇿 CZ • 🇸🇰 SK';
-  if (subtitles.length) return '🇨🇿 CZ';
-  if (/\bEN\b.*\btit/i.test(text)) return '🇬🇧 EN';
-  return 'Bez titulků';
-}
-
-function audioLabel(stream) {
-  const text = `${stream?.description || ''} ${stream?.title || ''}`;
-  if (/\bEN\s*dab/i.test(text)) return '🇬🇧 EN';
-  if (/\bCZ\s*dab/i.test(text)) return '🇨🇿 CZ';
-  if (/\bSK\s*dab/i.test(text)) return '🇸🇰 SK';
-  return '🌐 ?';
 }
 
 function displayDirect(stream) {

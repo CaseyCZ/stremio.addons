@@ -17,7 +17,7 @@ test('movies and series use one identical CZ stream formatter without modifying 
   assert.equal(movie.externalUrl,streamtape);
   assert.equal(movie.name,'Bombuj • streamtape.com');
   assert.equal(movie.title,
-    '🎧 🇨🇿 CZ\n💬 🇨🇿 CZ • 🇸🇰 SK\n🌐 Web player • streamtape.com');
+    '🎧 🇨🇿 CZ\n💬 🇨🇿 CZ / 🇸🇰 SK\n🌐 Web player • streamtape.com');
   assert.equal(movie.description,undefined);
 });
 
@@ -28,7 +28,7 @@ test('English-with-subtitles group gives correct audio flag without inventing su
   };
   const stream=formatBombujStream(input);
   assert.equal(stream.name,'Bombuj • vidlink');
-  assert.equal(stream.title,'🎧 🇬🇧 EN\n💬 Bez titulků\n🌐 Web player • vidlink');
+  assert.equal(stream.title,'🎧 🇬🇧 EN\n💬 🇨🇿 CZ / 🇸🇰 SK (Bombuj)\n🌐 Web player • vidlink');
   assert.equal(stream.externalUrl,input.externalUrl);
 });
 
@@ -51,7 +51,7 @@ test('direct streams retain their media URL, headers and quality metadata', () =
   };
   const out=formatBombujStream(input);
   assert.equal(out.name,'Bombuj • Direct');
-  assert.equal(out.title,'🎧 🇬🇧 EN\n💬 Bez titulků\n🎬 Direct • VOE');
+  assert.equal(out.title,'🎧 🇬🇧 EN\n💬 Neuvedeny\n🎬 Direct • VOE');
   assert.equal(out.url,input.url);
   assert.deepEqual(out.behaviorHints,input.behaviorHints);
 });
@@ -61,12 +61,100 @@ test('unknown audio is labeled honestly, not mislabeled with a flag', () => {
     name:'Bombuj • Mystery',description:'Bombuj • externí player',
     externalUrl:'https://provider.example/video'
   });
-  assert.equal(stream.title,'🎧 🌐 Neurčeno\n💬 Bez titulků\n🌐 Web player • Mystery');
+  assert.equal(stream.title,'🎧 🌐 Neurčeno\n💬 Neuvedeny\n🌐 Web player • Mystery');
 });
 
 test('movie subtitle resource still extracts subtitle query parameters', () => {
   const tracks=subtitleTracks([{externalUrl:streamtape}]);
   assert.equal(tracks.length,1);
-  assert.equal(tracks[0].lang,'ces');
+  assert.equal(tracks[0].lang,'und');
   assert.equal(tracks[0].url,'https://serialy.bombuj.si/titulky/abc.vtt');
+});
+
+function wrapperFunctions(filename, names) {
+  const fs = require('node:fs'), vm = require('node:vm');
+  const file = require.resolve(filename), local = require('node:module').createRequire(file);
+  const mod = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(file, 'utf8') + `\nmodule.exports={${names.join(',')}};`, {
+    require: p => p === 'http' ? { createServer: () => ({ listen() {} }) } :
+      ['./index.js', './bootstrap.js'].includes(p) ? {} : local(p),
+    module: mod, process: { env: {} }, console: { log() {}, error() {} },
+    global: { fetch: () => { throw Error('unexpected network request'); } }, URL, AbortSignal
+  });
+  return mod.exports;
+}
+
+test('all four Bombuj groups survive front/bootstrap and repeated movie/episode formatting', () => {
+  const front = wrapperFunctions('./front.js', ['displayDirect', 'displayExternal']);
+  const boot = wrapperFunctions('./bootstrap.js', ['nativeTitle']);
+  for (const [group, audio] of [
+    ['CZ dabing', '🇨🇿 CZ'], ['SK dabing', '🇸🇰 SK'],
+    ['CZ/SK titulky', '🌐 Původní'], ['EN dab/tit', '🇬🇧 EN']
+  ]) {
+    const raw = { name: 'Bombuj • VOE', description: group + ' • přímý HLS', url: 'https://cdn.example/video.m3u8' };
+    const expected = formatBombujStream(raw);
+    assert.equal(expected.title.split('\n')[0], '🎧 ' + audio);
+    assert.equal(formatBombujStream(expected).title, expected.title);
+    assert.equal(formatBombujStream(front.displayDirect(raw)).title, expected.title);
+    assert.equal(formatBombujStream({ ...raw, name: 'Bombuj • Direct', title: boot.nativeTitle(raw), description: undefined }).title, expected.title);
+    const external = { ...raw, url: undefined, externalUrl: 'https://voe.sx/e/fixture' };
+    assert.equal(formatBombujStream(front.displayExternal(external)).title, formatBombujStream(external).title);
+  }
+});
+
+test('subtitle section does not invent English audio or downloadable subtitle files', () => {
+  const stream = formatBombujStream({ name: 'Bombuj • VOE', description: 'CZ/SK titulky • externí player', externalUrl: 'https://voe.sx/e/fixture' });
+  assert.match(stream.title, /^🎧 🌐 Původní\n💬 🇨🇿 CZ \/ 🇸🇰 SK \(Bombuj\)/);
+  assert.equal(stream.subtitles, undefined);
+});
+
+test('explicit VOE Czech subtitle overrides combined section; Slovak query is not defaulted to Czech', () => {
+  const raw = { name: 'Bombuj • VOE', description: 'CZ/SK titulky • externí player', externalUrl: 'https://voe.sx/e/fixture?subtitles=' + encodeURIComponent('CZSK;cs;https://cdn.example/cz.vtt') };
+  const stream = formatBombujStream(raw);
+  assert.match(stream.title, /💬 🇨🇿 CZ\n/);
+  assert.equal(stream.subtitles[0].lang, 'ces');
+  const tracks = subtitleTracks([{ externalUrl: 'https://provider.example/e/fixture?c1_lang=sk&c1_file=https%3A%2F%2Fcdn.example%2Fsk.vtt' }]);
+  assert.equal(tracks[0].lang, 'slk');
+  assert.equal(subtitleTracks([{ subtitles: [{ url: 'https://cdn.example/unknown.vtt' }] }])[0].lang, 'und');
+});
+
+test('additional language groups are parsed dynamically with separate audio and subtitle roles', () => {
+  for (const [group, audio, subtitles] of [
+    ['DE dabing', '🇩🇪 DE', 'Neuvedeny'],
+    ['FR titulky', '🌐 Původní', '🇫🇷 FR (Bombuj)'],
+    ['JA audio + CZ titulky', '🇯🇵 JA', '🇨🇿 CZ (Bombuj)'],
+    ['Český dabing + SK titulky', '🇨🇿 CZ', '🇸🇰 SK (Bombuj)'],
+    ['CZ / SK dabing', '🇨🇿 CZ / 🇸🇰 SK', 'Neuvedeny'],
+    ['English subtitles', '🌐 Původní', '🇬🇧 EN (Bombuj)'],
+    ['Nová speciální verze', '🌐 Nová speciální verze', 'Neuvedeny'],
+    ['XYZ titulky', '🌐 Původní', 'XYZ titulky (Bombuj)']
+  ]) {
+    const raw = { name: 'Bombuj • VOE', description: group + ' • přímý HLS', url: 'https://cdn.example/video.m3u8' };
+    const result = formatBombujStream(raw);
+    assert.equal(result.title.split('\n')[0], '🎧 ' + audio, group);
+    assert.equal(result.title.split('\n')[1], '💬 ' + subtitles, group);
+    assert.equal(formatBombujStream(result).title, result.title, group);
+    assert.equal(result.subtitles, undefined);
+  }
+});
+
+test('all supplied subtitle languages are shown, including languages beyond the original four groups', () => {
+  const stream = formatBombujStream({ name: 'Bombuj • VOE', description: 'JA audio • přímý HLS', url: 'https://cdn.example/video.m3u8',
+    subtitles: [{ url: 'https://cdn.example/de.vtt', lang: 'de' }, { url: 'https://cdn.example/fr.vtt', lang: 'fra' }, { url: 'https://cdn.example/ar.vtt', lang: 'ar' }] });
+  assert.match(stream.title, /💬 🇩🇪 DE • 🇫🇷 FR • 🌐 AR\n/);
+  assert.deepEqual(stream.subtitles.map(s => s.lang), ['deu', 'fra', 'ara']);
+});
+
+test('arbitrary new accordion sections stay bound to their own links', () => {
+  const { parseBombujPlayerGroups } = require('./player-groups');
+  const groups = ['DE dabing', 'FR titulky', 'JA audio + CZ titulky', 'Nová speciální verze'];
+  const html = groups.map((label, i) => `<div class="dropdownlink">${label}</div><ul><li link="https://provider.example/${i}"><a>Player</a></li></ul>`).join('');
+  const players = parseBombujPlayerGroups(html);
+  assert.deepEqual(players.map(p => p.language), groups);
+  assert.deepEqual(players.map(p => p.url), groups.map((_, i) => `https://provider.example/${i}`));
+  const formatted = players.map(p => formatBombujStream({ name: 'Bombuj • ' + p.provider, description: p.language + ' • externí player', externalUrl: p.url }));
+  assert.match(formatted[0].title, /^🎧 🇩🇪 DE/);
+  assert.match(formatted[1].title, /💬 🇫🇷 FR \(Bombuj\)/);
+  assert.match(formatted[2].title, /^🎧 🇯🇵 JA\n💬 🇨🇿 CZ/);
+  assert.match(formatted[3].title, /^🎧 🌐 Nová speciální verze/);
 });

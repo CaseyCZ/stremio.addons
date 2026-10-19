@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('http');
+const { subtitleTracks, audioLabel, subtitleLabel, providerLabel } = require('./stream-display.js');
 
 const originalFetch = global.fetch.bind(global);
 const PUBLIC_PORT = Number(process.env.PORT || 7004);
@@ -298,35 +299,11 @@ global.fetch = async function resilientFetch(input, init = {}) {
 };
 
 function subtitleUrlsFromStream(stream) {
-  const values = [];
-  for (const subtitle of Array.isArray(stream?.subtitles) ? stream.subtitles : []) {
-    if (subtitle?.url) values.push({ url: String(subtitle.url), lang: subtitle.lang || 'ces' });
-  }
-  for (const raw of [stream?.externalUrl, stream?.url]) {
-    try {
-      const parsed = new URL(String(raw || ''));
-      const keys = ['sub_url', 'sub_file', 'sub1'];
-      for (let i = 1; i <= 8; i += 1) keys.push(`c${i}_file`);
-      for (const key of keys) {
-        const value = parsed.searchParams.get(key);
-        if (value && /^https?:\/\//i.test(value)) values.push({ url: value, lang: 'ces' });
-      }
-    } catch {}
-  }
-  return values;
+  return subtitleTracks([stream]);
 }
 
 function collectSubtitles(streams) {
-  const seen = new Set();
-  const out = [];
-  for (const stream of Array.isArray(streams) ? streams : []) {
-    for (const subtitle of subtitleUrlsFromStream(stream)) {
-      if (!/^https?:\/\//i.test(subtitle.url) || seen.has(subtitle.url)) continue;
-      seen.add(subtitle.url);
-      out.push({ id: `bombuj-sub-${out.length + 1}`, url: subtitle.url, lang: subtitle.lang || 'ces' });
-    }
-  }
-  return out;
+  return subtitleTracks(streams);
 }
 
 function qualityLabel(stream) {
@@ -341,18 +318,8 @@ function qualityLabel(stream) {
   return 'Direct';
 }
 
-function providerLabel(stream) {
-  return String(stream?.name || '').replace(/^Bombuj\s*•\s*/i, '').trim() || 'Bombuj';
-}
-
-function nativeTitle(stream, subtitles) {
-  const text = `${stream?.description || ''} ${stream?.title || ''}`;
-  const audio = /\bEN\s*dab/i.test(text) ? '🇬🇧 EN' : '🌐 ?';
-  let sub = 'Bez titulků';
-  if (/CZ\s*\/\s*SK|CZ-SK/i.test(text)) sub = '🇨🇿 CZ • 🇸🇰 SK';
-  else if (subtitles.length) sub = '🇨🇿 CZ';
-  else if (/\bEN\b.*\btit/i.test(text)) sub = '🇬🇧 EN';
-  return `🎧 ${audio}\n💬 ${sub}\n🎬 ${qualityLabel(stream)} • ${providerLabel(stream)}`;
+function nativeTitle(stream) {
+  return `🎧 ${audioLabel(stream)}\n💬 ${subtitleLabel(stream)}\n🎬 ${qualityLabel(stream)} • ${providerLabel(stream)}`;
 }
 
 function streamCacheKey(type, id) {

@@ -3,6 +3,7 @@
 const http = require('http');
 const { confirmedStremioEmbedFailure } = require('./provider-compat.js');
 const { validStreamtapeEmbed } = require('./streamtape-link.js');
+const { testUnblockAllowed, testDirectVoeAllowed } = require('./embed-test-policy.js');
 
 const PUBLIC_PORT = Number(process.env.PORT || 7004);
 const INNER_PORT = Number(process.env.BOMBUJ_PREFLIGHT_INNER_PORT || (PUBLIC_PORT + 1));
@@ -183,13 +184,21 @@ async function preflightStreams(payload, type, id) {
   const streams = Array.isArray(payload?.streams) ? payload.streams : [];
   const results = await Promise.all(streams.map(async (stream) => {
     if (stream?.url && /^https?:\/\//i.test(String(stream.url))) {
-      return { stream, state: 'ok', reason: 'direct-media', provider: providerName(stream) };
+      return { stream, state: 'unknown', reason: 'direct-media-client-playback-unverified', provider: providerName(stream) };
     }
     if (!stream?.externalUrl || !/^https?:\/\//i.test(String(stream.externalUrl))) {
       return { stream, state: 'unknown', reason: 'no-http-url', provider: providerName(stream) };
     }
+    // Preserve the exact web fallback for opted-in VOE even if a server HTML
+    // preflight fails. Server reachability does not establish client playback.
+    if (testDirectVoeAllowed(stream.externalUrl)) {
+      return { stream, state: 'unknown', reason: 'voe-original-web-fallback', provider: providerName(stream) };
+    }
     // Byse's owner explicitly rejects web.stremio.com. A server-side HTTP
     // 200 cannot validate an iframe/player that the browser is forbidden to load.
+    if (testUnblockAllowed(stream.externalUrl)) {
+      return { stream, state: 'unknown', reason: 'diagnostic-unfiltered-playback-unverified', provider: providerName(stream) };
+    }
     const incompatibility = confirmedStremioEmbedFailure(stream.externalUrl);
     if (incompatibility) {
       return { stream, state: 'failed', reason: incompatibility, provider: providerName(stream) };
