@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "/home/ubuntu/stremio.sktonline"
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
 if [[ "$(git branch --show-current)" != "Master" ]]; then
   echo "Refusing deploy: expected branch Master."

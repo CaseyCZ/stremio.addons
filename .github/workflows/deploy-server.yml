@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - Master
+      - refactor/addons-runtime-directory
       - fix/bombuj-voe-access-quality
       - release/bombuj-voe-direct
       - release/bombuj-runtime-deploy
@@ -145,6 +146,8 @@ jobs:
             console.log('Direct, protected Torrent, and configured Bombuj JSON routes verified');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
+          bash -n relocate-addons-runtime.sh
+          python3 scripts/test-relocate-addons-runtime.py
           bash -n deploy-bombuj-runtime.sh
           bash -n deploy-bombuj-unified.sh
           node --check ecosystem.bombuj.config.cjs
