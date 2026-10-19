@@ -85,6 +85,7 @@ fi
 # rollback-safe; does not modify any stream/manifest routes.
 if command -v nginx >/dev/null 2>&1; then
   bash "$PWD/scripts/install-nginx-stremio-configure-root.sh"
+  bash "$PWD/scripts/install-nginx-stremio-addons-alias.sh"
 fi
 
 # Verify the public/local reverse proxy no longer exposes the stale service.
