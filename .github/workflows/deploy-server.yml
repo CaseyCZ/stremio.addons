@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - Master
+      - release/bombuj-voe-direct
       - feature/unified-stremio-addons
       - feature/web-redesign
       - feature/migrate-bombuj-runtime

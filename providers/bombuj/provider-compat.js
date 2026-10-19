@@ -1,9 +1,11 @@
 'use strict';
+const { testUnblockAllowed } = require('./embed-test-policy.js');
 
 // A normal HTTP request cannot reproduce browser iframe/domain authorization.
 // Only explicitly verified Stremio-incompatible embed hosts belong here.
 // Match real hostnames, never arbitrary substrings or provider names.
 function confirmedStremioEmbedFailure(rawUrl) {
+  if (testUnblockAllowed(rawUrl)) return null;
   try {
     const url = new URL(String(rawUrl || ''));
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;

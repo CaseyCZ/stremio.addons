@@ -14,7 +14,9 @@ module.exports = {
     max_memory_restart: '512M',
     env: {
       NODE_ENV: 'production',
-      PORT: '7004'
+      PORT: '7004',
+      // Provider-direct HLS with the original web player kept as fallback.
+      BOMBUJ_DIRECT_VOE: '1'
     }
   }]
 };

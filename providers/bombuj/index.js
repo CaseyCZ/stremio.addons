@@ -6,6 +6,8 @@ const { movieImdbId, seriesImdbId } = require('./bombuj-cinemeta.js');
 const { parseSeriesCards, parseSeriesBrowseCards, parseEpisodeList, seriesBrowseUrl } = require('./series-catalog.js');
 const { rememberSource, findSource, sourceIdentity, normalizeTitle } = require('./source-identity.js');
 const { parseMovieCards } = require('./bombuj-listing.js');
+const { testDirectVoeAllowed } = require('./embed-test-policy.js');
+const { subtitleTracks } = require('./stream-display.js');
 
 const BOMBUJ_BASE = 'https://www.bombuj.si';
 const BOMBUJ_SERIES_BASE = 'https://serialy.bombuj.si';
@@ -431,17 +433,6 @@ async function findBombujSeriesEpisode(seriesItem, season, episode) {
     parseEpisodeList(html, season, seriesItem.slug).find(item => item.episode === episode) || null;
 }
 
-function subtitleFromUrl(url) {
-  try {
-    const parsed = new URL(url);
-    for (let index = 1; index <= 8; index += 1) {
-      const file = parsed.searchParams.get(`c${index}_file`);
-      if (file) return absoluteUrl(file, parsed.toString());
-    }
-  } catch {}
-  return null;
-}
-
 function rot13(value) {
   return String(value || '').replace(/[a-z]/gi, (character) => {
     const code = character.charCodeAt(0);
@@ -500,10 +491,14 @@ function extractScriptRedirect(html, baseUrl) {
 }
 
 async function resolveVoe(embedUrl, sourcePageUrl) {
+  const deadline = Date.now() + 10000;
   let current = embedUrl;
   let referer = sourcePageUrl || embedUrl;
   for (let depth = 0; depth < 4; depth += 1) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return null;
     const page = await fetchPage(current, {
+      signal: AbortSignal.timeout(remaining),
       headers: {
         Referer: referer,
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
@@ -586,7 +581,7 @@ function safeLabel(value) {
   return String(value || '').replace(/[\r\n]+/g, ' ').trim();
 }
 
-function makeDirectStream(player, direct, index, subtitle) {
+function makeDirectStream(player, direct, index, tracks) {
   const provider = safeLabel(player.provider) || `Zdroj ${index + 1}`;
   const language = safeLabel(player.language) || 'Bombuj';
   const extension = direct.type === 'hls' ? 'm3u8' : 'mp4';
@@ -596,7 +591,7 @@ function makeDirectStream(player, direct, index, subtitle) {
     url: direct.url,
     behaviorHints: {
       notWebReady: true,
-      bingeGroup: `bombuj-${normalize(provider) || index}`,
+      bingeGroup: `bombuj-${normalize(provider) || index}${testDirectVoeAllowed(player.resolvedUrl) ? '-' + normalize(language).replace(/\s+/g, '-') : ''}`,
       filename: `bombuj-${index + 1}.${extension}`,
       proxyHeaders: {
         request: {
@@ -605,25 +600,33 @@ function makeDirectStream(player, direct, index, subtitle) {
         }
       }
     },
-    ...(subtitle ? { subtitles: [{ id: `bombuj-${index}-cz`, url: subtitle, lang: 'ces' }] } : {})
+    ...(tracks.length ? { subtitles: tracks } : {})
+  };
+}
+
+function makeExternalStream(player, index, tracks) {
+  return {
+    name: `Bombuj • ${safeLabel(player.provider) || `Zdroj ${index + 1}`}`,
+    description: `${safeLabel(player.language) || 'Bombuj'} • externí player`,
+    externalUrl: player.resolvedUrl,
+    ...(tracks.length ? { subtitles: tracks } : {})
   };
 }
 
 async function playersToStreams(players, sourcePageUrl) {
+  const voeFallbacks = [];
   const resolved = await mapWithConcurrency(players, 3, async (player, index) => {
-    const subtitle = subtitleFromUrl(player.resolvedUrl);
+    const tracks = subtitleTracks([{ externalUrl: player.resolvedUrl }]);
     const direct = await resolveDirectPlayer(player, sourcePageUrl).catch(() => null);
-    if (direct?.url) return makeDirectStream(player, direct, index, subtitle);
-    return {
-      name: `Bombuj • ${safeLabel(player.provider) || `Zdroj ${index + 1}`}`,
-      description: `${safeLabel(player.language) || 'Bombuj'} • externí player`,
-      externalUrl: player.resolvedUrl,
-      ...(subtitle ? { subtitles: [{ id: `bombuj-${index}-cz`, url: subtitle, lang: 'ces' }] } : {})
-    };
+    if (direct?.url) {
+      if (testDirectVoeAllowed(player.resolvedUrl)) voeFallbacks[index] = makeExternalStream(player, index, tracks);
+      return makeDirectStream(player, direct, index, tracks);
+    }
+    return makeExternalStream(player, index, tracks);
   });
 
   const direct = resolved.filter((stream) => stream?.url);
-  const external = resolved.filter((stream) => stream?.externalUrl);
+  const external = [...resolved.filter((stream) => stream?.externalUrl), ...voeFallbacks.filter(Boolean)];
   return [...direct, ...external];
 }
 
