@@ -25,6 +25,27 @@ const bootstrap = String.raw`
     type === 'movie' && id === 'bombuj-movie-strange-harvest'
     ? {imdbId:'tt33400719',season:null,episode:null,id:'tt33400719'}
     : null;
+  const bridge = require('./api/bombuj-bridge');
+  bridge.getBombujJson = async requestPath => {
+    if (requestPath === '/manifest.json') return {
+      id:'community.caseycz.bombuj', version:'0.8.1', name:'Bombuj',
+      types:['movie','series'],
+      resources:[
+        {name:'stream',types:['movie','series'],idPrefixes:['tt','bombuj-movie-']},
+        {name:'meta',types:['movie','series'],idPrefixes:['tt','bombuj-movie-']},
+        {name:'catalog',types:['movie','series'],idPrefixes:['tt']},
+        {name:'subtitles',types:['movie','series'],idPrefixes:['tt']}
+      ],
+      catalogs:[{type:'movie',id:'bombuj-movies-search',name:'Films',
+                 extra:[{name:'search',isRequired:true}]}]
+    };
+    if (requestPath.startsWith('/catalog/')) return {metas:[{id:'tt33400719',name:'Strange Harvest'}]};
+    if (requestPath.startsWith('/meta/')) return {meta:{id:'tt33400719',name:'Strange Harvest'}};
+    if (requestPath.startsWith('/subtitles/')) return {subtitles:[]};
+    if (requestPath.startsWith('/stream/')) return {streams:[{name:'Bombuj mock',url:'https://example.invalid/mock.mp4'}]};
+    throw Error('Unknown Bombuj mock route: ' + requestPath);
+  };
+
   CinemetaApi.prototype.getMeta = async (type, id) => ({
     name: id === 'tt18546730' ? 'The Walking Dead: Dead City' : 'Strange Harvest',
     year: id === 'tt18546730' ? 2025 : 2024
@@ -137,6 +158,43 @@ async function token(payload) {
     assert.equal(badProviderRoot.status, 404);
     const invalidConfigureRoot = await fetch(BASE + '/enc1.not-a-valid.token.hmac', { redirect:'manual' });
     assert.equal(invalidConfigureRoot.status, 404);
+
+    // SKTOnline/SKTorrent and new configured providers all share the flat
+    // /<token>/manifest.json -> /<token>/stream/... contract.
+    const flatPrehrajto = await json('/' + credToken + '/manifest.json');
+    assert.equal(flatPrehrajto.status, 200);
+    assert.equal(flatPrehrajto.body.id, linked.body.id);
+    assert.ok(flatPrehrajto.body.idPrefixes.includes('sosac_ep_'));
+    const flatP = await json('/' + credToken + '/stream/movie/tt33400719.json');
+    assert.equal(flatP.status, 200);
+    assert.equal(flatP.body.streams.length, 1);
+    assert.equal(flatP.body.streams[0].name, 'Přehraj.to');
+    const flatEP = await json('/' + credToken + '/stream/series/sosac_ep_345.json');
+    assert.equal(flatEP.body.streams.length, 1);
+    assert.match(flatEP.body.streams[0].title, /2:6/);
+
+    const flatBombuj = await json('/' + bombujToken + '/manifest.json');
+    assert.equal(flatBombuj.status, 200);
+    assert.equal(flatBombuj.body.id, 'cz.caseycz.stremio.bombuj.unified');
+    assert.ok(flatBombuj.body.catalogs.some(x => x.id === 'bombuj-movies-search'));
+    assert.ok(flatBombuj.body.resources.some(x => x.name === 'stream'));
+    const flatBS = await json('/' + bombujToken + '/stream/movie/tt33400719.json');
+    assert.equal(flatBS.status, 200);
+    assert.equal(flatBS.body.streams[0].name, 'Bombuj mock');
+    const flatCatalog = await json('/' + bombujToken + '/catalog/movie/bombuj-movies-search/search=hope.json');
+    assert.equal(flatCatalog.status, 200);
+    assert.equal(flatCatalog.body.metas[0].id, 'tt33400719');
+    const flatMeta = await json('/' + bombujToken + '/meta/movie/tt33400719.json');
+    assert.equal(flatMeta.body.meta.name, 'Strange Harvest');
+    const nestedBombuj = await json('/' + bombujToken + '/bombuj/manifest.json');
+    assert.equal(nestedBombuj.status, 200);
+    assert.equal(nestedBombuj.body.id, flatBombuj.body.id);
+
+    // Configurable direct addons remain unchanged under flat routes.
+    const flatDirect = await json('/' + directToken + '/manifest.json');
+    assert.equal(flatDirect.body.id, 'cz.caseycz.stremio.sktonline.direct');
+    const noBombujOnPrehrajto = await json('/' + credToken + '/catalog/movie/bombuj-movies-search.json');
+    assert.equal(noBombujOnPrehrajto.status, 400);
 
     const movie = await json(prefix + '/stream/movie/sosac_m_123.json');
     assert.equal(movie.status, 200);
