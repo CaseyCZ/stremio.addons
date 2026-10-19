@@ -244,6 +244,8 @@ function movieReleaseMatches(candidate, title) {
   for (const word of remainder) {
     if (/^(?:19|20)\d{2}$/.test(word)) continue;
     if (movieReleaseWords.has(word)) { hasMediaTag = true; continue; }
+    // Czech/English conjunctions occur in language tags (CZ a SK / CZ and SK).
+    if (hasMediaTag && /^(?:a|and)$/.test(word)) continue;
     // Numeric codec/channel metadata only applies after a release tag,
     // never immediately after the movie title (e.g. Ted vs Ted 2).
     if (hasMediaTag && /^\d{1,3}$/.test(word)) continue;

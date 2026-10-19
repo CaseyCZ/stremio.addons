@@ -67,6 +67,8 @@ test('movie release matching is generic and preserves title/year boundaries', ()
     ['John.Wick.Chapter.2.2017.1080p.BluRay', ['John Wick'], '2014', false],
     ['Ted.2012.1080p.BluRay.x264-GECKOS', ['Ted'], '2012', true],
     ['Ted.Lasso.2012.1080p.BluRay', ['Ted'], '2012', false],
+    ['Mayday (2026) 1080p CZ a SK TITULKY', ['Mayday'], '2026', true],
+    ['Mayday 2026 CZ and SK titulky', ['Mayday'], '2026', true],
     ['Ted 2012 2', ['Ted'], '2012', false],
     ['Avatar.2009.Extended.2160p.UHD.BluRay.HEVC-RELEASE', ['Avatar'], '2009', true],
     ['Avatar.The.Way.Of.Water.2009.2160p', ['Avatar'], '2009', false]
