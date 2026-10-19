@@ -6,6 +6,8 @@ on:
       - 'api/prehrajto.js'
       - 'addon.js'
       - 'test-prehrajto.cjs'
+      - 'test-prehrajto-sosac.cjs'
+      - 'scripts/test-prehrajto-sosac-http.cjs'
       - 'public/configure.html'
       - '.github/workflows/test-prehrajto.yml'
   workflow_dispatch:
@@ -29,7 +31,9 @@ jobs:
         run: |
           node --check api/prehrajto.js
           node --check addon.js
-          node --test test-prehrajto.cjs
+          node --test test-prehrajto.cjs test-prehrajto-sosac.cjs
+          node --check scripts/test-prehrajto-sosac-http.cjs
+          node scripts/test-prehrajto-sosac-http.cjs
       - name: Verify standalone manifest route without external API traffic
         run: |
           node - <<'NODE'
