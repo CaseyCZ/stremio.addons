@@ -136,7 +136,7 @@ async function token(payload) {
       assert.equal(target.pathname, '/configure');
       const page = await fetch(target);
       assert.equal(page.status, 200);
-      assert.match(await page.text(), /Propojení se Sosáčem/);
+      assert.match(await page.text(), /id="sosacSettings"/);
     }
     await configurationLink('/' + credToken);
     await configurationLink('/' + credToken + '/');
