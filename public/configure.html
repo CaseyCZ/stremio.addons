@@ -9,229 +9,192 @@
 <title>CaseyCZ Stremio Addons | Konfigurace</title>
 <style>
 :root {
-  color-scheme: dark;
-  --bg: #0b1020;
-  --panel: #111827;
-  --panel2: #172033;
-  --line: #2a3850;
-  --text: #f8fafc;
-  --muted: #94a3b8;
-  --soft: #8294ab;
-  --blue: #38bdf8;
-  --blue-dark: #0284c7;
-  --good: #86efac;
-  --bad: #fca5a5;
+  color-scheme:dark;
+  --bg:#0b1020;
+  --panel:#111827;
+  --panel2:#172033;
+  --border:#2a3850;
+  --text:#f8fafc;
+  --muted:#94a3b8;
+  --accent:#38bdf8;
+  --accent2:#0284c7;
+  --ok:#86efac;
+  --error:#fca5a5;
 }
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html { scroll-behavior: smooth; }
-body {
-  margin: 0;
-  min-height: 100vh;
-  padding: 28px 18px;
-  background: radial-gradient(circle at top, #172554 0, #0b1020 42%, #070b14 100%);
-  color: var(--text);
-  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth}
+body{
+  margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;
+  background:radial-gradient(circle at top,#172554 0,#0b1020 42%,#070b14 100%);
+  font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text)
 }
-button, input, select { font: inherit; }
-button, a { -webkit-tap-highlight-color: transparent; }
-button { cursor: pointer; }
-button:disabled { cursor: not-allowed; opacity: .55; }
-button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible {
-  outline: 2px solid var(--blue); outline-offset: 3px;
+button,input,select{font:inherit}
+button,a{-webkit-tap-highlight-color:transparent}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.55}
+button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible{
+  outline:2px solid var(--accent);outline-offset:3px
 }
-a { color: inherit; }
-.page {
-  width: min(100%, 1010px);
-  margin: 0 auto;
-  padding: 27px 30px 24px;
-  background: rgba(17, 24, 39, .96);
-  border: 1px solid var(--line);
-  border-radius: 24px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, .45);
+a{color:inherit}
+.wrap{width:min(100%,680px)}
+.card{
+  padding:28px;border:1px solid var(--border);border-radius:22px;
+  background:rgba(17,24,39,.96);box-shadow:0 24px 70px rgba(0,0,0,.45)
 }
-.topbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 0 0 20px; border-bottom: 1px solid var(--line);
+.badges{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.badge{
+  display:inline-flex;align-items:center;gap:7px;padding:6px 10px;
+  border:1px solid #1d4ed8;border-radius:999px;
+  background:#0f1f46;color:#bfdbfe;font-size:.78rem;font-weight:700
 }
-.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-size: 15px; font-weight: 750; }
-.brand-mark {
-  display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px;
-  background: linear-gradient(135deg, #38bdf8, #0284c7);
-  color: #071320; font-size: 22px; font-weight: 900;
+h1{margin:18px 0 6px;font-size:1.65rem;line-height:1.2;letter-spacing:-.4px}
+.lead{margin:0 0 22px;color:var(--muted);line-height:1.55}
+.field{margin:16px 0}
+.field label,.output label{
+  display:block;margin-bottom:7px;color:#dbeafe;font-size:.9rem;font-weight:650
 }
-.brand small { margin-left: 3px; font-size: 10px; letter-spacing: 1.2px; color: var(--muted); }
-.version {
-  padding: 6px 11px; border: 1px solid #334155; border-radius: 99px;
-  background: #172033; color: #cbd5e1; font-size: 12px; font-weight: 650; white-space: nowrap;
+input,select{
+  width:100%;min-height:46px;padding:0 13px;
+  border:1px solid var(--border);border-radius:12px;
+  background:#0b1220;color:var(--text);outline:none
 }
-.hero { padding: 28px 0 13px; }
-.eyebrow { margin: 0 0 9px; text-transform: uppercase; letter-spacing: 1.5px; color: #7dd3fc; font-size: 11px; font-weight: 800; }
-h1 { margin: 0; font-size: clamp(1.75rem, 3.5vw, 2.2rem); line-height: 1.17; letter-spacing: -.8px; }
-h1 span { color: var(--blue); }
-.lead { max-width: 720px; margin: 10px 0 17px; color: #b9c5d7; line-height: 1.65; }
-.hero-points { display: flex; gap: 8px; flex-wrap: wrap; }
-.hero-points span {
-  display: inline-flex; align-items: center; padding: 6px 10px;
-  border: 1px solid #1d4ed8; border-radius: 99px;
-  background: #0f1f46; color: #bfdbfe; font-size: 12px; font-weight: 700;
+input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.12)}
+input::placeholder{color:#7c8ca3}
+.switch-block{margin-top:22px}
+.switch-title{
+  margin:0 0 8px;color:var(--muted);font-size:.75rem;
+  font-weight:800;letter-spacing:.06em;text-transform:uppercase
 }
-.section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 21px 0 13px; }
-.section-heading h2 { margin: 0; font-size: 18px; letter-spacing: -.3px; }
-.section-heading p { margin: 0; color: var(--muted); font-size: 12px; }
-.addons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; align-items: stretch; }
-.addon {
-  display: flex; flex-direction: column; min-width: 0; padding: 24px;
-  border: 1px solid #2a3850; border-radius: 20px; background: #0e1728;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
-  transition: border-color .18s, background-color .18s;
+.mode-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.mode-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;
+  padding:9px 12px;border:1px solid #334155;border-radius:999px;
+  background:#172033;color:#94a3b8;font-size:.81rem;font-weight:750;
+  transition:background .15s,border-color .15s,color .15s
 }
-.addon:hover { border-color: #42618a; background: #111d31; }
-.addon-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
-.provider-icon { display: grid; place-items: center; width: 47px; height: 47px; border-radius: 14px; font-size: 23px; font-weight: 800; }
-#sktonline .provider-icon { background: #0f2c48; color: #7dd3fc; }
-#sktorrent .provider-icon { background: #103932; color: #86efac; }
-#bombuj .provider-icon { background: #33223b; color: #f5b5e9; }
-#prehrajto .provider-icon { background: #373123; color: #f9dea0; }
-.provider-pill {
-  display: inline-flex; align-items: center; padding: 6px 10px;
-  border: 1px solid #334155; border-radius: 99px; background: #172033;
-  color: #cbd5e1; font-size: 10px; letter-spacing: .45px; font-weight: 800;
+.mode-btn:hover{border-color:#475569;color:#e2e8f0}
+.mode-btn.active{
+  border-color:#1d4ed8;background:#0f1f46;color:#bfdbfe;
+  box-shadow:0 0 0 2px rgba(29,78,216,.12)
 }
-.addon h3 { margin: 0; font-size: 21px; line-height: 1.25; letter-spacing: -.5px; }
-.addon .sub { margin: 4px 0 12px; color: var(--muted); font-size: 13px; }
-.description { margin: 0 0 14px; color: #cbd5e1; font-size: 14px; line-height: 1.6; }
-.features { display: flex; gap: 7px; flex-wrap: wrap; margin: 0 0 22px; padding: 0; list-style: none; }
-.features li {
-  padding: 5px 9px; border: 1px solid #344154; border-radius: 99px;
-  background: var(--panel2); color: #bfcee0; font-size: 11px; font-weight: 650;
+.addons{margin-top:20px}
+.addon{min-width:0}
+.addon-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.provider-icon{
+  display:grid;place-items:center;width:44px;height:44px;border-radius:12px;
+  background:var(--panel2);font-size:21px
 }
-.card-bottom { margin-top: auto; }
-.account-note { display: flex; align-items: center; gap: 8px; margin: 0 0 13px; color: #bccadd; font-size: 12px; }
-.account-note .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); flex: 0 0 auto; }
-.account-note.locked .dot { background: #fbbf77; }
-.action {
-  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
-  width: 100%; min-height: 48px; padding: 12px 15px; border: 1px solid transparent;
-  border-radius: 12px; background: var(--blue-dark); text-align: center;
-  color: #fff; font-size: 14px; font-weight: 750; text-decoration: none;
-  transition: background-color .16s, transform .16s;
+.provider-pill{
+  display:inline-flex;align-items:center;padding:5px 10px;border:1px solid #334155;
+  border-radius:999px;background:#172033;color:#cbd5e1;font-size:.71rem;font-weight:700
 }
-.action:not(:disabled):hover { background: #0ea5e9; transform: translateY(-1px); }
-.action-secondary { background: #243149; border-color: var(--line); color: #f1f5f9; }
-.action-secondary:not(:disabled):hover { background: #334155; }
-.action:disabled { transform: none; }
-.feedback { margin: 10px 0 0; min-height: 0; font-size: 12px; color: var(--good); overflow-wrap: anywhere; }
-.feedback.error { color: var(--bad); }
-.output { margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--line); }
-.output label { margin-bottom: 8px; }
-.result-row { display: flex; gap: 8px; align-items: stretch; }
-.result-row input { min-width: 0; flex: 1; font-size: 11px; }
-.copy-btn {
-  flex: 0 0 auto; padding: 0 12px; border: 1px solid #374b64; border-radius: 12px;
-  background: #243149; color: #e2e8f0; font-size: 12px; font-weight: 700;
+.addon h2{margin:0;font-size:1.3rem;line-height:1.3}
+.addon .sub{margin:4px 0 12px;color:var(--muted);font-size:.88rem}
+.description{margin:0 0 14px;color:#cbd5e1;font-size:.88rem;line-height:1.6}
+.features{display:flex;flex-wrap:wrap;gap:7px;list-style:none;margin:0 0 17px;padding:0}
+.features li{
+  padding:5px 10px;border:1px solid var(--border);border-radius:99px;
+  background:var(--panel2);color:#b9c9dc;font-size:.75rem;font-weight:650
 }
-.copy-btn:hover, .reveal:hover { background: #334155; }
-.output .install { margin-top: 10px; }
-.field { margin: 0 0 15px; }
-.field label, .output label { display: block; margin-bottom: 7px; color: #dbeafe; font-size: 13px; font-weight: 650; }
-input, select {
-  width: 100%; min-height: 46px; padding: 10px 13px;
-  border: 1px solid var(--line); border-radius: 12px;
-  background: #0b1220; color: var(--text); outline: none;
+.account-note{display:flex;align-items:center;gap:8px;margin:0 0 11px;color:#bac6d7;font-size:.82rem}
+.account-note .dot{width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:var(--ok)}
+.account-note.locked .dot{background:#fbbf77}
+.action{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  width:100%;min-height:48px;padding:12px 15px;border:0;border-radius:12px;
+  background:var(--accent2);color:#fff;text-decoration:none;text-align:center;
+  font-size:1rem;font-weight:750;transition:filter .15s
 }
-input::placeholder { color: #75849a; }
-input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(56,189,248,.12); }
-.password-row { display: flex; gap: 8px; }
-.password-row input { min-width: 0; flex: 1; }
-.reveal { flex: 0 0 auto; padding: 0 13px; border: 1px solid var(--line); border-radius: 12px; background: #243149; color: #e2e8f0; font-size: 12px; font-weight: 700; }
-.torrent-fields { padding: 4px 0 2px; }
-.language-setting {
-  display: flex; align-items: center; justify-content: space-between; gap: 15px;
-  margin: 20px 0 0; padding: 17px 20px;
-  border: 1px solid var(--line); border-radius: 16px; background: #0e1728;
-  color: #cbd5e1; font-size: 13px;
+.action:not(:disabled):hover{filter:brightness(1.12)}
+.action-secondary{background:#243149;border:1px solid var(--border)}
+.feedback{margin:11px 0 0;color:var(--ok);font-size:.84rem;overflow-wrap:anywhere}
+.feedback.error{color:var(--error)}
+.output{margin-top:18px;padding-top:17px;border-top:1px solid var(--border)}
+.output label{margin-bottom:8px}
+.result-row,.password-row{display:flex;gap:8px;align-items:stretch}
+.result-row input,.password-row input{min-width:0;flex:1}
+.result-row input{font-size:.78rem}
+.copy-btn,.reveal{
+  flex:0 0 auto;padding:0 13px;border:1px solid var(--border);
+  border-radius:12px;background:#243149;color:#e2e8f0;font-size:.84rem;font-weight:700
 }
-.language-setting select { width: auto; min-width: 160px; min-height: 42px; }
-.settings { margin: 13px 0 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: #0e1728; }
-.settings summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 20px; cursor: pointer; list-style: none; }
-.settings summary::-webkit-details-marker { display: none; }
-.settings summary:hover { background: #142137; }
-.settings-label { display: flex; align-items: center; gap: 13px; min-width: 0; }
-.settings-icon { display: grid; place-items: center; flex: 0 0 auto; width: 42px; height: 42px; background: var(--panel2); border-radius: 12px; font-size: 20px; }
-.settings-title { display: block; font-size: 14px; font-weight: 800; }
-.settings-sub { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; }
-.settings-state { margin-left: auto; color: #93c5fd; font-size: 11px; font-weight: 800; white-space: nowrap; }
-.chevron { color: #93c5fd; font-size: 18px; transition: transform .2s; }
-.settings[open] .chevron { transform: rotate(180deg); }
-.settings-content { padding: 0 20px 20px; border-top: 1px solid var(--line); }
-.settings-content > p { margin: 16px 0; color: #c2cbd9; font-size: 13px; line-height: 1.65; }
-.settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
-.settings-hint { margin: 0; color: var(--muted); font-size: 12px; }
-.settings-hint.warn { color: #fdba74; }
-.small-note { color: var(--muted); font-size: 12px; line-height: 1.7; }
-.footer {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  margin-top: 18px; padding: 18px 0 2px; border-top: 1px solid var(--line);
-  color: #8294ab; font-size: 12px;
+.copy-btn:hover,.reveal:hover{filter:brightness(1.12)}
+.output .install{margin-top:10px}
+.torrent-fields{padding-top:2px}
+.settings{margin:21px 0 0;border:1px solid var(--border);border-radius:12px;background:var(--panel2);overflow:hidden}
+.settings summary{
+  display:flex;align-items:center;gap:11px;padding:14px;cursor:pointer;list-style:none
 }
-.footer a { color: #a5cdee; text-decoration: none; }
-@media (max-width: 700px) {
-  body { padding: 14px; }
-  .page { padding: 21px; border-radius: 22px; }
-  .hero { padding: 24px 0 11px; }
-  .addons { grid-template-columns: 1fr; gap: 12px; }
-  .addon { padding: 20px; }
-  .addon-top { margin-bottom: 13px; }
-  .features { margin-bottom: 19px; }
-  .settings-fields { grid-template-columns: 1fr; gap: 0; }
-  .settings summary { padding: 16px; }
-  .settings-content { padding: 0 16px 16px; }
-  .settings-state { display: none; }
-  .footer { align-items: flex-start; flex-direction: column; }
+.settings summary::-webkit-details-marker{display:none}
+.settings-label{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.settings-icon{font-size:19px}
+.settings-title{display:block;font-size:.9rem;font-weight:750}
+.settings-sub{display:block;color:var(--muted);font-size:.79rem}
+.settings-state{color:#93c5fd;font-size:.72rem;white-space:nowrap}
+.chevron{color:#93c5fd;font-size:18px;transition:transform .2s}
+.settings[open] .chevron{transform:rotate(180deg)}
+.settings-content{padding:0 15px 15px;border-top:1px solid var(--border)}
+.settings-content>p{color:#cbd5e1;font-size:.84rem;line-height:1.5}
+.settings-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.settings-hint{color:var(--muted)}
+.settings-hint.warn{color:#fdba74}
+.note{
+  margin:18px 0 0;padding:12px 14px;border:1px solid var(--border);
+  border-radius:12px;background:var(--panel2);
+  color:#cbd5e1;font-size:.86rem;line-height:1.45
 }
-@media (max-width: 430px) {
-  .topbar { gap: 8px; }
-  .brand small { display: none; }
-  .version { font-size: 11px; padding: 5px 8px; }
-  .section-heading p { display: none; }
-  .lead { font-size: 14px; }
-  .language-setting { flex-direction: column; align-items: stretch; gap: 9px; padding: 15px; }
-  .language-setting select { width: 100%; }
-  .result-row { gap: 6px; }
-  .copy-btn { padding: 0 10px; }
+.foot{margin:14px 4px 0;color:#64748b;text-align:center;font-size:.76rem;line-height:1.7}
+.cookie-settings-link{
+  padding:0;border:0;background:transparent;color:inherit;font:inherit;
+  text-decoration:underline;text-underline-offset:3px;cursor:pointer
 }
-@media (prefers-reduced-motion: reduce) {
-  .action, .chevron, .addon { transition: none; }
+@media(max-width:520px){
+  body{padding:14px}
+  .card{padding:21px}
+  .mode-switch{gap:7px}
+  .mode-btn{padding:9px 6px;font-size:.78rem}
+  .result-row,.password-row{gap:6px}
+  .copy-btn,.reveal{padding:0 10px}
+  .settings-fields{grid-template-columns:1fr;gap:0}
+  .settings-state{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .mode-btn,.action,.chevron{transition:none}
 }
 </style>
 </head>
 <body>
-<main class="page">
-  <header class="topbar">
-    <a class="brand" href="/stremio-addons/configure" aria-label="CaseyCZ Stremio – domů">
-      <span class="brand-mark" aria-hidden="true">C</span> CaseyCZ <small>STREMIO</small>
-    </a>
-    <span class="version" id="versionBadge">Verze …</span>
-  </header>
+<main class="wrap">
+  <section class="card">
+    <div class="badges">
+      <span class="badge">🎬 4 doplňky</span>
+      <span class="badge" id="versionBadge">📦 Verze …</span>
+      <span class="badge">▶️ Stremio</span>
+    </div>
 
-  <section class="hero">
-    <p class="eyebrow">CASEYCZ / STREMIO</p>
-    <h1>Stremio <span>doplňky</span></h1>
-    <p class="lead">Čtyři samostatné zdroje filmů a seriálů. Vyber si, co chceš přidat do Stremia – každý doplněk si nainstaluješ zvlášť.</p>
-    <div class="hero-points"><span>✓ 4 samostatné doplňky</span><span>✓ Přímé streamy i P2P</span><span>✓ České a slovenské zdroje</span></div>
-  </section>
+    <h1>Stremio Addons</h1>
+    <p class="lead">Vyber zdroj filmů a seriálů a přidej si ho do Stremia. Každý doplněk funguje samostatně.</p>
 
-  <div class="section-heading">
-    <h2>Vyber si doplněk</h2>
-    <p>Instalovat můžeš jeden až čtyři, každý zvlášť.</p>
-  </div>
+    <div class="field">
+      <label for="uiLanguage">Jazyk metadat</label>
+      <select id="uiLanguage"><option value="cs">Čeština</option><option value="sk">Slovenština</option><option value="en">English</option></select>
+    </div>
 
-  <section class="addons" aria-label="Doplňky Stremio">
-    <article class="addon" id="sktonline">
+    <div class="switch-block">
+      <div class="switch-title">Vyber doplněk</div>
+      <div class="mode-switch" role="tablist" aria-label="Zdroj videa">
+        <button class="mode-btn active" type="button" role="tab" id="tab-sktonline" aria-selected="true" aria-controls="sktonline" data-provider-tab="sktonline">▶️ SKTOnline</button>
+        <button class="mode-btn" type="button" role="tab" id="tab-sktorrent" aria-selected="false" aria-controls="sktorrent" data-provider-tab="sktorrent">🧲 SKTorrent</button>
+        <button class="mode-btn" type="button" role="tab" id="tab-bombuj" aria-selected="false" aria-controls="bombuj" data-provider-tab="bombuj">🍿 Bombuj</button>
+        <button class="mode-btn" type="button" role="tab" id="tab-prehrajto" aria-selected="false" aria-controls="prehrajto" data-provider-tab="prehrajto">▶️ Přehraj.to</button>
+      </div>
+    </div>
+
+<section class="addons" aria-label="Doplňky Stremio">
+    <article class="addon" id="sktonline" role="tabpanel" aria-labelledby="tab-sktonline">
       <div class="addon-top"><span class="provider-icon" aria-hidden="true">▶</span><span class="provider-pill">DIRECT</span></div>
-      <h3>SKTOnline</h3><p class="sub">Přímé přehrávání</p>
+      <h2>SKTOnline</h3><p class="sub">Přímé přehrávání</p>
       <p class="description">Vyhledá přímá videa, rozpozná dostupné kvality, jazyky a titulky.</p>
       <ul class="features"><li>Video Direct</li><li>CZ / SK</li><li>Titulky</li></ul>
       <div class="card-bottom">
@@ -246,9 +209,9 @@ input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
       </div>
     </article>
 
-    <article class="addon" id="sktorrent">
+    <article class="addon" id="sktorrent" role="tabpanel" aria-labelledby="tab-sktorrent" hidden>
       <div class="addon-top"><span class="provider-icon" aria-hidden="true">🧲</span><span class="provider-pill">P2P</span></div>
-      <h3>SKTorrent</h3><p class="sub">Torrentové zdroje</p>
+      <h2>SKTorrent</h3><p class="sub">Torrentové zdroje</p>
       <p class="description">Samostatné P2P streamy s původním názvem releasu, kvalitou a počtem seederů.</p>
       <ul class="features"><li>Magnet / P2P</li><li>Seeders</li><li>Releasy</li></ul>
       <div class="card-bottom">
@@ -267,9 +230,9 @@ input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
       </div>
     </article>
 
-    <article class="addon" id="bombuj">
+    <article class="addon" id="bombuj" role="tabpanel" aria-labelledby="tab-bombuj" hidden>
       <div class="addon-top"><span class="provider-icon" aria-hidden="true">🍿</span><span class="provider-pill">FILMY & SERIÁLY</span></div>
-      <h3>Bombuj</h3><p class="sub">Filmy, seriály a přehrávače</p>
+      <h2>Bombuj</h3><p class="sub">Filmy, seriály a přehrávače</p>
       <p class="description">Procházej katalogy filmů a seriálů a vyber si z dostupných možností přehrávání.</p>
       <ul class="features"><li>Katalogy</li><li>Cinemeta</li><li>Web / Direct</li></ul>
       <div class="card-bottom">
@@ -291,9 +254,9 @@ input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
         </div>
       </div>
     </article>
-    <article class="addon" id="prehrajto">
+    <article class="addon" id="prehrajto" role="tabpanel" aria-labelledby="tab-prehrajto" hidden>
       <div class="addon-top"><span class="provider-icon" aria-hidden="true">▶</span><span class="provider-pill">MP4 DIRECT</span></div>
-      <h3>Přehraj.to</h3><p class="sub">Přímé streamy a titulky</p>
+      <h2>Přehraj.to</h3><p class="sub">Přímé streamy a titulky</p>
       <p class="description">Filmy a epizody z Přehraj.to s výběrem dostupných verzí a titulky podle konkrétního videa.</p>
       <ul class="features"><li>Bez účtu</li><li>MP4 direct</li><li>CZ / SK titulky</li></ul>
       <div class="card-bottom">
@@ -318,11 +281,7 @@ input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
     </article>
   </section>
 
-  <div class="language-setting">
-    <label for="uiLanguage">Jazyk doplňků</label>
-    <select id="uiLanguage"><option value="cs">Čeština</option><option value="sk">Slovenština</option><option value="en">English</option></select>
-  </div>
-  <details class="settings" id="sosacSettings">
+<details class="settings" id="sosacSettings">
     <summary>
       <span class="settings-label">
         <span class="settings-icon" aria-hidden="true">🔗</span>
@@ -340,16 +299,28 @@ input:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb
     </div>
   </details>
 
-  <footer class="footer">
-    <span>© CaseyCZ · Neoficiální doplňky pro Stremio</span>
-    <span>Streamy se přehrávají ze zdroje. Instalační odkazy s přihlášením nesdílej.</span>
-  </footer>
+    <div class="note">Instalační odkazy s přihlašovacími údaji jsou chráněné, ale stále citlivé. Nikdy je veřejně nesdílej.</div>
+  </section>
+  <div class="foot" data-cookie-settings-host>Neoficiální komunitní doplňky pro Stremio. · <button class="cookie-settings-link" type="button" data-cookie-settings>Nastavení cookies</button></div>
 </main>
 
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
 const cards = ['sktonline','sktorrent','bombuj','prehrajto'];
+const providerTabs = document.querySelectorAll('[data-provider-tab]');
+for (const tab of providerTabs) {
+  tab.addEventListener('click', () => {
+    for (const other of providerTabs) {
+      const selected = other === tab;
+      other.classList.toggle('active', selected);
+      other.setAttribute('aria-selected', String(selected));
+      const panel = $(other.dataset.providerTab);
+      if (panel) panel.hidden = !selected;
+    }
+  });
+}
+
 const defaultBombujPath = '/stremio-addons/bombuj/manifest.json';
 
 function base() {
