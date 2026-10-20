@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="readme-header.svg" alt="CaseyCZ Stremio Addons: SKTOnline, SKTorrent, Bombuj a Přehraj.to" width="100%" />
+  <img src="readme-header.svg" alt="CaseyCZ Stremio Addons – SKTOnline, SKTorrent, Bombuj a Přehraj.to" width="100%" />
 </p>
 
 <p align="center">
@@ -7,82 +7,82 @@
 </p>
 
 <p align="center">
-  Neoficiální komunitní sada doplňků pro <strong>Stremio</strong>: <strong>SKTOnline Direct</strong>, <strong>SKTorrent P2P</strong>, <strong>Bombuj</strong> a <strong>Přehraj.to Direct</strong>.
+  Čtyři komunitní doplňky pro <strong>Stremio</strong> na jednom místě.<br>
+  Vyber si zdroje filmů a seriálů, které chceš používat.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/package-json/v/CaseyCZ/stremio.addons?style=for-the-badge&label=VERZE&color=38BDF8&labelColor=0284C7" alt="Aktuální verze CaseyCZ Stremio Addons" />
+  <img src="https://img.shields.io/github/package-json/v/CaseyCZ/stremio.addons?style=for-the-badge&label=VERZE&color=38BDF8&labelColor=0284C7" alt="Aktuální verze" />
 </p>
 
 <p align="center">
-  <a href="https://130.61.49.108/stremio-addons/configure"><img src="https://img.shields.io/badge/Otev%C5%99%C3%ADt-Spole%C4%8Dnou%20konfiguraci-198CC8?style=for-the-badge&labelColor=14263B" alt="Otevřít konfiguraci všech čtyř doplňků" /></a>
-  <a href="https://130.61.49.108/stremio-addons/bombuj/manifest.json"><img src="https://img.shields.io/badge/Bombuj-P%C5%99%C3%ADm%C3%A1%20instalace-AD6CAF?style=for-the-badge&labelColor=14263B" alt="Bombuj – přímá instalace bez přihlášení" /></a>
+  <a href="https://130.61.49.108/stremio-addons/configure"><img src="https://img.shields.io/badge/Konfigurace-Otev%C5%99%C3%ADt-38BDF8?style=for-the-badge&labelColor=0284C7&logo=googlechrome&logoColor=white" alt="Otevřít konfiguraci doplňků" /></a>
 </p>
 
 ## O projektu
 
-**CaseyCZ Stremio Addons** nabízí na jedné konfigurační stránce čtyři odděleně instalovatelné doplňky. Každý má vlastní manifest a funguje samostatně.
+**CaseyCZ Stremio Addons** přidává do Stremia další možnosti, kde hledat a přehrávat filmy a seriály. Všechny čtyři doplňky jsou **samostatné** – můžeš si nainstalovat jeden, několik nebo všechny.
 
-| Doplněk | Zdroje | Přihlášení |
+## Dostupné doplňky
+
+| Doplněk | Co nabízí | Potřebuje účet? |
 | --- | --- | --- |
-| 🎬 **SKTOnline Direct** | Přímé streamy a dostupné titulky | Nepotřebuje |
-| 🧲 **SKTorrent P2P** | Torrentové zdroje se seedery a kvalitou | Vlastní účet SKTorrent |
-| 🍿 **Bombuj** | Filmy, seriály, přehrávače a Cinemeta | Nepotřebuje |
-| ▶ **Přehraj.to Direct** | Přímá MP4 CDN videa a titulky dle dostupnosti | Nepotřebuje |
+| 🎬 **SKTOnline Direct** | Přímé video streamy a dostupné titulky. | **Ne** |
+| 🧲 **SKTorrent P2P** | Torrentové zdroje včetně informací o kvalitě a seederech. | **Ano, SKTorrent** |
+| 🍿 **Bombuj** | Filmy, seriály, katalogy a dostupné možnosti přehrávání. | **Ne** |
+| ▶️ **Přehraj.to Direct** | Přímé přehrávání videí, více dostupných verzí a titulky. | **Ne** |
+
+Každý zdroj funguje nezávisle na ostatních. Když u jednoho filmu něco nenajdeš, můžeš zkusit jiný doplněk.
 
 ## Hlavní funkce
 
-- 🎬 přímé video zdroje SKTOnline
-- 🧲 samostatně instalovatelné P2P torrenty SKTorrent
-- 🍿 samostatný Bombuj s filmovými a seriálovými katalogy
-- ▶ samostatné Přehraj.to přes česká vyhledávací a resolver API
-- 💬 dostupné titulky a rozpoznaný jazyk přehrávání
-- 🔗 kompatibilita titulů přes IMDb/Cinemeta i vlastní ID Bombuj
-- ⚡ rychlejší opakované vyhledávání díky dočasné cache
-- 📱 podpora běžných Stremio klientů podle možností jejich přehrávačů
+- 🎬 **Filmy a seriály** z několika různých zdrojů přímo ve Stremiu.
+- 📺 **Výběr kvality** podle dostupných verzí videa.
+- 🇨🇿 🇸🇰 **Přehledné označení jazyků** tam, kde je dokážeme rozpoznat.
+- 💬 **Titulky**, pokud jsou u konkrétního videa dostupné.
+- 🔍 **Vyhledávání a katalogy** podle možností jednotlivých doplňků.
+- ⚡ **Rychlejší načítání** díky průběžným optimalizacím vyhledávání.
 
-## Společný repozitář
+## Instalace
 
-Všechny čtyři doplňky i konfigurátor jsou spravovány v [CaseyCZ/stremio.addons](https://github.com/CaseyCZ/stremio.addons). Bombuj se spouští z `providers/bombuj/`. Pracovní adresář na Oracle je `/home/ubuntu/stremio.addons`. **Nová hlavní veřejná adresa je `/stremio-addons/`**. Původní veřejná `/stremio-sktonline/` se ruší bez aliasu; už nainstalované doplňky z této cesty je proto nutné ve Stremiu nahradit nově vygenerovanými odkazy. Původní veřejná `/stremio-bombuj/` se rovněž ruší; Bombuj bez propojení se Sosáčem je nyní pod `/stremio-addons/bombuj/manifest.json`, zatímco propojená instalace se Sosáčem používá `/stremio-addons/<šifrovaný-token>/manifest.json`. Interní Bombuj stále běží odděleně na portu 7004. Interní PM2 procesy mají sjednocené názvy: `stremio-addons` (port 7003) a `stremio-addons-bombuj` (port 7004). Šifrovací klíč a jeho původní cesta `/home/ubuntu/.stremio-sktonline-config-key` se nemění, aby existující šifrované konfigurace zůstaly čitelné.
+1. Otevři **[konfigurační stránku](https://130.61.49.108/stremio-addons/configure)**.
+2. Vyber doplněk, který chceš používat. Pro **SKTorrent P2P** vyplň svůj účet; ostatní zdroje účet nevyžadují.
+3. Použij vygenerovaný instalační odkaz a přidej doplněk do **Stremia**.
 
-## Instalace doplňků
+Doplňky můžeš kdykoliv přidávat samostatně. Není nutné instalovat celou sadu.
 
-**Společná konfigurace:** [https://130.61.49.108/stremio-addons/](https://130.61.49.108/stremio-addons/) — pro instalaci všech čtyř doplňků:
-
-1. **SKTOnline Direct** – vybereš instalaci bez přihlášení.
-2. **SKTorrent P2P** – zadáš svůj SKTorrent účet a po ověření získáš šifrovaný instalační odkaz.
-3. **Bombuj** – nainstaluješ bez přihlášení; případně můžeš zapnout volitelné propojení se Sosáčem.
-4. **Přehraj.to Direct** – bez přihlášení na `/stremio-addons/prehrajto/manifest.json`; pro položky z katalogu Sosáč vyplň údaje v sekci **Propojení se Sosáčem** a vytvoř šifrovaný instalační odkaz.
-
-Tlačítko **Bombuj – Přímá instalace** používá také sjednocenou cestu `/stremio-addons/bombuj/manifest.json`. Doplňky můžeš instalovat nezávisle v libovolné kombinaci.
+**Přímé odkazy bez přihlášení:** [🍿 Bombuj](https://130.61.49.108/stremio-addons/bombuj/manifest.json) · [▶️ Přehraj.to](https://130.61.49.108/stremio-addons/prehrajto/manifest.json)
 
 ## Volitelné propojení se Sosáčem
 
-Můžeš zadat své údaje Sosáč pro rozpoznání položek z jeho katalogu. Každý doplněk pak nabídne své vlastní dostupné streamy také u podporovaných titulů Sosáč.
+Používáš také **[Stremio Sosáč](https://github.com/CaseyCZ/stremio.sosac)**? V konfiguraci můžeš zapnout propojení se svým účtem Sosáč. Podporované položky z jeho katalogu pak mohou zobrazit i další dostupné streamy z těchto doplňků.
 
-**Samotný Sosáč ani jeho repozitář neupravujeme.** Bez přihlašovacích údajů k Sosáči všechny čtyři doplňky nadále fungují se svými podporovanými tituly.
+Propojení je **dobrovolné**. Bez něj všechny čtyři doplňky dál fungují běžným způsobem.
 
-Bombuj i Přehraj.to používají pro volitelné propojení Sosáče vlastní šifrovaný instalační token ve stejném tvaru jako fungující SKTOnline/SKTorrent: `/<token>/manifest.json`, `/<token>/stream/...`. Staré vnořené instalační cesty `/<token>/bombuj/manifest.json` a `/<token>/prehrajto/manifest.json` zůstávají zpětně kompatibilní. Přehraj.to bez propojení má stále samostatný veřejný manifest. Údaje Sosáče se nikdy nedoplňují do otevřené query části MP4 ani VTT odkazů; pro převod `sosac_*` ID používáme existující `SosacOverlay`. Starý instalační odkaz bez propojení je nutné nahradit novým.
+## Kvalita, jazyky a přehrávání
 
-## Přehraj.to Direct – technické poznámky
+U streamů se snažíme přehledně zobrazit kvalitu, zvukovou stopu a titulky. Například:
 
-Nezávislý zdroj podporuje IMDb/Cinemeta ID (`tt...` a u seriálů `tt...:sezóna:epizoda`) a vlastni ID Bombuj; s volitelnou šifrovanou konfigurací Sosáče také `sosac_m_*`, `sosac_s_*` a `sosac_ep_*`. Samotný seriál bez konkrétní epizody nevrací stream, aby nedošlo k záměně dílů. Před resolvem kontroluje úplný název, rok u filmů a přesnou epizodu u seriálů. Vyhledává přes externí službu Blaniok a obnovuje podepsanou MP4 URL přes `ceskarepublika.wiki/api/movies/video-url`. Obě služby jsou třetí strany; nemají garantovanou dostupnost ani veřejné SLA.
+**Přehraj.to • 1080p**  
+🎧 🇨🇿 CZ  
+💬 🇬🇧 EN  
+🎬 1080p
 
-MP4 i VTT se předávají jako přímé adresy CDN, **neprocházejí přes Oracle**. Titulky se připojují přímo ke konkrétnímu streamu. Jazyky `cze/slo/eng/ng1/ng2` se převádějí na ISO 639-2 `ces/slk/eng`. Kvalita v popisku (například 1080p) je pouze **orientační štítek odvozený z názvu uploadu**, nikoli technicky ověřené rozlišení MP4. Není-li údaj v názvu, používá se označení `Direct`. Externí služba může vrátit jen jednu MP4, ačkoli název uploadu naznačuje vyšší kvalitu.
+Údaj o kvalitě může vycházet z názvu nahraného souboru, takže nemusí vždy odpovídat skutečnému rozlišení online videa. Jazyky a titulky uvádíme podle dostupných informací.
 
-Přehraj.to používá vlastní šifrovaný instalační token jen při propojení se Sosáčem. Jeho instalace nemění konfigurace ani resolvery SKTOnline, SKTorrent a Bombuj.
+**Přehraj.to** zvládá využít i některé původní MKV uploady, pokud k nim služba nabízí online MP4 verzi. **SKTorrent P2P** používá na rozdíl od přímých zdrojů torrentové přehrávání.
 
-## Soukromí a přehrávání
+Funkčnost konkrétního streamu závisí na jeho dostupnosti a na možnostech přehrávače ve Stremiu. Některé zdroje proto mohou fungovat na jednom zařízení lépe než na jiném.
 
-Údaje k SKTorrentu a volitelně k Sosáči se ukládají do šifrované instalační konfigurace. **Instalační odkazy obsahující konfiguraci nesdílej veřejně.**
+## Soukromí a důležité informace
 
-Videa z SKTOnline a Bombuj neprocházejí serverem doplňků. Torrenty jsou samostatné P2P zdroje. Některé webové přehrávače Bombuj nemusí být kompatibilní se všemi Stremio klienty.
+Údaje k SKTorrentu a volitelnému propojení se Sosáčem jsou součástí chráněné konfigurace. **Vygenerované instalační odkazy s přihlašovacími údaji nikde veřejně nesdílej.**
 
-## Důležité
-
-Projekt je neoficiální komunitní doplněk a není oficiálně spojen se službami Stremio, SKTOnline, SKTorrent, Bombuj ani Sosáč. Dostupnost zdrojů závisí na původních poskytovatelích.
+Jde o **neoficiální komunitní projekt**. Není oficiálně propojen ani podporován službami Stremio, SKTOnline, SKTorrent, Bombuj, Přehraj.to či Sosáč. Projekt nehostuje samotná videa a dostupnost obsahu se může měnit.
 
 ## Podpora
+
+Pokud ti projekt pomáhá a chceš podpořit jeho další vývoj, můžeš využít Buy Me a Coffee. ❤️
 
 <p align="center">
   <a href="https://www.buymeacoffee.com/caseycz"><img src="https://img.shields.io/badge/Podpo%C5%99it%20CaseyCZ-Buy%20Me%20a%20Coffee-38BDF8?style=for-the-badge&labelColor=0284C7&logo=buymeacoffee&logoColor=white" alt="Podpořit CaseyCZ" /></a>
