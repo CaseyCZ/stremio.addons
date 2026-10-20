@@ -181,6 +181,24 @@ input::placeholder{color:#7c8ca3}
       <select id="uiLanguage"><option value="cs">Čeština</option><option value="sk">Slovenština</option><option value="en">English</option></select>
     </div>
 
+    <details class="settings" id="sosacSettings">
+        <summary>
+          <span class="settings-label">
+            <span class="settings-icon" aria-hidden="true">🔗</span>
+            <span><span class="settings-title">Volitelné propojení se Sosáčem</span><span class="settings-sub">Další dostupné zdroje u titulů z katalogu Sosáč</span></span>
+          </span>
+          <span class="settings-state" id="sosacState">Nenastaveno</span><span class="chevron" aria-hidden="true">⌄</span>
+        </summary>
+        <div class="settings-content">
+          <p>Chceš nabídnout tyto zdroje také u filmů a epizod z katalogu Sosáč? Vyplň svůj účet a vytvoř nové instalační odkazy. Propojení je dobrovolné a všechny doplňky fungují i bez něj.</p>
+          <div class="settings-fields">
+            <div class="field"><label for="sosacUsername">Sosáč – uživatelské jméno</label><input id="sosacUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Volitelné"></div>
+            <div class="field"><label for="sosacPassword">Sosáč – heslo</label><div class="password-row"><input id="sosacPassword" type="password" autocomplete="current-password" placeholder="Volitelné"><button class="reveal show-password" data-target="sosacPassword" type="button" aria-pressed="false">Zobrazit</button></div></div>
+          </div>
+          <p class="settings-hint" id="sosacHint">Bez vyplnění budou všechny čtyři doplňky fungovat se svými běžnými zdroji.</p>
+        </div>
+      </details>
+
     <div class="switch-block">
       <div class="switch-title">Vyber doplněk</div>
       <div class="mode-switch" role="tablist" aria-label="Zdroj videa">
@@ -194,7 +212,7 @@ input::placeholder{color:#7c8ca3}
 <section class="addons" aria-label="Doplňky Stremio">
     <article class="addon" id="sktonline" role="tabpanel" aria-labelledby="tab-sktonline">
       <div class="addon-top"><span class="provider-icon" aria-hidden="true">▶</span><span class="provider-pill">DIRECT</span></div>
-      <h2>SKTOnline</h3><p class="sub">Přímé přehrávání</p>
+      <h2>SKTOnline</h2><p class="sub">Přímé přehrávání</p>
       <p class="description">Vyhledá přímá videa, rozpozná dostupné kvality, jazyky a titulky.</p>
       <ul class="features"><li>Video Direct</li><li>CZ / SK</li><li>Titulky</li></ul>
       <div class="card-bottom">
@@ -211,7 +229,7 @@ input::placeholder{color:#7c8ca3}
 
     <article class="addon" id="sktorrent" role="tabpanel" aria-labelledby="tab-sktorrent" hidden>
       <div class="addon-top"><span class="provider-icon" aria-hidden="true">🧲</span><span class="provider-pill">P2P</span></div>
-      <h2>SKTorrent</h3><p class="sub">Torrentové zdroje</p>
+      <h2>SKTorrent</h2><p class="sub">Torrentové zdroje</p>
       <p class="description">Samostatné P2P streamy s původním názvem releasu, kvalitou a počtem seederů.</p>
       <ul class="features"><li>Magnet / P2P</li><li>Seeders</li><li>Releasy</li></ul>
       <div class="card-bottom">
@@ -232,7 +250,7 @@ input::placeholder{color:#7c8ca3}
 
     <article class="addon" id="bombuj" role="tabpanel" aria-labelledby="tab-bombuj" hidden>
       <div class="addon-top"><span class="provider-icon" aria-hidden="true">🍿</span><span class="provider-pill">FILMY & SERIÁLY</span></div>
-      <h2>Bombuj</h3><p class="sub">Filmy, seriály a přehrávače</p>
+      <h2>Bombuj</h2><p class="sub">Filmy, seriály a přehrávače</p>
       <p class="description">Procházej katalogy filmů a seriálů a vyber si z dostupných možností přehrávání.</p>
       <ul class="features"><li>Katalogy</li><li>Cinemeta</li><li>Web / Direct</li></ul>
       <div class="card-bottom">
@@ -256,7 +274,7 @@ input::placeholder{color:#7c8ca3}
     </article>
     <article class="addon" id="prehrajto" role="tabpanel" aria-labelledby="tab-prehrajto" hidden>
       <div class="addon-top"><span class="provider-icon" aria-hidden="true">▶</span><span class="provider-pill">MP4 DIRECT</span></div>
-      <h2>Přehraj.to</h3><p class="sub">Přímé streamy a titulky</p>
+      <h2>Přehraj.to</h2><p class="sub">Přímé streamy a titulky</p>
       <p class="description">Filmy a epizody z Přehraj.to s výběrem dostupných verzí a titulky podle konkrétního videa.</p>
       <ul class="features"><li>Bez účtu</li><li>MP4 direct</li><li>CZ / SK titulky</li></ul>
       <div class="card-bottom">
@@ -281,23 +299,7 @@ input::placeholder{color:#7c8ca3}
     </article>
   </section>
 
-<details class="settings" id="sosacSettings">
-    <summary>
-      <span class="settings-label">
-        <span class="settings-icon" aria-hidden="true">🔗</span>
-        <span><span class="settings-title">Volitelné propojení se Sosáčem</span><span class="settings-sub">Další dostupné zdroje u titulů z katalogu Sosáč</span></span>
-      </span>
-      <span class="settings-state" id="sosacState">Nenastaveno</span><span class="chevron" aria-hidden="true">⌄</span>
-    </summary>
-    <div class="settings-content">
-      <p>Chceš nabídnout tyto zdroje také u filmů a epizod z katalogu Sosáč? Vyplň svůj účet a vytvoř nové instalační odkazy. Propojení je dobrovolné a všechny doplňky fungují i bez něj.</p>
-      <div class="settings-fields">
-        <div class="field"><label for="sosacUsername">Sosáč – uživatelské jméno</label><input id="sosacUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Volitelné"></div>
-        <div class="field"><label for="sosacPassword">Sosáč – heslo</label><div class="password-row"><input id="sosacPassword" type="password" autocomplete="current-password" placeholder="Volitelné"><button class="reveal show-password" data-target="sosacPassword" type="button" aria-pressed="false">Zobrazit</button></div></div>
-      </div>
-      <p class="settings-hint" id="sosacHint">Bez vyplnění budou všechny čtyři doplňky fungovat se svými běžnými zdroji.</p>
-    </div>
-  </details>
+
 
     <div class="note">Instalační odkazy s přihlašovacími údaji jsou chráněné, ale stále citlivé. Nikdy je veřejně nesdílej.</div>
   </section>
