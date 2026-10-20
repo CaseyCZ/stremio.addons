@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const {test}=require('node:test');
-const {bombujManifest,bombujRequestPath,getBombujJson}=require('./api/bombuj-bridge');
+const {bombujManifest,bombujRequestPath,getBombujJson}=require('../api/bombuj-bridge');
 test('bridge preserves episode and film identities',()=>{
   assert.equal(bombujRequestPath('stream','series','bombuj-series-chicago-hope:1:1'),
     '/stream/series/bombuj-series-chicago-hope:1:1.json');

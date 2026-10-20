@@ -4,21 +4,6 @@ on:
   push:
     branches:
       - Master
-      - refactor/addons-runtime-directory
-      - fix/bombuj-voe-access-quality
-      - release/bombuj-voe-direct
-      - release/bombuj-runtime-deploy
-      - feature/unified-stremio-addons
-      - feature/web-redesign
-      - feature/migrate-bombuj-runtime
-      - feature/fix-sktorrent-auth-search
-      - feature/fix-bombuj-episode-names
-      - feature/cross-catalog-imdb-identity
-      - feature/shared-imdb-episode-playback
-      - fix/sktonline-strict-episode-identity
-      - fix/sktonline-search-coverage
-      - fix/sktonline-empty-search-cache
-      - fix/sktonline-serialized-search
   workflow_dispatch:
 
 permissions:
@@ -55,7 +40,7 @@ jobs:
           node --check api/sosac-overlay.js
           node --check api/bombuj-overlay.js
           node --check api/bombuj-bridge.js
-          node --test test-bombuj-overlay.cjs test-bombuj-bridge.cjs test-sktorrent-auth.cjs test-sktonline-episode-identity.cjs
+          node --test tests/test-bombuj-overlay.cjs tests/test-bombuj-bridge.cjs tests/test-sktorrent-auth.cjs tests/test-sktonline-episode-identity.cjs tests/test-analytics-consent.cjs
           if [[ -f providers/bombuj/package.json ]]; then
             npm install --prefix providers/bombuj --omit=dev --no-audit --no-fund --ignore-scripts
             npm --prefix providers/bombuj run check
@@ -146,12 +131,9 @@ jobs:
             console.log('Direct, protected Torrent, and configured Bombuj JSON routes verified');
           })().catch(e=>{console.error(e);process.exit(1)});
           NODE
-          bash -n relocate-addons-runtime.sh
-          python3 scripts/test-relocate-addons-runtime.py
           bash -n deploy-bombuj-runtime.sh
           bash -n scripts/migrate-pm2-unified-names.sh
           node scripts/test-pm2-name-contract.cjs
-          bash -n deploy-bombuj-unified.sh
           node --check ecosystem.bombuj.config.cjs
           node -e "for(const file of ['./ecosystem.config.js','./ecosystem.bombuj.config.cjs'])if(require(file).apps[0].env.RUNNER_TRACKING_ID!=='')throw Error('Persistent PM2 app must clear runner tracking')"
           node -e "const p=require('./ecosystem.bombuj.config.cjs').apps[0];if(p.name!=='stremio-addons-bombuj'||p.env.PORT!=='7004'||!p.cwd.endsWith('/providers/bombuj'))throw Error('Wrong unified Bombuj PM2 definition')"

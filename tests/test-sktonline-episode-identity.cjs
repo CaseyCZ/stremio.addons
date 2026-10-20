@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const {test}=require('node:test');
-const {episodeIdentityMatches,buildQueries,findDirectOnlineByTitle}=require('./api/sktonline');
+const {episodeIdentityMatches,buildQueries,findDirectOnlineByTitle}=require('../api/sktonline');
 
 const titles=['Ted Lasso'];
 const yes=[

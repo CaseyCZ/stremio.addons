@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const {test}=require('node:test');
-const {parseBombujId,resolveBombujId}=require('./api/bombuj-overlay');
+const {parseBombujId,resolveBombujId}=require('../api/bombuj-overlay');
 function fixture(imdb){return async()=>({ok:true,json:async()=>({meta:{id:'bombuj-series-test',imdb_id:imdb}})})}
 test('Bombuj film ID resolves to Cinemeta IMDb without credentials',async()=>{
   const r=await resolveBombujId('movie','bombuj-movie-strange-harvest',{fetchImpl:fixture('tt33400719')});

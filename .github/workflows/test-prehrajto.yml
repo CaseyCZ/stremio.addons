@@ -5,10 +5,11 @@ on:
     paths:
       - 'api/prehrajto.js'
       - 'addon.js'
-      - 'test-prehrajto.cjs'
-      - 'test-prehrajto-sosac.cjs'
+      - 'tests/test-prehrajto.cjs'
+      - 'tests/test-prehrajto-sosac.cjs'
       - 'scripts/test-prehrajto-sosac-http.cjs'
       - 'public/configure.html'
+      - 'tests/test-analytics-consent.cjs'
       - 'deploy-server.sh'
       - 'scripts/install-nginx-stremio-configure-root.sh'
       - 'scripts/test-nginx-stremio-configure-root.py'
@@ -51,7 +52,7 @@ jobs:
           node scripts/test-pm2-name-contract.cjs
           node --check api/prehrajto.js
           node --check addon.js
-          node --test test-prehrajto.cjs test-prehrajto-sosac.cjs
+          node --test tests/test-prehrajto.cjs tests/test-prehrajto-sosac.cjs tests/test-analytics-consent.cjs
           node --check scripts/test-prehrajto-sosac-http.cjs
           node scripts/test-prehrajto-sosac-http.cjs
       - name: Verify standalone manifest route without external API traffic

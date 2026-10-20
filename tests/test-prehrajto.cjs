@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const {
   findPrehrajtoStreams, acceptsCandidate, episodeTokens, mapSubtitle, makeStream,
   validDetailUrl, validCdnUrl
-} = require('./api/prehrajto');
+} = require('../api/prehrajto');
 
 const MAYDAY = 'https://prehraj.to/mayday-2026-1080p-cz-a-sk-titulky/d90920cb3f176ead';
 const DEAD_CITY = 'https://prehraj.to/walking-dead-dead-city-s02e06-cz-dab-bridge-partners-are-hard-to-come-by-these-days-dd/5d2aa213c31d797e';

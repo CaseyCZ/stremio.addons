@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { SosacOverlay } = require('./api/sosac-overlay');
+const { SosacOverlay } = require('../api/sosac-overlay');
 
 // These fixtures deliberately don't access the real Sosac account or API.
 // They exercise the exact overlay already used by SKTOnline and Bombuj.

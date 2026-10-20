@@ -76,6 +76,8 @@ Funkčnost konkrétního streamu závisí na jeho dostupnosti a na možnostech p
 
 Údaje k SKTorrentu a volitelnému propojení se Sosáčem jsou součástí chráněné konfigurace. **Vygenerované instalační odkazy s přihlašovacími údaji nikde veřejně nesdílej.**
 
+Analytika na konfigurační stránce je volitelná a zapne se pouze po souhlasu. Svou volbu můžeš kdykoliv změnit v nastavení cookies.
+
 Jde o **neoficiální komunitní projekt**. Není oficiálně propojen ani podporován službami Stremio, SKTOnline, SKTorrent, Bombuj, Přehraj.to či Sosáč. Projekt nehostuje samotná videa a dostupnost obsahu se může měnit.
 
 ## Podpora

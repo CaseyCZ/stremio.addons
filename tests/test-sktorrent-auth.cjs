@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { searchTorrents, getClient } = require('./api/sktorrent');
+const { searchTorrents, getClient } = require('../api/sktorrent');
 
 const examplePage = `<!doctype html><html><body>
   <table><tr><td><b>Film - HD</b><a href="details.php?id=31415" title="Barbie 2023 1080p CZ">
