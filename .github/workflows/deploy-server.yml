@@ -1,4 +1,4 @@
-name: Validate SKTOnline source
+name: Validate and deploy Stremio Addons
 
 on:
   push:
@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: validate-stremio-sktonline
-  cancel-in-progress: true
+  group: deploy-stremio-addons
+  cancel-in-progress: false
 
 jobs:
   validate:
@@ -40,7 +40,8 @@ jobs:
           node --check api/sosac-overlay.js
           node --check api/bombuj-overlay.js
           node --check api/bombuj-bridge.js
-          node --test tests/test-bombuj-overlay.cjs tests/test-bombuj-bridge.cjs tests/test-sktorrent-auth.cjs tests/test-sktonline-episode-identity.cjs tests/test-analytics-consent.cjs
+          npm test
+          node --check api/prehrajto.js
           if [[ -f providers/bombuj/package.json ]]; then
             npm install --prefix providers/bombuj --omit=dev --no-audit --no-fund --ignore-scripts
             npm --prefix providers/bombuj run check
@@ -146,5 +147,67 @@ jobs:
             echo
             echo "- GitHub commit: \`${GITHUB_SHA}\`"
             echo "- Source validation: passed"
-            echo "- Oracle deployment: handled by the private dashboard auto-deploy poll"
+            echo "- Oracle deployment: follows in the SSH deploy job"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy to Oracle
+    needs: validate
+    if: github.ref == 'refs/heads/Master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Require SSH deployment key
+        env:
+          DEPLOY_KEY_B64: ${{ secrets.ADDONS_DEPLOY_SSH_KEY_B64 }}
+        run: |
+          if [[ -z "$DEPLOY_KEY_B64" ]]; then
+            echo "::error::Automatic deployment is not configured. Add repository secret ADDONS_DEPLOY_SSH_KEY_B64 (base64 encoded private SSH key authorized for ubuntu on Oracle)."
+            exit 1
+          fi
+
+      - name: Configure SSH with pinned server identity
+        env:
+          DEPLOY_KEY_B64: ${{ secrets.ADDONS_DEPLOY_SSH_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s' "$DEPLOY_KEY_B64" | base64 --decode > ~/.ssh/deploy-key
+          chmod 600 ~/.ssh/deploy-key
+          ssh-keygen -y -f ~/.ssh/deploy-key >/dev/null
+
+          ssh-keyscan -T 10 -p 22 130.61.49.108 > /tmp/stremio-addons-host-keys 2>/dev/null
+          test -s /tmp/stremio-addons-host-keys
+          if ! ssh-keygen -lf /tmp/stremio-addons-host-keys | awk '{print $2}' | grep -Fxq 'SHA256:SHoVgKDg5pnIiJP70GQCO90OZTECuaNlKnfLK/WZF5Y'; then
+            echo "::error::Oracle SSH host fingerprint does not match the pinned identity."
+            exit 1
+          fi
+          cat /tmp/stremio-addons-host-keys >> ~/.ssh/known_hosts
+
+      - name: Deploy unified Addons from Master
+        run: |
+          ssh \
+            -i ~/.ssh/deploy-key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
+            ubuntu@130.61.49.108 \
+            'bash /home/ubuntu/stremio.addons/deploy-server.sh'
+
+      - name: Verify Addons and Bombuj on Oracle
+        run: |
+          ssh \
+            -i ~/.ssh/deploy-key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            ubuntu@130.61.49.108 \
+            'set -e; cd /home/ubuntu/stremio.addons; test "$(git rev-parse HEAD)" = "$(git rev-parse origin/Master)"; curl -fsS --max-time 10 http://127.0.0.1:7003/health >/dev/null; curl -fsS --max-time 10 http://127.0.0.1:7004/manifest.json >/dev/null'
+          echo "Oracle Addons deployment and both provider services verified." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy-key /tmp/stremio-addons-host-keys
