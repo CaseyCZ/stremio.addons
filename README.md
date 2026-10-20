@@ -51,11 +51,9 @@ Každý zdroj funguje nezávisle na ostatních. Když u jednoho filmu něco nena
 
 Doplňky můžeš kdykoliv přidávat samostatně. Není nutné instalovat celou sadu.
 
-**Přímé odkazy bez přihlášení:** [🍿 Bombuj](https://130.61.49.108/stremio-addons/bombuj/manifest.json) · [▶️ Přehraj.to](https://130.61.49.108/stremio-addons/prehrajto/manifest.json)
-
 ## Volitelné propojení se Sosáčem
 
-Používáš také **[Stremio Sosáč](https://github.com/CaseyCZ/stremio.sosac)**? V konfiguraci můžeš zapnout propojení se svým účtem Sosáč. Podporované položky z jeho katalogu pak mohou zobrazit i další dostupné streamy z těchto doplňků.
+V konfiguraci můžeš volitelně propojit doplňky se svým účtem Sosáč. U podporovaných titulů z jeho katalogu pak mohou být dostupné také streamy z těchto zdrojů.
 
 Propojení je **dobrovolné**. Bez něj všechny čtyři doplňky dál fungují běžným způsobem.
 
