@@ -32,7 +32,8 @@ if [[ "$before_sha" != "$after_sha" ]] && git diff --name-only "$before_sha" "$a
 fi
 
 npm install --omit=dev --no-audit --no-fund
-npm run version:check
+# Unit/integration tests run in the separate code-validation workflow.
+# Retain lightweight syntax checks and live health probes for deployment safety.
 node --check addon.js
 node --check api/cinemeta.js
 node --check api/csfd.js

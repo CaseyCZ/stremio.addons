@@ -7,8 +7,8 @@ This service is intentionally **metadata-only**. It fetches SKTOnline search/pla
 Use the same repository checkout as the addon, or clone it once:
 
 ```bash
-git clone https://github.com/CaseyCZ/stremio.sktonline.git
-cd stremio.sktonline
+git clone https://github.com/CaseyCZ/stremio.addons.git
+cd stremio.addons
 npm install
 ```
 
@@ -36,7 +36,7 @@ SKTONLINE_RESOLVER_URL=https://your-resolver-hostname.example
 SKTONLINE_RESOLVER_TOKEN=the_same_random_token
 ```
 
-After setting them, reload `stremio-sktonline` with PM2.
+After setting them, reload the main addon process `stremio-addons` with PM2 (`pm2 restart stremio-addons --update-env`). The home resolver process, when used, is named `sktonline-home-resolver`.
 
 ## Endpoints
 

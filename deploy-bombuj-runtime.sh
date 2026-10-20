@@ -65,7 +65,10 @@ if [[ "$PREVIOUS_VOE" == "$DESIRED_VOE" && -f "$STAMP" && "$(cat "$STAMP")" == "
   exit 0
 fi
 curl -fsS --max-time 10 http://127.0.0.1:7004/manifest.json > "$STATE/before.json"
-npm --prefix "$PROVIDER" run check
+# Deployment: syntax-safety only. Unit/integration tests run on code changes in CI.
+for script in preflight-front.js filtered-front.js front.js bootstrap.js index.js provider-compat.js; do
+  node --check "$PROVIDER/$script"
+done
 node --check "$CONF"
 # Refuse occupied staging ports before starting any additional process.
 node - "$STAGE_PORT" <<'NODE'
