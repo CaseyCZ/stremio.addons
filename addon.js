@@ -8,6 +8,7 @@ const { SocksProxyAgent } = require('socks-proxy-agent');
 const { CinemetaApi, uniqueStrings } = require('./api/cinemeta');
 const { findOnlineStreams, findOnlineSourceBundle } = require('./api/sktonline');
 const { findPrehrajtoStreams } = require('./api/prehrajto');
+const { findHellspyStreams } = require('./api/hellspy');
 const { SosacOverlay } = require('./api/sosac-overlay');
 const { resolveBombujId } = require('./api/bombuj-overlay');
 const { getBombujJson, bombujManifest, bombujRequestPath } = require('./api/bombuj-bridge');
@@ -95,7 +96,7 @@ function normalizeConfig(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const sktUsername = String(value.sktUsername || value.username || '').trim().slice(0, 128);
   const sktPassword = String(value.sktPassword || value.password || '').slice(0, 256);
-  const addonType = ['sktonline', 'sktorrent', 'bombuj', 'prehrajto'].includes(value.addonType) ? value.addonType : 'combined';
+  const addonType = ['sktonline', 'sktorrent', 'bombuj', 'prehrajto', 'hellspy'].includes(value.addonType) ? value.addonType : 'combined';
   const wantsTorrents = addonType === 'sktorrent' || (addonType === 'combined' && value.enableTorrents === true);
   const sosacUsername = String(value.sosacUsername || '').trim().slice(0, 128);
   const sosacPassword = String(value.sosacPassword || '').slice(0, 256);
@@ -518,7 +519,7 @@ app.get('/:cfg/configure', (req, res) => {
 // Validate the token and its provider before redirecting. A relative Location
 // keeps the public nginx mount prefix (e.g. /stremio-sktonline/) unchanged,
 // while removing credentials from the final browser address.
-const CONFIGURE_INSTALL_ROOT = /^\/enc1\.[^/]+(?:\/(?:bombuj|prehrajto))?\/?$/;
+const CONFIGURE_INSTALL_ROOT = /^\/enc1\.[^/]+(?:\/(?:bombuj|prehrajto|hellspy))?\/?$/;
 app.get(CONFIGURE_INSTALL_ROOT, (req, res) => {
   noCache(res);
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -619,6 +620,67 @@ app.get('/:cfg/prehrajto/stream/:type/:id.json', (req, res) => {
   return handlePrehrajtoStream(req, res, cfg);
 });
 
+// Independent experimental HellSpy source. It never proxies video or VTT
+// bytes; the provider's HTTP 429 results in an empty stream list.
+function hellspyManifest(cfg = {}) {
+  const sosacLinked = Boolean(cfg.sosacUsername && cfg.sosacPassword);
+  return {
+    id: 'cz.caseycz.stremio.hellspy.direct.test',
+    version: VERSION,
+    name: 'HellSpy Direct TEST',
+    description: 'Experimentální přímé CDN streamy HellSpy a všechny dostupné VTT titulky. Dostupnost závisí na síti.',
+    types: ['movie', 'series'],
+    idPrefixes: ['tt', 'bombuj-movie-', 'bombuj-series-', 'bombuj-episode-',
+      ...(sosacLinked ? ['sosac_m_', 'sosac_s_', 'sosac_ep_'] : [])],
+    resources: ['stream'],
+    catalogs: [],
+    behaviorHints: { configurable: sosacLinked, configurationRequired: false }
+  };
+}
+
+app.get('/hellspy/manifest.json', (req, res) => {
+  noCache(res);
+  return res.json(hellspyManifest());
+});
+
+async function handleHellspyStream(req, res, cfg = {}) {
+  noCache(res);
+  const empty = { streams: [], cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 };
+  const type = req.params.type;
+  if (!['movie', 'series'].includes(type)) return res.json(empty);
+  try {
+    const parsed = await resolveIncomingStremioId(cfg, type, String(req.params.id || ''));
+    if (!parsed || (type === 'series' && (!Number.isInteger(parsed.season) ||
+        parsed.season < 1 || !Number.isInteger(parsed.episode) || parsed.episode < 1))) {
+      return res.json(empty);
+    }
+    const meta = await cinemeta.getMeta(type, parsed.imdbId);
+    if (!meta) return res.json(empty);
+    const streams = await resolveWithin(findHellspyStreams({
+      meta, type, season: parsed.season, episode: parsed.episode
+    }), 30000, 'hellspy');
+    return res.json({ ...empty, streams });
+  } catch (error) {
+    console.warn('[hellspy] stream lookup failed: ' + error.message);
+    return res.json(empty);
+  }
+}
+
+app.get('/hellspy/stream/:type/:id.json', (req, res) => handleHellspyStream(req, res));
+app.get('/:cfg/hellspy/manifest.json', (req, res) => {
+  noCache(res);
+  const cfg = normalizeConfig(decryptConfig(req.params.cfg));
+  if (!cfg || cfg.addonType !== 'hellspy')
+    return res.status(400).json({ error: 'Invalid HellSpy configuration' });
+  return res.json(hellspyManifest(cfg));
+});
+app.get('/:cfg/hellspy/stream/:type/:id.json', (req, res) => {
+  const cfg = normalizeConfig(decryptConfig(req.params.cfg));
+  if (!cfg || cfg.addonType !== 'hellspy')
+    return res.status(400).json({ error: 'Invalid HellSpy configuration' });
+  return handleHellspyStream(req, res, cfg);
+});
+
 // Uniform flat encrypted-manifest structure, identical to SKTOnline/SKTorrent.
 // Nested legacy /<token>/bombuj and /<token>/prehrajto manifests still work.
 app.get('/:cfg/manifest.json', async (req, res) => {
@@ -626,6 +688,7 @@ app.get('/:cfg/manifest.json', async (req, res) => {
   const cfg = normalizeConfig(decryptConfig(req.params.cfg));
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
   if (cfg.addonType === 'prehrajto') return res.json(prehrajtoManifest(cfg));
+  if (cfg.addonType === 'hellspy') return res.json(hellspyManifest(cfg));
   if (cfg.addonType === 'bombuj') {
     try {
       const source = await getBombujJson('/manifest.json');
@@ -712,6 +775,7 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const cfg = normalizeConfig(decryptConfig(req.params.cfg));
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
   if (cfg.addonType === 'prehrajto') return handlePrehrajtoStream(req, res, cfg);
+  if (cfg.addonType === 'hellspy') return handleHellspyStream(req, res, cfg);
   if (cfg.addonType === 'bombuj') return handleFlatBombujResource(req, res, 'stream');
   if (!['movie', 'series'].includes(req.params.type)) return res.json({ streams: [], cacheMaxAge: 0 });
   const parsed = await resolveIncomingStremioId(cfg, req.params.type, req.params.id);
@@ -778,7 +842,7 @@ function handleFlatSubtitles(req, res) {
   const cfg = normalizeConfig(decryptConfig(req.params.cfg));
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
   if (cfg.addonType === 'bombuj') return handleFlatBombujResource(req, res, 'subtitles');
-  if (cfg.addonType === 'prehrajto') {
+  if (cfg.addonType === 'prehrajto' || cfg.addonType === 'hellspy') {
     noCache(res);
     return res.json({ subtitles: [] }); // VTTs are embedded in stream.subtitles.
   }

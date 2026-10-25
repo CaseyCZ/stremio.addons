@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  Čtyři komunitní doplňky pro <strong>Stremio</strong> na jednom místě.<br>
+  Komunitní doplňky pro <strong>Stremio</strong> na jednom místě.<br>
   Vyber si zdroje filmů a seriálů, které chceš používat.
 </p>
 
@@ -21,7 +21,9 @@
 
 ## O projektu
 
-**CaseyCZ Stremio Addons** přidává do Stremia další možnosti, kde hledat a přehrávat filmy a seriály. Všechny čtyři doplňky jsou **samostatné** – můžeš si nainstalovat jeden, několik nebo všechny.
+**CaseyCZ Stremio Addons** přidává do Stremia další možnosti, kde hledat a přehrávat filmy a seriály. Doplňky jsou **samostatné** – můžeš si nainstalovat jeden, několik nebo všechny.
+
+> **Pouze větev `feature/search-improvements`:** HellSpy Direct TEST je experimentální pátý zdroj. Není nasazený na produkčním serveru. Vyhledávání z Oracle bylo omezeno HTTP 429; testovací manifest proto nemusí vracet výsledky, i když vyhledávání funguje z českého PC.
 
 ## Dostupné doplňky
 
@@ -31,6 +33,7 @@
 | 🧲 **SKTorrent P2P** | Torrentové zdroje včetně informací o kvalitě a seederech. | **Ano, SKTorrent** |
 | 🍿 **Bombuj** | Filmy, seriály, katalogy a dostupné možnosti přehrávání. | **Ne** |
 | ▶️ **Přehraj.to Direct** | Přímé přehrávání videí, více dostupných verzí a titulky. | **Ne** |
+| 🧪 **HellSpy Direct TEST** | Přímé CDN odkazy na původní videa a všechny dostupné VTT titulky. Zatím experimentální. | **Ne** |
 
 Každý zdroj funguje nezávisle na ostatních. Když u jednoho filmu něco nenajdeš, můžeš zkusit jiný doplněk.
 
@@ -55,7 +58,7 @@ Doplňky můžeš kdykoliv přidávat samostatně. Není nutné instalovat celou
 
 V konfiguraci můžeš volitelně propojit doplňky se svým účtem Sosáč. U podporovaných titulů z jeho katalogu pak mohou být dostupné také streamy z těchto zdrojů.
 
-Propojení je **dobrovolné**. Bez něj všechny čtyři doplňky dál fungují běžným způsobem.
+Propojení je **dobrovolné**. Bez něj ostatní doplňky dál fungují běžným způsobem.
 
 ## Kvalita, jazyky a přehrávání
 

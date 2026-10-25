@@ -123,7 +123,23 @@ function createHellspyClient({ fetchImpl = globalThis.fetch, now = Date.now } = 
     } catch (_) { return null; }
   }
 
-  return { search, resolveOriginal };
+  async function getVideoDetails({ id, fileHash }) {
+    if (!Number.isSafeInteger(id) || id <= 0 || !/^[a-z0-9_-]{6,128}$/i.test(String(fileHash || ''))) return null;
+    const response = await fetchImpl(`${API}video/${id}/${fileHash}`, {
+      method: 'GET',
+      headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    return {
+      filename: typeof data.filename === 'string' ? data.filename : '',
+      subtitles: Array.isArray(data.subtitles) ? data.subtitles : []
+    };
+  }
+
+  return { search, resolveOriginal, getVideoDetails };
 }
 
 module.exports = { createHellspyClient, exactEpisode, matchingScore };
