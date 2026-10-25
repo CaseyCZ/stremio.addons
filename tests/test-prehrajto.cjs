@@ -71,6 +71,12 @@ test('movie release matching is generic and preserves title/year boundaries', ()
     ['Mayday 2026 CZ and SK titulky', ['Mayday'], '2026', true],
     ['Ted 2012 2', ['Ted'], '2012', false],
     ['Avatar.2009.Extended.2160p.UHD.BluRay.HEVC-RELEASE', ['Avatar'], '2009', true],
+    ['Avatar_1_(2009)_[CZ_Dabing]', ['Avatar'], '2009', true],
+    ['+Avatar 1 (2009) [CZ Dabing]', ['Avatar'], '2009', true],
+    ['Avatar 1 2009 1080p', ['Avatar'], '2009', true],
+    ['Avatar 1 2022 CZ Dabing', ['Avatar'], '2009', false],
+    ['Avatar 2 (2009) CZ Dabing', ['Avatar'], '2009', false],
+    ['Avatar 1 CZ Dabing', ['Avatar'], '2009', false],
     ['Avatar.The.Way.Of.Water.2009.2160p', ['Avatar'], '2009', false]
   ];
   for (const [title, wanted, year, accepted] of cases) {

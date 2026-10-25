@@ -223,7 +223,7 @@ const movieReleaseWords = new Set([
   "paramount"
 ]);
 
-function movieReleaseMatches(candidate, title) {
+function movieReleaseMatches(candidate, title, wantedYear) {
   const wanted = normalize(title);
   if (!wanted) return false;
   const raw = String(candidate || '');
@@ -241,8 +241,13 @@ function movieReleaseMatches(candidate, title) {
   if (source === wanted) return true;
   if (!source.startsWith(wanted + ' ')) return false;
   const remainder = source.slice(wanted.length).trim().split(' ');
+  // Some original films are uploaded as "Title 1 (YEAR)". Accept the first
+  // installment marker only when the file explicitly confirms the requested
+  // year. "Title 2 (YEAR)" and undated aliases remain ambiguous/rejected.
+  const explicitYear = wantedYear && source.split(' ').includes(wantedYear);
   let hasMediaTag = false;
-  for (const word of remainder) {
+  for (const [index, word] of remainder.entries()) {
+    if (index === 0 && word === '1' && explicitYear) continue;
     if (/^(?:19|20)\d{2}$/.test(word)) continue;
     if (movieReleaseWords.has(word)) { hasMediaTag = true; continue; }
     // Czech/English conjunctions occur in language tags (CZ a SK / CZ and SK).
@@ -260,7 +265,7 @@ function acceptsCandidate(candidateTitle, titles, type, year, season, episode) {
   if (!raw || !titles.length || /\b(?:trailer|teaser|recap|review|reaction|parody)\b/i.test(raw)) return false;
   if (type === 'movie') {
     if (episodeTokens(raw).length || !hasMatchingYear(raw, year)) return false;
-    return titles.some(title => movieReleaseMatches(raw, title));
+    return titles.some(title => movieReleaseMatches(raw, title, year));
   }
   if (type !== 'series' || !Number.isInteger(season) || season < 1 ||
       !Number.isInteger(episode) || episode < 1) return false;
