@@ -5,6 +5,7 @@
 // External APIs are best-effort third-party services, not guaranteed contracts.
 const axios = require('axios');
 const NodeCache = require('node-cache');
+const { episodeTokens } = require('./search-matching');
 
 const SEARCH_API = process.env.PREHRAJTO_SEARCH_API || 'https://blaniok.azurewebsites.net/api/search';
 const RESOLVE_API = process.env.PREHRAJTO_RESOLVE_API || 'https://ceskarepublika.wiki/api/movies/video-url';
@@ -254,21 +255,6 @@ function movieReleaseMatches(candidate, title) {
   return true;
 }
 
-function episodeTokens(text) {
-  const source = String(text || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const tokens = [];
-  for (const re of [
-    /(?:^|[^a-z0-9])s0*(\d{1,2})[\s._-]*e0*(\d{1,3})(?=$|[^a-z0-9])/g,
-    /(?:^|[^a-z0-9])0*(\d{1,2})\s*[x×]\s*0*(\d{1,3})(?=$|[^a-z0-9])/g
-  ]) {
-    for (const match of source.matchAll(re)) {
-      const offset = match[0].length - match[0].trimStart().length;
-      tokens.push({ season: Number(match[1]), episode: Number(match[2]), pos: match.index + offset, end: match.index + match[0].length });
-    }
-  }
-  return tokens.sort((a, b) => a.pos - b.pos);
-}
-
 function acceptsCandidate(candidateTitle, titles, type, year, season, episode) {
   const raw = String(candidateTitle || '');
   if (!raw || !titles.length || /\b(?:trailer|teaser|recap|review|reaction|parody)\b/i.test(raw)) return false;
@@ -292,17 +278,20 @@ function acceptsCandidate(candidateTitle, titles, type, year, season, episode) {
 
 function makeQueries(titles, type, year, season, episode) {
   const queries = [];
-  for (const title of titles.slice(0, 3)) {
+  for (const [index, title] of titles.slice(0, 3).entries()) {
     if (type === 'series') {
       if (!Number.isInteger(season) || !Number.isInteger(episode)) continue;
       queries.push(title + ' S' + String(season).padStart(2, '0') + 'E' + String(episode).padStart(2, '0'));
+      // Some uploads use S4E4 instead of S04E04; only query this for the
+      // primary title to avoid overloading the upstream search service.
+      if (index === 0) queries.push(title + ' S' + season + 'E' + episode);
     } else {
       queries.push(year ? title + ' ' + year : title);
     }
   }
   if (type === 'movie' && titles[0] && year) queries.push(titles[0]);
   if (type === 'series' && titles[0]) queries.push(titles[0]);
-  return [...new Set(queries)].slice(0, 4);
+  return [...new Set(queries)].slice(0, type === 'series' ? 5 : 4);
 }
 
 const MAX_STREAMS = 8;

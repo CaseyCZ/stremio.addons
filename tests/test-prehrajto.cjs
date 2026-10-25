@@ -92,6 +92,30 @@ test('series match must include full show identity and exact episode', () => {
   assert.deepEqual(episodeTokens('Show 2x06').map(x => [x.season, x.episode]), [[2, 6]]);
 });
 
+test('real Ted Lasso uploads only match the requested season and episode', () => {
+  const uploads = [
+    'Ted Lasso S04E01 CZ Titulky chemon',
+    'Ted Lasso S04E01 CZ Titulky 1080p FULL HD lemon',
+    'Ted Lasso S04E09 CZ Titulky H265 HEVC 4K UHD HDR',
+    'Ted Lasso S03E06 CzTit',
+    'Ted Lasso_S04E08_Vstříc vzteku',
+    'Ted Lasso - S4E4 Greyhounds’ Day Off EN',
+    'Ztrácím tě, lásko (1978)'
+  ];
+  const matching = uploads.filter(name => acceptsCandidate(name, ['Ted Lasso'], 'series', '', 4, 1));
+  assert.deepEqual(matching, uploads.slice(0, 2));
+  assert.equal(acceptsCandidate('Ted Lasso 4. série – 1. díl CZ', ['Ted Lasso'], 'series', '', 4, 1), true);
+  assert.equal(acceptsCandidate('Ted Lasso 4. série – 1.–2. díl', ['Ted Lasso'], 'series', '', 4, 1), false);
+});
+
+test('series queries include padded/unpadded S/E notation and a broad title fallback', () => {
+  const { makeQueries } = require('../api/prehrajto');
+  const queries = makeQueries(['Ted Lasso'], 'series', '', 4, 4);
+  assert.ok(queries.includes('Ted Lasso S04E04'));
+  assert.ok(queries.includes('Ted Lasso S4E4'));
+  assert.ok(queries.includes('Ted Lasso'));
+});
+
 test('Mayday five caption tracks keep unique ids and correct ISO language codes', () => {
   const tracks = [
     { lang: 'cze', label: 'CZE' },
