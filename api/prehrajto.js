@@ -305,6 +305,7 @@ const MAX_STREAMS = 16;
 const MAX_RESOLVE_ATTEMPTS = 24;
 const RESOLVE_CONCURRENCY = 4;
 const LOOKUP_BUDGET_MS = 22000;
+const MAX_SUBTITLE_TRACKS = 20;
 
 // Upstream lookup shares one deadline and aborts unfinished HTTP requests.
 async function searchApi(query, { signal } = {}) {
@@ -378,8 +379,19 @@ function makeStream(item, pageUrl, resolved) {
   const url = validCdnUrl(resolved && (resolved.video_url || resolved.videoUrl), 'mp4');
   if (!url) return null;
   const id = new URL(pageUrl).pathname.split('/').filter(Boolean).pop();
-  const subtitles = (Array.isArray(resolved.subtitles) ? resolved.subtitles : [])
-    .slice(0, 20).map((sub, index) => mapSubtitle(sub, id, index)).filter(Boolean);
+  // The upstream may send dozens of caption variants. Scan all of them before
+  // applying the display limit; Czech and Slovak may appear after 20 English.
+  const subtitleRank = { ces: 0, slk: 1, eng: 2 };
+  const uniqueSubtitles = new Map();
+  for (const [index, sub] of (Array.isArray(resolved.subtitles) ? resolved.subtitles : []).entries()) {
+    const track = mapSubtitle(sub, id, index);
+    if (!track) continue;
+    const key = track.lang + '|' + track.label + '|' + track.url;
+    if (!uniqueSubtitles.has(key)) uniqueSubtitles.set(key, track);
+  }
+  const subtitles = [...uniqueSubtitles.values()]
+    .sort((left, right) => subtitleRank[left.lang] - subtitleRank[right.lang])
+    .slice(0, MAX_SUBTITLE_TRACKS);
   const releaseTitle = String(item.title || '').trim().slice(0, 180);
   const quality = releaseQuality(releaseTitle);
   const subtitleFlags = { ces: '🇨🇿 CZ', slk: '🇸🇰 SK', eng: '🇬🇧 EN' };
@@ -449,6 +461,7 @@ async function findPrehrajtoStreams({ meta, type, season, episode }, injected = 
 
     let next = 0;
     let found = 0;
+    const seenMediaUrls = new Set();
     async function worker() {
       while (next < candidates.length && found < MAX_STREAMS && !controller.signal.aborted) {
         const index = next++;
@@ -457,7 +470,8 @@ async function findPrehrajtoStreams({ meta, type, season, episode }, injected = 
           const data = await resolve(pageUrl, { signal: controller.signal });
           if (controller.signal.aborted) return;
           const stream = makeStream(item, pageUrl, data);
-          if (stream) {
+          if (stream && !seenMediaUrls.has(stream.url)) {
+            seenMediaUrls.add(stream.url);
             resolved[index] = stream;
             found++;
           }

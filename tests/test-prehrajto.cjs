@@ -149,6 +149,24 @@ test('Mayday uses the shared stream display style with actual subtitle tracks', 
   assert.equal(stream.url.startsWith('https://pf-storage6.premiumcdn.net/'), true);
 });
 
+test('caption selection finds Czech and Slovak even after forty English tracks', () => {
+  const english = Array.from({ length: 40 }, (_, i) => ({
+    lang: 'eng', label: 'ENG' + (i + 1),
+    url: cdn('vtt') + '&track=' + i
+  }));
+  const stream = makeStream({ title: 'Ted Lasso S04E01' }, MAYDAY, {
+    video_url: cdn('mp4'),
+    subtitles: [...english,
+      { lang: 'cze', label: 'CZE', url: cdn('vtt') + '&track=cz' },
+      { lang: 'slo', label: 'SLO', url: cdn('vtt') + '&track=sk' },
+      { lang: 'cze', label: 'CZE', url: cdn('vtt') + '&track=cz' }]
+  });
+  assert.equal(stream.subtitles.length, 20);
+  assert.deepEqual(stream.subtitles.slice(0, 2).map(track => track.lang), ['ces', 'slk']);
+  assert.equal(stream.subtitles.filter(track => track.lang === 'ces').length, 1);
+  assert.match(stream.title, /💬 🇨🇿 CZ • 🇸🇰 SK • 🇬🇧 EN/);
+});
+
 test('Forrest Gump audio flags and release-quality labels never invent a resolution', () => {
   const result = title => makeStream({ title }, MAYDAY, { video_url: cdn('mp4'), subtitles: [] });
   const direct = result('Forrest Gump 1994 CZ dab');
@@ -259,6 +277,49 @@ test('all thirteen real Ted Lasso S04E01 naming variants can become streams', as
   assert.equal(checked.length, 13);
   assert.equal(streams.length, 13);
   assert.equal(new Set(streams.map(stream => stream.url)).size, 13);
+});
+
+test('different upload pages resolving to the same media URL are returned once', async () => {
+  const movies = Array.from({ length: 4 }, (_, index) => ({
+    title: 'Avatar 2009 1080p',
+    url: 'https://prehraj.to/avatar/' + (index + 1).toString(16).padStart(16, '0')
+  }));
+  let checked = 0;
+  const streams = await findPrehrajtoStreams({
+    meta: { name: 'Avatar', year: 2009 }, type: 'movie'
+  }, {
+    search: async () => movies,
+    resolve: async url => {
+      checked++;
+      const fileId = Number.parseInt(url.split('/').pop(), 16);
+      const sourceId = fileId <= 2 ? 1 : fileId;
+      return { video_url: 'https://pf-storage6.premiumcdn.net/123/' +
+        sourceId + '.mp4?expires=' + (Math.floor(Date.now() / 1000) + 3600) };
+    }
+  });
+  assert.equal(checked, 4);
+  assert.equal(streams.length, 3);
+  assert.equal(new Set(streams.map(stream => stream.url)).size, 3);
+});
+
+test('provider result order stays stable when resolvers finish out of order', async () => {
+  const movies = Array.from({ length: 3 }, (_, index) => ({
+    title: 'Mayday 2026 1080p',
+    url: 'https://prehraj.to/mayday/' + (index + 1).toString(16).padStart(16, '0')
+  }));
+  const streams = await findPrehrajtoStreams({
+    meta: { name: 'Mayday', year: 2026 }, type: 'movie'
+  }, {
+    search: async () => movies,
+    resolve: async url => {
+      const id = Number.parseInt(url.split('/').pop(), 16);
+      await new Promise(done => setTimeout(done, (4 - id) * 4));
+      return { video_url: 'https://pf-storage6.premiumcdn.net/123/' + id +
+        '.mp4?expires=' + (Math.floor(Date.now() / 1000) + 3600) };
+    }
+  });
+  assert.deepEqual(streams.map(stream => new URL(stream.url).pathname.split('/').pop()),
+    ['1.mp4', '2.mp4', '3.mp4']);
 });
 
 test('searches later title variants after earlier match and tolerates resolver errors', async () => {
