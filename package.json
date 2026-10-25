@@ -2,7 +2,7 @@
   "name": "stremio-addons",
   "version": "0.2.1",
   "private": true,
-  "description": "Five independent Stremio sources including experimental HellSpy Direct (test branch only)",
+  "description": "Six independent Stremio sources including experimental HellSpy and Sledujteto Direct (test branch only)",
   "main": "addon.js",
   "scripts": {
     "start": "node addon.js",

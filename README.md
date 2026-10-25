@@ -23,7 +23,7 @@
 
 **CaseyCZ Stremio Addons** přidává do Stremia další možnosti, kde hledat a přehrávat filmy a seriály. Doplňky jsou **samostatné** – můžeš si nainstalovat jeden, několik nebo všechny.
 
-> **Pouze větev `feature/search-improvements`:** HellSpy Direct TEST je experimentální pátý zdroj. Není nasazený na produkčním serveru. Vyhledávání z Oracle bylo omezeno HTTP 429; testovací manifest proto nemusí vracet výsledky, i když vyhledávání funguje z českého PC.
+> **Pouze větev `feature/search-improvements`:** HellSpy Direct TEST a Sledujteto Direct TEST jsou experimentální zdroje. Nejsou nasazené na produkčním serveru. HellSpy vyhledávání z Oracle bylo omezeno HTTP 429. Sledujteto zatím prošlo ručními testy API a HTTP Range z českého PC, nikoli testem na Oracle nebo ve Stremio iOS.
 
 ## Dostupné doplňky
 
@@ -34,6 +34,7 @@
 | 🍿 **Bombuj** | Filmy, seriály, katalogy a dostupné možnosti přehrávání. | **Ne** |
 | ▶️ **Přehraj.to Direct** | Přímé přehrávání videí, více dostupných verzí a titulky. | **Ne** |
 | 🧪 **HellSpy Direct TEST** | Přímé CDN odkazy na původní videa a všechny dostupné VTT titulky. Zatím experimentální. | **Ne** |
+| 🧪 **Sledujteto Direct TEST** | Přímé MP4 odkazy z autorizovaného vyhledávání, dostupné přímé VTT titulky. Zatím experimentální. | **Ano, Sledujteto** |
 
 Každý zdroj funguje nezávisle na ostatních. Když u jednoho filmu něco nenajdeš, můžeš zkusit jiný doplněk.
 
@@ -49,10 +50,19 @@ Každý zdroj funguje nezávisle na ostatních. Když u jednoho filmu něco nena
 ## Instalace
 
 1. Otevři **[konfigurační stránku](https://130.61.49.108/stremio-addons/configure)**.
-2. Vyber doplněk, který chceš používat. Pro **SKTorrent P2P** vyplň svůj účet; ostatní zdroje účet nevyžadují.
+2. Vyber doplněk, který chceš používat. **SKTorrent P2P** a testovací **Sledujteto Direct TEST** vyžadují vlastní účet; ostatní zdroje účet nevyžadují.
 3. Použij vygenerovaný instalační odkaz a přidej doplněk do **Stremia**.
 
 Doplňky můžeš kdykoliv přidávat samostatně. Není nutné instalovat celou sadu.
+
+### Sledujteto Direct TEST – omezení testovací verze
+
+- Přihlašování používá rozhraní `/api/v1/token`, vyhledávání `/api/v1/videos` a přímý odkaz `/api/v1/video/{id}/link` z Kodi doplňku Sledujteto.
+- Údaje o účtu jsou v instalaci součástí **šifrovaného konfiguračního tokenu**. Instalační URL je i tak citlivá a nesmí se veřejně sdílet. Nezapisuj ji do issue, logů ani screenshotů.
+- Server získává jen metadata a podepsanou adresu videa. Vlastní MP4 nepřenáší, nestahuje ani neukládá.
+- Bezplatný účet v ručním testu vrátil video URL a CDN odpovědělo `206 video/mp4` na dva jednorázové Range požadavky. **To nepotvrzuje plné přehrání, životnost odkazu ani nárok na neomezené přehrávání**.
+- Nyní se nabízejí jen přímé VTT titulky; odkazy na SRT se nepřevádějí. Přesné epizody filtrujeme podle označení sezóny a epizody.
+- Doplněk má vlastní instalační token a volitelné propojení se Sosáčem; nezasahuje do vyhledávání HellSpy, Přehraj.to a dalších zdrojů.
 
 ## Volitelné propojení se Sosáčem
 
@@ -77,11 +87,11 @@ Funkčnost konkrétního streamu závisí na jeho dostupnosti a na možnostech p
 
 ## Soukromí a důležité informace
 
-Údaje k SKTorrentu a volitelnému propojení se Sosáčem jsou součástí chráněné konfigurace. **Vygenerované instalační odkazy s přihlašovacími údaji nikde veřejně nesdílej.**
+Údaje k SKTorrentu, Sledujteto a volitelnému propojení se Sosáčem jsou součástí chráněné konfigurace. **Vygenerované instalační odkazy s přihlašovacími údaji nikde veřejně nesdílej.**
 
 Analytika na konfigurační stránce je volitelná a zapne se pouze po souhlasu. Svou volbu můžeš kdykoliv změnit v nastavení cookies.
 
-Jde o **neoficiální komunitní projekt**. Není oficiálně propojen ani podporován službami Stremio, SKTOnline, SKTorrent, Bombuj, Přehraj.to či Sosáč. Projekt nehostuje samotná videa a dostupnost obsahu se může měnit.
+Jde o **neoficiální komunitní projekt**. Není oficiálně propojen ani podporován službami Stremio, SKTOnline, SKTorrent, Bombuj, Přehraj.to, HellSpy, Sledujteto či Sosáč. Projekt nehostuje samotná videa a dostupnost obsahu se může měnit.
 
 ## Podpora
 

@@ -168,7 +168,7 @@ input::placeholder{color:#7c8ca3}
 <main class="wrap">
   <section class="card">
     <div class="badges">
-      <span class="badge">🎬 4 doplňky</span>
+      <span class="badge">🎬 6 doplňků (včetně testovacích)</span>
       <span class="badge" id="versionBadge">📦 Verze …</span>
       <span class="badge">▶️ Stremio</span>
     </div>
@@ -207,6 +207,7 @@ input::placeholder{color:#7c8ca3}
         <button class="mode-btn" type="button" role="tab" id="tab-bombuj" aria-selected="false" aria-controls="bombuj" data-provider-tab="bombuj">🍿 Bombuj</button>
         <button class="mode-btn" type="button" role="tab" id="tab-prehrajto" aria-selected="false" aria-controls="prehrajto" data-provider-tab="prehrajto">▶️ Přehraj.to</button>
         <button class="mode-btn" type="button" role="tab" id="tab-hellspy" aria-selected="false" aria-controls="hellspy" data-provider-tab="hellspy">🧪 HellSpy TEST</button>
+        <button class="mode-btn" type="button" role="tab" id="tab-sledujteto" aria-selected="false" aria-controls="sledujteto" data-provider-tab="sledujteto">🧪 Sledujteto TEST</button>
       </div>
     </div>
 
@@ -323,6 +324,26 @@ input::placeholder{color:#7c8ca3}
         </div>
       </div>
     </article>
+    <article class="addon" id="sledujteto" role="tabpanel" aria-labelledby="tab-sledujteto" hidden>
+      <div class="addon-top"><span class="provider-icon" aria-hidden="true">🧪</span><span class="provider-pill">MP4 DIRECT TEST</span></div>
+      <h2>Sledujteto</h2><p class="sub">Experimentální přímé MP4 streamy</p>
+      <p class="description">Vyhledávání přes účet Sledujteto a přímé video z jeho CDN. Zatím je ověřené jen vyhledávání a HTTP Range z českého PC, nikoli přehrávání ve Stremiu nebo dostupnost z Oracle.</p>
+      <ul class="features"><li>Vlastní účet</li><li>CDN Direct</li><li>VTT, pokud jsou dostupné</li></ul>
+      <div class="card-bottom">
+        <p class="account-note locked"><span class="dot"></span> Vyžaduje vlastní účet Sledujteto (Premium zatím netestováno)</p>
+        <div class="torrent-fields">
+          <div class="field"><label for="sledujtetoEmail">Sledujteto – e-mail</label><input id="sledujtetoEmail" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="E-mail účtu"></div>
+          <div class="field"><label for="sledujtetoPassword">Sledujteto – heslo</label><div class="password-row"><input id="sledujtetoPassword" type="password" autocomplete="current-password" placeholder="Heslo Sledujteto"><button class="reveal show-password" data-target="sledujtetoPassword" type="button" aria-pressed="false">Zobrazit</button></div></div>
+        </div>
+        <button class="action generate" data-addon="sledujteto" id="sledujtetoGenerate" type="button" disabled>Vytvořit šifrovaný testovací manifest <span aria-hidden="true">→</span></button>
+        <p class="feedback" role="status" aria-live="polite"></p>
+        <div class="output" hidden>
+          <label for="sledujtetoUrl">Šifrovaný manifest – nesdílet veřejně</label>
+          <div class="result-row"><input id="sledujtetoUrl" readonly aria-label="Sledujteto TEST manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
+          <a class="action install" href="#">Instalovat Sledujteto TEST</a>
+        </div>
+      </div>
+    </article>
   </section>
 
 
@@ -335,7 +356,7 @@ input::placeholder{color:#7c8ca3}
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
-const cards = ['sktonline','sktorrent','bombuj','prehrajto','hellspy'];
+const cards = ['sktonline','sktorrent','bombuj','prehrajto','hellspy','sledujteto'];
 const providerTabs = document.querySelectorAll('[data-provider-tab]');
 for (const tab of providerTabs) {
   tab.addEventListener('click', () => {
@@ -373,6 +394,10 @@ function clearResult(addon) {
 function refreshTorrent() {
   const hasLogin=$('sktUsername').value.trim() && $('sktPassword').value;
   $('torrentGenerate').disabled=!hasLogin;
+}
+function refreshSledujteto() {
+  const hasLogin=$('sledujtetoEmail').value.trim() && $('sledujtetoPassword').value;
+  $('sledujtetoGenerate').disabled=!hasLogin;
 }
 function refreshSosac() {
   const user=$('sosacUsername').value.trim(),pass=$('sosacPassword').value;
@@ -422,6 +447,11 @@ async function generate(addon) {
     body.sktPassword=$('sktPassword').value;
     if (!body.sktUsername || !body.sktPassword) return;
   }
+  if (addon==='sledujteto') {
+    body.sledujtetoEmail=$('sledujtetoEmail').value.trim();
+    body.sledujtetoPassword=$('sledujtetoPassword').value;
+    if (!body.sledujtetoEmail || !body.sledujtetoPassword) return;
+  }
   clearResult(addon);
   button.disabled=true;
   const oldText=button.innerHTML;
@@ -434,12 +464,14 @@ async function generate(addon) {
     const data=await response.json().catch(()=>({}));
     if (!response.ok || !data.token) throw Error(data.error||'Instalační odkaz se nepodařilo vytvořit.');
     showResult(addon,data.token);
-    feedback(card,addon==='sktorrent'?'Účet ověřen. Manifest je připravený.':'Manifest je připravený.');
+    feedback(card,addon==='sktorrent'?'Účet ověřen. Manifest je připravený.':
+      addon==='sledujteto'?'Šifrovaný testovací manifest je připravený. Přihlášení se ověří až při vyhledávání.':'Manifest je připravený.');
   } catch (error) {
     feedback(card,error.message||'Nepodařilo se vytvořit odkaz.',true);
   } finally {
     button.innerHTML=oldText;
-    button.disabled=addon==='sktorrent'?!($('sktUsername').value.trim()&&$('sktPassword').value):false;
+    button.disabled=addon==='sktorrent'?!($('sktUsername').value.trim()&&$('sktPassword').value):
+      addon==='sledujteto'?!($('sledujtetoEmail').value.trim()&&$('sledujtetoPassword').value):false;
   }
 }
 for(const button of document.querySelectorAll('.generate')) {
@@ -447,6 +479,9 @@ for(const button of document.querySelectorAll('.generate')) {
 }
 for(const id of ['sktUsername','sktPassword']) {
   $(id).addEventListener('input',()=>{clearResult('sktorrent');refreshTorrent();});
+}
+for(const id of ['sledujtetoEmail','sledujtetoPassword']) {
+  $(id).addEventListener('input',()=>{clearResult('sledujteto');refreshSledujteto();});
 }
 for(const id of ['sosacUsername','sosacPassword']) $(id).addEventListener('input',refreshSosac);
 $('uiLanguage').addEventListener('change',refreshLanguage);
@@ -476,6 +511,7 @@ $('hellspyUrl').value=location.origin+hellspyPath;
 $('hellspyInstall').href='stremio://'+location.host+hellspyPath;
 refreshSosac();
 refreshTorrent();
+refreshSledujteto();
 async function loadVersion() {
   for(const url of [...new Set([base()+'/health','/health'])]) {
     try {
