@@ -187,8 +187,8 @@ test('matching and resolution work without live third-party API calls', async ()
   assert.equal(results[0].subtitles[0].lang, 'ces');
 });
 
-test('eight streams maximum, four concurrent resolvers, duplicate links ignored', async () => {
-  const movies = Array.from({ length: 14 }, (_, i) => ({
+test('sixteen streams maximum, four concurrent resolvers, duplicate links ignored', async () => {
+  const movies = Array.from({ length: 25 }, (_, i) => ({
     title: 'The Dark Knight 2008 2160p BluRay',
     url: 'https://prehraj.to/film-' + i + '/' + (i + 1).toString(16).padStart(16, '0')
   }));
@@ -212,11 +212,47 @@ test('eight streams maximum, four concurrent resolvers, duplicate links ignored'
     }
   });
   assert.equal(queries.length, 2);
-  assert.equal(streams.length, 8);
-  assert.ok(attempts >= 8 && attempts <= 11);
+  assert.equal(streams.length, 16);
+  assert.ok(attempts >= 16 && attempts <= 19);
   assert.ok(peak > 1 && peak <= 4);
-  assert.equal(new Set(streams.map(s => s.url)).size, 8);
+  assert.equal(new Set(streams.map(s => s.url)).size, 16);
   assert.ok(streams.every(s => !Object.hasOwn(s, 'description')));
+});
+
+test('all thirteen real Ted Lasso S04E01 naming variants can become streams', async () => {
+  const names = [
+    'Ted Lasso S04E01 CZ Titulky chemon',
+    'Ted Lasso S04E01 CZ Titulky  LumiX',
+    'Ted Lasso S04E01 CZ Titulky lemon',
+    'Ted Lasso S04E01 CZ Titulky',
+    'Ted Lasso S04E01 CZ Titulky demon',
+    'Ted Lasso S04E01 CZ Titulky 1080p FULL HD chemon',
+    'Ted Lasso S04E01 CZ Titulky 1080p FULL HD lemon',
+    'Ted Lasso S04E01 CZ Titulky 1080p FULL HD demon',
+    'Ted Lasso S04E01 CZ Titulky',
+    'Ted Lasso S04E01 CzTit',
+    'Ted Lasso_S04E01_Domov',
+    'Ted Lasso - S4E1 Home EN',
+    'Ted Lasso S04E01 CZtitulky'
+  ];
+  const movies = names.map((title, index) => ({
+    title,
+    url: 'https://prehraj.to/ted-lasso/' + (index + 1).toString(16).padStart(16, '0')
+  }));
+  const checked = [];
+  const streams = await findPrehrajtoStreams({
+    meta: { name: 'Ted Lasso' }, type: 'series', season: 4, episode: 1
+  }, {
+    search: async () => movies,
+    resolve: async url => {
+      checked.push(url);
+      return { video_url: 'https://pf-storage6.premiumcdn.net/123/' +
+        url.split('/').pop() + '.mp4?expires=' + (Math.floor(Date.now() / 1000) + 3600) };
+    }
+  });
+  assert.equal(checked.length, 13);
+  assert.equal(streams.length, 13);
+  assert.equal(new Set(streams.map(stream => stream.url)).size, 13);
 });
 
 test('searches later title variants after earlier match and tolerates resolver errors', async () => {

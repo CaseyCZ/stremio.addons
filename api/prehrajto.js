@@ -294,8 +294,10 @@ function makeQueries(titles, type, year, season, episode) {
   return [...new Set(queries)].slice(0, type === 'series' ? 5 : 4);
 }
 
-const MAX_STREAMS = 8;
-const MAX_RESOLVE_ATTEMPTS = 12;
+// Keep more distinct uploads for episodes with many valid releases. The
+// four-worker concurrency and overall deadline still bound upstream load.
+const MAX_STREAMS = 16;
+const MAX_RESOLVE_ATTEMPTS = 24;
 const RESOLVE_CONCURRENCY = 4;
 const LOOKUP_BUDGET_MS = 22000;
 
@@ -306,7 +308,7 @@ async function searchApi(query, { signal } = {}) {
   if (found !== undefined) return found;
   const resp = await http.get(SEARCH_API, { params: { q: query }, signal });
   if (!resp.data || resp.data.success !== true || !Array.isArray(resp.data.movies)) throw Error('search API returned no valid movie list');
-  const movies = resp.data.movies.slice(0, 40);
+  const movies = resp.data.movies.slice(0, 60);
   cache.set(key, movies, movies.length ? 60 : 10);
   return movies;
 }
