@@ -84,8 +84,8 @@ function wrapperFunctions(filename, names) {
   return mod.exports;
 }
 
-test('all four Bombuj groups survive front/bootstrap and repeated movie/episode formatting', () => {
-  const front = wrapperFunctions('./front.js', ['displayDirect', 'displayExternal']);
+test('all four Bombuj groups survive front/bootstrap direct movie/episode formatting', () => {
+  const front = wrapperFunctions('./front.js', ['displayDirect']);
   const boot = wrapperFunctions('./bootstrap.js', ['nativeTitle']);
   for (const [group, audio] of [
     ['CZ dabing', '🇨🇿 CZ'], ['SK dabing', '🇸🇰 SK'],
@@ -97,8 +97,6 @@ test('all four Bombuj groups survive front/bootstrap and repeated movie/episode 
     assert.equal(formatBombujStream(expected).title, expected.title);
     assert.equal(formatBombujStream(front.displayDirect(raw)).title, expected.title);
     assert.equal(formatBombujStream({ ...raw, name: 'Bombuj • Direct', title: boot.nativeTitle(raw), description: undefined }).title, expected.title);
-    const external = { ...raw, url: undefined, externalUrl: 'https://voe.sx/e/fixture' };
-    assert.equal(formatBombujStream(front.displayExternal(external)).title, formatBombujStream(external).title);
   }
 });
 

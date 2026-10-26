@@ -144,10 +144,11 @@ test('existing Bombuj Primewire player is not altered until test flag enabled', 
     ], 'https://www.bombuj.si/online-film-example',
     { type: 'movie', title: 'Insidious', year: 2011 });
     assert.equal(called, enabled ? 1 : 0);
-    assert.equal(streams.length, enabled ? 2 : 1);
-    assert.equal(enabled ? streams[0].url : streams[0].externalUrl,
-      enabled ? 'https://ployan.me/hls/test/master.m3u8' : embed);
-    assert.match(streams[0].description, /EN dab\/tit/);
-    if (enabled) assert.equal(streams[1].externalUrl, embed);
+    assert.equal(streams.length, enabled ? 1 : 0);
+    if (enabled) {
+      assert.equal(streams[0].url, 'https://ployan.me/hls/test/master.m3u8');
+      assert.match(streams[0].description, /EN dab\/tit/);
+      assert.equal(streams[0].externalUrl, undefined);
+    }
   }
 });

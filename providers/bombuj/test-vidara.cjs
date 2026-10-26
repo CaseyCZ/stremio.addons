@@ -114,15 +114,13 @@ test('existing Bombuj pipeline uses Vidara only when opted in, preserving origin
       { provider: 'Vidara', language: 'EN dab/tit', resolvedUrl: embed }
     ], 'https://www.bombuj.si/online-film-example');
     assert.equal(calls, enabled ? 1 : 0);
-    assert.equal(found.length, enabled ? 2 : 1);
+    assert.equal(found.length, enabled ? 1 : 0);
     if (enabled) {
       assert.equal(found[0].url, master);
-      assert.equal(found[1].externalUrl, embed);
+      assert.equal(found[0].externalUrl, undefined);
       assert.equal(found[0].subtitles[0].lang, 'ces');
       assert.equal(found[0].behaviorHints.proxyHeaders.request.Origin, 'https://vidara.to');
       assert.equal(found[0].description, 'EN dab/tit • přímý HLS • 1080p');
-    } else {
-      assert.equal(found[0].externalUrl, embed);
     }
   }
 });

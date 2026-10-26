@@ -65,17 +65,6 @@ function displayDirect(stream) {
   };
 }
 
-function displayExternal(stream) {
-  const provider = providerLabel(stream);
-  return {
-    ...stream,
-    name: `Bombuj • ${provider}`,
-    title: `🎧 ${audioLabel(stream)}\n💬 ${subtitleLabel(stream)}\n🌐 Web player`,
-    description: undefined,
-    url: undefined
-  };
-}
-
 function streamKey(type, id) {
   return `${String(type || '')}:${String(id || '')}`;
 }
@@ -88,12 +77,8 @@ function transformStreams(type, id, payload) {
   const direct = discovered
     .filter((stream) => stream?.url && /^https?:\/\//i.test(String(stream.url)))
     .map(displayDirect);
-  const external = discovered
-    .filter((stream) => stream?.externalUrl && /^https?:\/\//i.test(String(stream.externalUrl)))
-    .map(displayExternal);
-
-  console.log(`[front] ${type}/${id}: direct=${direct.length} external=${external.length} discovered=${discovered.length} subtitles=${subtitles.length}`);
-  return { streams: [...direct, ...external] };
+  console.log(`[front] ${type}/${id}: direct=${direct.length} omitted-web=${discovered.length - direct.length} discovered=${discovered.length} subtitles=${subtitles.length}`);
+  return { streams: direct };
 }
 
 function parseResource(pathname, resource) {

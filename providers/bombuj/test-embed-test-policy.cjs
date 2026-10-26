@@ -10,7 +10,7 @@ test('unblock requires an explicit switch and exact permitted hostname',()=>{
   }
   for(const url of ['https://mixdrop.ag.evil.test/e/test','https://evil.test','https://voe.sx/e/test','http://mixdrop.ag/e/test','https://u:p@mixdrop.ag/e/test'])assert.equal(testUnblockAllowed(url,on),false);
 });
-test('preflight keeps opted-in embeds without inventing playback success or opening a port',async()=>{
+test('preflight never publishes HTML embeds even with diagnostic switches',async()=>{
   const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
   const file=require.resolve('./preflight-front.js'),local=createRequire(file),mod={exports:{}};
   const env={BOMBUJ_TEST_UNBLOCK_EMBEDS:'1'};
@@ -21,9 +21,9 @@ test('preflight keeps opted-in embeds without inventing playback success or open
   });
   const streams=['bysekoze.com','vsembed.ru','mixdrop.ag'].map(host=>({name:host,externalUrl:`https://${host}/e/test`}));
   const out=await mod.exports.preflightStreams({streams},'movie','tt0133093');
-  assert.equal(out.streams.length,3);assert.equal(out.streams[0].externalUrl,streams[0].externalUrl);
+  assert.equal(out.streams.length,0);
 });
-test('owner show-all mode preserves every web source without network preflight',async()=>{
+test('owner show-all mode still publishes only direct video URLs',async()=>{
   const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
   const file=require.resolve('./preflight-front.js'),local=createRequire(file),mod={exports:{}};
   const env={BOMBUJ_SHOW_ALL_SOURCES:'1'};
@@ -35,10 +35,10 @@ test('owner show-all mode preserves every web source without network preflight',
   const streams=['mixdrop.ag','byse.sx','player.videasy.to','some-player.example'].map(host=>({name:host,externalUrl:`https://${host}/e/test`}));
   streams.unshift({name:'direct',url:'https://cdn.example/video.m3u8'});
   const out=await mod.exports.preflightStreams({streams},'movie','tt0468569');
-  assert.equal(out.streams.length,streams.length);
-  assert.deepEqual(Array.from(out.streams,s=>s.externalUrl||s.url),streams.map(s=>s.externalUrl||s.url));
+  assert.equal(out.streams.length,1);
+  assert.equal(out.streams[0].url,'https://cdn.example/video.m3u8');
 });
-test('owner show-all mode permits Mixdrop page fetch and preserves its web fallback',async()=>{
+test('owner show-all mode resolves Mixdrop without publishing its web player',async()=>{
   const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
   const frontFile=require.resolve('./front.js'),frontRequire=createRequire(frontFile);
   let requests=0;
@@ -61,9 +61,8 @@ test('owner show-all mode permits Mixdrop page fetch and preserves its web fallb
   const embed='https://mixdrop.ag/e/test';
   const out=await mod.exports.playersToStreams([{provider:'Mixdrop',language:'CZ dabing',resolvedUrl:embed}],
     'https://www.bombuj.si/online-film-fixture');
-  assert.equal(out.length,2);
+  assert.equal(out.length,1);
   assert.equal(out[0].url,'https://mxcontent.net/fixture.mp4');
-  assert.equal(out[1].externalUrl,embed);
 });
 test('filter exclusion is disabled only while the diagnostic switch is set',()=>{
   const old=process.env.BOMBUJ_TEST_UNBLOCK_EMBEDS;
@@ -82,7 +81,7 @@ test('VOE direct test is separate and limited to the two expected hosts',()=>{
   assert.equal(testDirectVoeAllowed('https://voe2.sx/e/test',env),true);
   for(const u of ['https://voe.sx.evil.test/e/test','https://mixdrop.ag/e/test','http://voe.sx/e/test'])assert.equal(testDirectVoeAllowed(u,env),false);
 });
-test('VOE opt-in keeps the original embed as fallback and preserves language',async()=>{
+test('VOE opt-in only publishes direct media and preserves language',async()=>{
   const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
   const file=require.resolve('./index'),local=createRequire(file),mod={exports:{}};
   const sdk={addonBuilder:class{defineCatalogHandler(){}defineStreamHandler(){}getInterface(){return{}}},serveHTTP(){}};
@@ -93,9 +92,9 @@ test('VOE opt-in keeps the original embed as fallback and preserves language',as
   });
   const embed='https://voe.sx/e/fixture?subtitles='+encodeURIComponent('CZSK;cs;https://www.bombuj.si/titulky/fixture.vtt');
   const out=await mod.exports.playersToStreams([{provider:'voe2.sx',language:'CZ dabing',resolvedUrl:embed}],'https://www.bombuj.si/online-film-temny-rytir');
-  assert.equal(out.length,2);assert.equal(out[0].url,'https://cdn.example/1080p/index.m3u8');
-  assert.match(out[0].description,/CZ dabing/);assert.equal(out[1].externalUrl,embed);
-  assert.equal(out[0].subtitles[0].lang,'ces');assert.equal(out[1].subtitles[0].url,'https://www.bombuj.si/titulky/fixture.vtt');
+  assert.equal(out.length,1);assert.equal(out[0].url,'https://cdn.example/1080p/index.m3u8');
+  assert.match(out[0].description,/CZ dabing/);
+  assert.equal(out[0].subtitles[0].lang,'ces');assert.equal(out[0].subtitles[0].url,'https://www.bombuj.si/titulky/fixture.vtt');
   const variants=await mod.exports.playersToStreams([
     {provider:'voe2.sx',language:'CZ dabing',resolvedUrl:'https://voe.sx/e/cz'},
     {provider:'voe2.sx',language:'SK dabing',resolvedUrl:'https://voe.sx/e/sk'}
@@ -131,7 +130,7 @@ test('normal VOE switch is host-limited and explicit disable overrides legacy op
     assert.equal(testDirectVoeAllowed(url,{BOMBUJ_DIRECT_VOE:'1'}),false);
 });
 
-test('VOE original fallback survives preflight without fetching video or claiming playback success',async()=>{
+test('VOE web player is excluded from public preflight without fetching video',async()=>{
   const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
   const file=require.resolve('./preflight-front'),local=createRequire(file),mod={exports:{}};
   const env={BOMBUJ_DIRECT_VOE:'1'},logs=[];
@@ -145,12 +144,11 @@ test('VOE original fallback survives preflight without fetching video or claimin
   const streams=[{name:'Bombuj • VOE',url:'https://cdn.example/video.m3u8'},
     {name:'Bombuj • VOE',externalUrl:'https://voe.sx/e/original'}];
   const out=await mod.exports.preflightStreams({streams},'movie','tt0468569');
-  assert.equal(out.streams.length,2);assert.equal(out.streams[1].externalUrl,streams[1].externalUrl);
-  assert(logs.some(line=>line.includes('state=unknown reason=voe-original-web-fallback')));
-  assert(logs.some(line=>line.includes('state=unknown reason=direct-media-client-playback-unverified')));
+  assert.equal(out.streams.length,1);assert.equal(out.streams[0].url,streams[0].url);
+  assert(logs.some(line=>line.includes('direct-only=1 omitted-web=1')));
 });
 
-test('VOE upstream failures retain exact language-bound web source',async()=>{
+test('VOE upstream failures never expose a web player as a stream',async()=>{
   const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
   const file=require.resolve('./index'),local=createRequire(file),mod={exports:{}};
   const sdk={addonBuilder:class{defineCatalogHandler(){}defineStreamHandler(){}getInterface(){return{}}},serveHTTP(){}};
@@ -161,7 +159,7 @@ test('VOE upstream failures retain exact language-bound web source',async()=>{
   });
   const embed='https://voe2.sx/e/original';
   const out=await mod.exports.playersToStreams([{provider:'voe2.sx',language:'SK dabing',resolvedUrl:embed}],'https://www.bombuj.si/online-film-example');
-  assert.equal(out.length,1);assert.equal(out[0].externalUrl,embed);assert.match(out[0].description,/SK dabing/);
+  assert.equal(out.length,0);
 });
 
 test('custom movie VOE signed URLs are resolved again, while other sources retain their cache',async()=>{

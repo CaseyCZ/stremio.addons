@@ -67,7 +67,7 @@ test('VidNest rejects unknown identifiers, untrusted results and malformed episo
   assert.equal(count, 4);
 });
 
-test('Bombuj VidNest wrapper preserves external fallback until test flag is enabled', async () => {
+test('Bombuj VidNest wrapper never publishes a web player', async () => {
   const file = require.resolve('./index.js'), local = createRequire(file);
   const sdk = { addonBuilder: class {
     defineCatalogHandler() {} defineStreamHandler() {} getInterface() { return {}; }
@@ -94,9 +94,11 @@ test('Bombuj VidNest wrapper preserves external fallback until test flag is enab
       { url: original, resolvedUrl: embed, provider: 'vidnest (New)', language: 'EN dab/tit' }
     ], 'https://www.bombuj.si/online-film-example', { type: 'movie' });
     assert.equal(called, enabled ? 1 : 0);
-    assert.equal(streams.length, enabled ? 2 : 1);
-    assert.equal(enabled ? streams[0].url : streams[0].externalUrl, enabled ? cdn : embed);
-    if (enabled) assert.equal(streams[1].externalUrl, embed);
+    assert.equal(streams.length, enabled ? 1 : 0);
+    if (enabled) {
+      assert.equal(streams[0].url, cdn);
+      assert.equal(streams[0].externalUrl, undefined);
+    }
   }
 });
 
@@ -128,7 +130,8 @@ test('Bombuj VidLink and Videasy may use exact-ID VidNest backend in isolation',
       resolvedUrl: `https://${source === 'vidlink' ? 'vidlink.pro' : 'player.videasy.net'}/movie/1291595`
     }], 'https://www.bombuj.si/online-film-example', { type: 'movie' });
     assert.equal(seen, 1);
+    assert.equal(streams.length, 1);
     assert.equal(streams[0].url, cdn);
-    assert(streams[1].externalUrl);
+    assert.equal(streams[0].externalUrl, undefined);
   }
 });

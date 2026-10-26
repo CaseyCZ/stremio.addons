@@ -123,9 +123,10 @@ test('existing Bombuj VidAPI wrapper uses direct only with explicit test switch'
         resolvedUrl: 'https://vaplayer.ru/embed/movie/1291595' }
     ], 'https://www.bombuj.si/online-film-example', { type: 'movie' });
     assert.equal(directCalls, enabled ? 1 : 0);
-    assert.equal(streams.length, enabled ? 2 : 1);
-    assert.equal(enabled ? streams[0].url : streams[0].externalUrl,
-      enabled ? cdn('high') : 'https://vaplayer.ru/embed/movie/1291595');
-    if (enabled) assert.equal(streams[1].externalUrl, 'https://vaplayer.ru/embed/movie/1291595');
+    assert.equal(streams.length, enabled ? 1 : 0);
+    if (enabled) {
+      assert.equal(streams[0].url, cdn('high'));
+      assert.equal(streams[0].externalUrl, undefined);
+    }
   }
 });

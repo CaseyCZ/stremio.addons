@@ -80,7 +80,10 @@ test('Bombuj Streamtape player stays external unless the direct test is enabled'
       { provider: 'streamtape.com', language: 'CZ dabing', resolvedUrl: embed }
     ], 'https://www.bombuj.si/online-film-example');
     assert.equal(calls, enabled ? 1 : 0);
-    assert.equal(enabled ? streams[0].url : streams[0].externalUrl, enabled ? cdn : embed);
-    if (enabled) assert.equal(streams[1].externalUrl, embed);
+    assert.equal(streams.length, enabled ? 1 : 0);
+    if (enabled) {
+      assert.equal(streams[0].url, cdn);
+      assert.equal(streams[0].externalUrl, undefined);
+    }
   }
 });

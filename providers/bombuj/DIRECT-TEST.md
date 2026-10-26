@@ -1,15 +1,18 @@
 # Bombuj: přímé streamy – izolované testování
 
 Rozšíření je součástí **stávajícího doplňku Bombuj**, nikoli samostatný Stremio addon.
-Stávající katalogy, přehrávače a značky `🎧` (audio), `💬` (titulky), `🎬` (kvalita)
-zůstávají beze změny. Primární pořadí je český dabing, potom anglické audio
+Stávající katalogy, objevování všech původních přehrávačů a značky `🎧` (audio),
+`💬` (titulky), `🎬` (kvalita) zůstávají zachované. **Stremio však dostane jen
+přímé HLS/MP4 streamy v poli `url`, nikoliv stránky v `externalUrl`.**
+Primární pořadí je český dabing, potom anglické audio
 se **skutečnou URL českých titulků**, následně deklarované CZ titulky a ostatní.
 
 ## Experimentální přímé resolvery
 
 Přepínače lze ovládat jednotlivě. **Na osobní produkční instanci jsou všechny
 níže uvedené přímé resolvery zapnuté**, včetně `BOMBUJ_DIRECT_VOE=1`.
-Bez přepínače se používá původní přehrávač.
+Při vypnutí resolveru se původní adresa stále rozpoznává a může být uvedena
+v soukromém diagnostickém logu, ale webový přehrávač se nepřidá mezi streamy.
 
 | Přepínač (`=1`) | Zdroj v Bombuj | Přímé video, pokud existuje |
 | --- | --- | --- |
@@ -22,17 +25,18 @@ Bez přepínače se používá původní přehrávač.
 | `BOMBUJ_DIRECT_STREAMTAPE` | Streamtape | Statické složení tokenu → originální MP4 CDN, pokud projde krátká range sonda |
 
 - VOE a Mixdrop mají vlastní existující přímé resolvery; nic se v nich nemaže.
-- Byse/Filemoon, VidSrc a další původní přehrávače zachovávají původní
-  fallback. Úspěšné načtení stránky (`HTTP 200`) samo o sobě nedokazuje
+- Byse/Filemoon, VidSrc a další původní přehrávače se dále vyhledávají a
+  zaznamenávají; pokud z nich zatím nelze získat přímé HLS/MP4, jejich
+  webová adresa se do výsledku Stremia nepřidává. Úspěšné načtení stránky (`HTTP 200`) samo o sobě nedokazuje
   dostupnost přímého videa nebo přehratelnost ve Stremio iOS.
 - Video ani titulky netečou přes Oracle server; vrací se zdrojová URL.
 - Přímá HLS/MP4 URL se kontroluje jen omezenou sondou, nejsou stahována videa.
 - Expirované podepsané URL se nemají ukládat do pětiminutové cache.
 - Filmy musí odpovídat ověřenému ID/titulu; u seriálů rovněž řadě a dílu.
-- Pokud resolver nedostane jednoznačný výsledek, zůstává původní externí
-  přehrávač. V osobní produkci `BOMBUJ_SHOW_ALL_SOURCES=1` zachovává všechny
-  nalezené webové odkazy i při neúspěšné předběžné kontrole. Samotná dostupnost
-  zdroje v seznamu nezaručuje jeho přehratelnost v aplikaci.
+- Pokud resolver nenajde přímé video, daný zdroj se pro tento požadavek
+  nezobrazí ve Stremiu; důvod a původní URL zůstávají v diagnostice.
+  `BOMBUJ_SHOW_ALL_SOURCES=1` nesmí toto pravidlo změnit. Přímé URL je
+  kandidát k přehrání, ne záruka přehratelnosti na každém zařízení.
 
 ## Diagnostika v soukromém Dashboardu
 
@@ -44,8 +48,8 @@ lze spojit jednotlivé pokusy stejného požadavku.
 - `requestUrl`: **přesná adresa volaná resolverem**, například API VidNest
   nebo stránka Mixdrop. Při chybě `http-403` je vidět i tato konkrétní URL.
 - `mediaUrl`: přímá HLS/MP4 adresa nalezená při rozboru stránky.
-- `handedToStremio`: **přesná adresa, kterou dostane Stremio** (přímé video
-  nebo původní webový odkaz). `result=direct` či `result=web-fallback`.
+- `handedToStremio`: **přesná přímá video adresa předaná Stremiu**. Vyskytuje
+  se pouze u `result=direct`; při `result=no-direct-media` je zdroj vynechán.
 - `reason` a `stage`: kde pokus skončil a proč (HTTP, token, HLS apod.).
 
 Přesné adresy se zapisují pouze při `BOMBUJ_RESOLVER_LOG_URLS=1`.

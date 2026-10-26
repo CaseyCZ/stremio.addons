@@ -182,58 +182,13 @@ async function preflightExternal(url, neutralReferrer = false) {
 
 async function preflightStreams(payload, type, id) {
   const streams = Array.isArray(payload?.streams) ? payload.streams : [];
-  const results = await Promise.all(streams.map(async (stream) => {
-    if (stream?.url && /^https?:\/\//i.test(String(stream.url))) {
-      return { stream, state: 'unknown', reason: 'direct-media-client-playback-unverified', provider: providerName(stream) };
-    }
-    if (!stream?.externalUrl || !/^https?:\/\//i.test(String(stream.externalUrl))) {
-      return { stream, state: 'unknown', reason: 'no-http-url', provider: providerName(stream) };
-    }
-    // Preserve every discovered web fallback in the owner's personal setup.
-    // A failed server-side preflight cannot establish actual client playback.
-    if (process.env.BOMBUJ_SHOW_ALL_SOURCES === '1') {
-      return { stream, state: 'unknown', reason: 'owner-enabled-all-sources', provider: providerName(stream) };
-    }
-    // Preserve the exact web fallback for opted-in VOE even if a server HTML
-    // preflight fails. Server reachability does not establish client playback.
-    if (testDirectVoeAllowed(stream.externalUrl)) {
-      return { stream, state: 'unknown', reason: 'voe-original-web-fallback', provider: providerName(stream) };
-    }
-    // Byse's owner explicitly rejects web.stremio.com. A server-side HTTP
-    // 200 cannot validate an iframe/player that the browser is forbidden to load.
-    if (testUnblockAllowed(stream.externalUrl)) {
-      return { stream, state: 'unknown', reason: 'diagnostic-unfiltered-playback-unverified', provider: providerName(stream) };
-    }
-    const incompatibility = confirmedStremioEmbedFailure(stream.externalUrl);
-    if (incompatibility) {
-      return { stream, state: 'failed', reason: incompatibility, provider: providerName(stream) };
-    }
-    const originalUrl = String(stream.externalUrl);
-    if (validStreamtapeEmbed(originalUrl)) {
-      // A plain Stremio Referer produces a false HTTP 404 for this
-      // Streamtape embed; a neutral request does not. Only use the
-      // neutral check to avoid a false negative. Always return the
-      // provider's ORIGINAL URL. Never proxy or redirect playback.
-      const check = await preflightExternal(originalUrl, true);
-      return {
-        stream,
-        provider: providerName(stream),
-        ...check,
-        // HTTP reachability is not proof of Stremio iOS playback.
-        state: check.state === 'ok' ? 'unknown' : check.state,
-        reason: 'direct-streamtape-referrer-uncertain:' + check.reason
-      };
-    }
-    const check = await preflightExternal(originalUrl);
-    return { stream, provider: providerName(stream), ...check };
-  }));
-
-  const kept = results.filter((item) => item.state !== 'failed').map((item) => item.stream);
-  for (const item of results) {
-    console.log(`[preflight] ${type}/${id} provider=${JSON.stringify(item.provider)} state=${item.state} reason=${item.reason}${item.status ? ` status=${item.status}` : ''}`);
-  }
-  console.log(`[preflight] ${type}/${id}: kept=${kept.length} removed=${streams.length - kept.length} discovered=${streams.length}`);
-  return { ...payload, streams: kept };
+  // Final public boundary: only real direct video URLs can reach Stremio.
+  // Internal discovery still processes every original Bombuj player, but
+  // HTML embeds / externalUrl must never be handed off as playable streams.
+  const direct = streams.filter(stream =>
+    stream?.url && /^https?:\/\//i.test(String(stream.url)));
+  console.log(`[preflight] ${type}/${id}: direct-only=${direct.length} omitted-web=${streams.length - direct.length} discovered=${streams.length}`);
+  return { ...payload, streams: direct };
 }
 
 async function fetchInner(pathname) {

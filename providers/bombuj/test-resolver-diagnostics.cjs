@@ -66,8 +66,9 @@ test('private Bombuj log includes exact player, attempted, and handed-off media 
     const streams = await mod.exports.playersToStreams([
       { provider: 'Mixdrop', language: 'CZ dabing', resolvedUrl: embed }
     ], 'https://www.bombuj.si/online-film-fixture');
+    assert.equal(streams.length, 1);
     assert.equal(streams[0].url, direct);
-    assert.equal(streams[1].externalUrl, embed);
+    assert.equal(streams[0].externalUrl, undefined);
     const entries = messages.filter(line => line.startsWith('[BOMBUJ RESOLVER] '))
       .map(line => JSON.parse(line.replace('[BOMBUJ RESOLVER] ', '')));
     const parse = entries.find(item => item.stage === 'parse');

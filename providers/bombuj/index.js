@@ -731,17 +731,7 @@ function makeDirectStream(player, direct, index, tracks) {
   };
 }
 
-function makeExternalStream(player, index, tracks) {
-  return {
-    name: `Bombuj • ${safeLabel(player.provider) || `Zdroj ${index + 1}`}`,
-    description: `${safeLabel(player.language) || 'Bombuj'} • externí player`,
-    externalUrl: player.resolvedUrl,
-    ...(tracks.length ? { subtitles: tracks } : {})
-  };
-}
-
 async function playersToStreams(players, sourcePageUrl, context = {}) {
-  const webFallbacks = [];
   const requestId = `${Date.now().toString(36)}-${(++resolverRequestCounter).toString(36)}`;
   const resolved = await mapWithConcurrency(players, 3, async (player, index) => {
     const started = Date.now();
@@ -757,21 +747,16 @@ async function playersToStreams(players, sourcePageUrl, context = {}) {
       onDiagnostic({ stage: 'result', result: 'direct', quality: direct.quality || direct.type,
         handedToStremio: direct.url, referer: direct.referer,
         elapsedMs: Date.now() - started });
-      // The owner requires every original Bombuj player link to remain
-      // selectable exactly as discovered, even when a direct CDN URL exists.
-      // A resolver only ADDS an option; it never replaces the source link.
-      webFallbacks[index] = makeExternalStream(player, index, tracks);
       return makeDirectStream(player, direct, index, tracks);
     }
-    onDiagnostic({ stage: 'result', result: 'web-fallback', reason: 'no-direct-media',
-      handedToStremio: player.resolvedUrl,
+    // Every original player is still inspected, but an HTML embed is not a
+    // playable Stremio stream. Never report it as handed off to the client.
+    onDiagnostic({ stage: 'result', result: 'no-direct-media', reason: 'no-direct-media',
       elapsedMs: Date.now() - started });
-    return makeExternalStream(player, index, tracks);
+    return null;
   });
 
-  const direct = resolved.filter((stream) => stream?.url);
-  const external = [...resolved.filter((stream) => stream?.externalUrl), ...webFallbacks.filter(Boolean)];
-  return [...direct, ...external];
+  return resolved.filter((stream) => stream?.url);
 }
 
 
