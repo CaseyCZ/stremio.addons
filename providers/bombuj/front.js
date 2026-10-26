@@ -1,8 +1,7 @@
 'use strict';
 
 const http = require('http');
-const { qualityLabel } = require('./stream-quality.js');
-const { subtitleTracks, audioLabel, subtitleLabel, providerLabel } = require('./stream-display.js');
+const { subtitleTracks, formatBombujStream } = require('./stream-display.js');
 const { testUnblockAllowed, testDirectVoeAllowed } = require('./embed-test-policy.js');
 
 const PUBLIC_PORT = Number(process.env.PORT || 7004);
@@ -54,19 +53,8 @@ function uniqueSubtitles(streams) {
 
 
 function displayDirect(stream) {
-  const quality = qualityLabel(stream);
-  const provider = providerLabel(stream);
-  // Keep the web-test marker through the last public-facing display layer.
-  // Stremio Web may attempt HTTPS MP4 without proxyHeaders/notWebReady;
-  // HLS and other header-dependent streams keep their original behavior.
-  const webTest = /\.mp4(?:$|[?#])/i.test(String(stream?.url || '')) &&
-    stream?.behaviorHints?.notWebReady !== true && !stream?.behaviorHints?.proxyHeaders;
-  const label = quality + (webTest ? ' • WEB TEST' : '');
   return {
-    ...stream,
-    name: `Bombuj • ${label}`,
-    title: `🎧 ${audioLabel(stream)}\n💬 ${subtitleLabel(stream)}\n🎬 ${label}`,
-    description: undefined,
+    ...formatBombujStream(stream),
     externalUrl: undefined
   };
 }
