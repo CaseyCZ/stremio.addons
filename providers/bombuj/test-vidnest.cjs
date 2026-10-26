@@ -102,12 +102,12 @@ test('Bombuj VidNest wrapper never publishes a web player', async () => {
   }
 });
 
-test('Bombuj VidLink and Videasy may use exact-ID VidNest backend in isolation', async () => {
+test('Bombuj Videasy may use exact-ID VidNest backend in isolation', async () => {
   const file = require.resolve('./index.js'), local = createRequire(file);
   const sdk = { addonBuilder: class {
     defineCatalogHandler() {} defineStreamHandler() {} getInterface() { return {}; }
   }, serveHTTP() {} };
-  for (const source of ['vidlink', 'videasy']) {
+  for (const source of ['videasy']) {
     const mod = { exports: {} };
     let seen = 0;
     vm.runInNewContext(fs.readFileSync(file, 'utf8'), {

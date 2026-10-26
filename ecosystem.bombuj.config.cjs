@@ -27,6 +27,7 @@ module.exports = {
       BOMBUJ_DIRECT_VIDAPI: '1',
       BOMBUJ_DIRECT_VIDNEST: '1',
       BOMBUJ_DIRECT_VIDLINK: '1',
+      BOMBUJ_DIRECT_BYSE: '1',
       BOMBUJ_DIRECT_VIDEASY: '1',
       BOMBUJ_DIRECT_STREAMTAPE: '1',
       // Owner requested every discovered source remain selectable. This only

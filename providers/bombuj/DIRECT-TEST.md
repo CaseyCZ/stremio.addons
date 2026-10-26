@@ -17,21 +17,24 @@ v soukromém diagnostickém logu, ale webový přehrávač se nepřidá mezi str
 | Přepínač (`=1`) | Zdroj v Bombuj | Přímé video, pokud existuje |
 | --- | --- | --- |
 | `BOMBUJ_DIRECT_VIDARA` | Vidara embed | HLS ze signovaného CDN |
+| `BOMBUJ_DIRECT_BYSE` | BYSE / FileMoon, pokud původní přehrávač vede na BYSE | AES-GCM metadata z BYSE API → původní podepsaný CDN HLS; klíč se skládá podle aktuální verze |
 | `BOMBUJ_DIRECT_PLOYAN` | Primewire | Přes přesnou shodu název+rok / seriál+řada: Ployan HLS, případně Vidara; všechny platné VTT titulky |
 | `BOMBUJ_DIRECT_VIDAPI` | VidAPI | Přímo od VidAPI, zatím pouze filmy s ověřeným IMDb ID |
 | `BOMBUJ_DIRECT_VIDNEST` | VidNest | TMDb ID z původního Bombuj přehrávače → VidNest HLS |
-| `BOMBUJ_DIRECT_VIDLINK` | VidLink | Přes příslušný backend VidNest (best effort) |
+| `BOMBUJ_DIRECT_VIDLINK` | VidLink | VidLink token API → přímé MP4 ve všech dostupných kvalitách; nepoužívá VidNest backend |
 | `BOMBUJ_DIRECT_VIDEASY` | Videasy | Přes příslušný backend VidNest (best effort) |
 | `BOMBUJ_DIRECT_STREAMTAPE` | Streamtape | Statické složení tokenu → originální MP4 CDN, pokud projde krátká range sonda |
 
 - VOE a Mixdrop mají vlastní existující přímé resolvery; nic se v nich nemaže.
-- Byse/Filemoon, VidSrc a další původní přehrávače se dále vyhledávají a
-  zaznamenávají; pokud z nich zatím nelze získat přímé HLS/MP4, jejich
+- FileMoon, pokud nevede na ověřený BYSE přehrávač, VidSrc a další původní
+  přehrávače se dále vyhledávají a zaznamenávají; pokud z nich nelze získat přímé HLS/MP4, jejich
   webová adresa se do výsledku Stremia nepřidává. Úspěšné načtení stránky (`HTTP 200`) samo o sobě nedokazuje
   dostupnost přímého videa nebo přehratelnost ve Stremio iOS.
 - Video ani titulky netečou přes Oracle server; vrací se zdrojová URL.
 - Přímá HLS/MP4 URL se kontroluje jen omezenou sondou, nejsou stahována videa.
 - Expirované podepsané URL se nemají ukládat do pětiminutové cache.
+- BYSE a VidLink URL jsou krátkodobé a mohou být omezené na IP, na které byly získány;
+  před přehráním na iOS je potřeba samostatná kontrola z klientského zařízení.
 - Filmy musí odpovídat ověřenému ID/titulu; u seriálů rovněž řadě a dílu.
 - Pokud resolver nenajde přímé video, daný zdroj se pro tento požadavek
   nezobrazí ve Stremiu; důvod a původní URL zůstávají v diagnostice.

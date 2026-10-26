@@ -13,6 +13,8 @@ const { resolveVidara, vidaraEmbed } = require('./resolvers/vidara.js');
 const { resolvePrimewireViaPloyan } = require('./resolvers/ployan.js');
 const { resolveVidapi } = require('./resolvers/vidapi.js');
 const { resolveVidnest, vidnestId } = require('./resolvers/vidnest.js');
+const { resolveVidlink } = require('./resolvers/vidlink.js');
+const { resolveByse, byseEmbedId } = require('./resolvers/byse.js');
 const { resolveStreamtape } = require('./resolvers/streamtape.js');
 
 const BOMBUJ_BASE = 'https://www.bombuj.si';
@@ -640,6 +642,7 @@ function inferProvider(player) {
   const signature = `${player.provider || ''} ${player.resolvedUrl || ''}`.toLowerCase();
   let host = '';
   try { host = new URL(player.resolvedUrl).hostname.toLowerCase(); } catch {}
+  if (byseEmbedId(player.resolvedUrl)) return 'byse';
   if (vidaraEmbed(player.resolvedUrl)) return 'vidara';
   if (/\bprimewire\b/i.test(signature) || /(^|\.)primewire\./i.test(host)) return 'primewire';
   if (/\bvidapi\b|\bvaplayer\b/i.test(signature) || /(^|\.)(?:vaplayer\.ru|nextgencloudfabric\.com)$/i.test(host)) return 'vidapi';
@@ -663,8 +666,11 @@ async function resolveDirectPlayer(player, sourcePageUrl, context = {}, onDiagno
   if (directType) return { url: player.resolvedUrl, referer: sourcePageUrl, type: directType };
 
   const provider = inferProvider(player);
-  // Experimental until client-side playback confirms signed HLS URLs from
-  // Oracle are usable on another public IP. Normal web-player fallback stays.
+  // Original Bombuj embeds are input only. The client receives direct video
+  // URLs; the signature/IP portability is checked separately on iOS.
+  if (provider === 'byse' && process.env.BOMBUJ_DIRECT_BYSE === '1') {
+    return resolveByse(player.resolvedUrl, { onDiagnostic });
+  }
   if (provider === 'vidara' && process.env.BOMBUJ_DIRECT_VIDARA === '1') {
     return resolveVidara(player.resolvedUrl);
   }
@@ -692,7 +698,11 @@ async function resolveDirectPlayer(player, sourcePageUrl, context = {}, onDiagno
       const matched = String(player.resolvedUrl || '').match(/\/(?:movie|tv)\/(\d{1,12})(?:\/|$|\?)/i);
       tmdbId = vidnestId(matched?.[1]);
     }
-    const backend = provider === 'vidlink' || provider === 'videasy' ? [provider] : undefined;
+    // VidLink's own tested MP4 API differs from the VidNest backend (403).
+    if (provider === 'vidlink') {
+      return resolveVidlink({ ...context, tmdbId }, { onDiagnostic });
+    }
+    const backend = provider === 'videasy' ? [provider] : undefined;
     return resolveVidnest({ ...context, tmdbId }, { ...(backend ? { backends: backend } : {}), onDiagnostic });
   }
   if (provider === 'streamtape' && process.env.BOMBUJ_DIRECT_STREAMTAPE === '1') {
@@ -711,6 +721,7 @@ function makeDirectStream(player, direct, index, tracks) {
   const provider = safeLabel(player.provider) || `Zdroj ${index + 1}`;
   const language = safeLabel(player.language) || 'Bombuj';
   const extension = direct.type === 'hls' ? 'm3u8' : 'mp4';
+  const qualityTag = String(direct.quality || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 16);
   return {
     name: `Bombuj • ${provider}`,
     description: `${language} • přímý ${direct.type === 'hls' ? 'HLS' : 'MP4'}${direct.quality ? ' • ' + direct.quality : ''}`,
@@ -718,7 +729,7 @@ function makeDirectStream(player, direct, index, tracks) {
     behaviorHints: {
       notWebReady: true,
       bingeGroup: `bombuj-${normalize(provider) || index}${testDirectVoeAllowed(player.resolvedUrl) ? '-' + normalize(language).replace(/\s+/g, '-') : ''}`,
-      filename: `bombuj-${index + 1}.${extension}`,
+      filename: `bombuj-${index + 1}${qualityTag ? '-' + qualityTag : ''}.${extension}`,
       proxyHeaders: {
         request: {
           'User-Agent': USER_AGENT,
@@ -739,24 +750,27 @@ async function playersToStreams(players, sourcePageUrl, context = {}) {
     let direct = null;
     try { direct = await resolveDirectPlayer(player, sourcePageUrl, context, onDiagnostic); }
     catch (error) { onDiagnostic({ stage: 'resolve', result: 'error', reason: resolverErrorReason(error) }); }
+    const candidates = (Array.isArray(direct) ? direct : [direct]).filter(item => item?.url);
     const tracks = subtitleTracks([{
       externalUrl: player.resolvedUrl,
-      subtitles: direct?.subtitles || []
+      subtitles: candidates.flatMap(item => Array.isArray(item.subtitles) ? item.subtitles : [])
     }]);
-    if (direct?.url) {
-      onDiagnostic({ stage: 'result', result: 'direct', quality: direct.quality || direct.type,
-        handedToStremio: direct.url, referer: direct.referer,
-        elapsedMs: Date.now() - started });
-      return makeDirectStream(player, direct, index, tracks);
+    if (candidates.length) {
+      return candidates.map(item => {
+        onDiagnostic({ stage: 'result', result: 'direct', quality: item.quality || item.type,
+          handedToStremio: item.url, referer: item.referer,
+          elapsedMs: Date.now() - started });
+        return makeDirectStream(player, item, index, tracks);
+      });
     }
     // Every original player is still inspected, but an HTML embed is not a
     // playable Stremio stream. Never report it as handed off to the client.
     onDiagnostic({ stage: 'result', result: 'no-direct-media', reason: 'no-direct-media',
       elapsedMs: Date.now() - started });
-    return null;
+    return [];
   });
 
-  return resolved.filter((stream) => stream?.url);
+  return resolved.flat().filter((stream) => stream?.url);
 }
 
 

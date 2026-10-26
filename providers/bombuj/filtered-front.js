@@ -10,6 +10,7 @@ const { PAGE_SIZE, parseCatalogPath, browseUrl, manifestCatalogs, normalizeGenre
 const { subtitleTracks: customSubtitleUrls, formatBombujStream: customStreamDisplay } = require('./stream-display.js');
 const { sortBombujStreams } = require('./stream-preference.js');
 const { vidaraEmbed } = require('./resolvers/vidara.js');
+const { byseEmbedId } = require('./resolvers/byse.js');
 const {
   movieImdbId, seriesImdbId, fetchCinemetaById, mergeCinemeta,
   enrichCinemetaSeries, enrichCinemetaEpisode,
@@ -598,6 +599,7 @@ async function customMovieStreams(id, slug) {
   // The lifetime/IP binding of VOE signatures is not established. Do not
   // retain these media URLs in the existing five-minute movie cache.
   if (players.some(player => testDirectVoeAllowed(player.resolvedUrl) ||
+    (process.env.BOMBUJ_DIRECT_BYSE === '1' && byseEmbedId(player.resolvedUrl)) ||
     (process.env.BOMBUJ_DIRECT_VIDARA === '1' && vidaraEmbed(player.resolvedUrl)) ||
     (process.env.BOMBUJ_DIRECT_PLOYAN === '1' && /primewire/i.test(player.provider || '')) ||
     (process.env.BOMBUJ_DIRECT_VIDAPI === '1' && /vidapi/i.test(player.provider || '')) ||
