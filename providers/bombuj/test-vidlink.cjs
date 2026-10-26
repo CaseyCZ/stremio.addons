@@ -46,10 +46,12 @@ test('VidLink uses yesterday’s tested token → movie API, never downloads MP4
       calls.push(actual);
       if (calls.length === 1) {
         assert.equal(actual, 'https://enc-dec.app/api/enc-vidlink?text=1291595');
+        assert.match(options.headers['User-Agent'], /^Mozilla\/5\.0 /);
         return Response.json({ status: 'success', result: token });
       }
       assert.equal(actual, 'https://vidlink.pro/api/b/movie/' + encodeURIComponent(token));
       assert.equal(options.headers.Origin, 'https://vidlink.pro');
+      assert.match(options.headers['User-Agent'], /^Mozilla\/5\.0 /);
       return Response.json(fixture());
     },
     onDiagnostic: event => events.push(event)

@@ -6,6 +6,9 @@ const { boundedJson } = require('./bounded-json.js');
 const TOKEN_API = 'https://enc-dec.app/api/enc-vidlink';
 const VIDEO_API = 'https://vidlink.pro/api/b/movie';
 const PLAYER_ORIGIN = 'https://vidlink.pro';
+// Confirmed on Oracle: VidLink returns HTTP 403 with Node's default UA,
+// but the same API request succeeds with this browser User-Agent.
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36';
 
 function vidlinkId(value) {
   return /^\d{1,12}$/.test(String(value || '')) ? String(value) : null;
@@ -55,7 +58,8 @@ async function resolveVidlink(context, { fetchImpl = fetch, onDiagnostic = () =>
   const tokenUrl = `${TOKEN_API}?text=${encodeURIComponent(id)}`;
   try {
     const tokenResponse = await fetchImpl(tokenUrl, {
-      redirect: 'error', signal: AbortSignal.timeout(9000), headers: { Accept: 'application/json' }
+      redirect: 'error', signal: AbortSignal.timeout(9000),
+      headers: { Accept: 'application/json', 'User-Agent': USER_AGENT }
     });
     if (tokenResponse.status !== 200) {
       onDiagnostic({ stage: 'token', result: 'failed', reason: `http-${tokenResponse.status}`, requestUrl: tokenUrl });
@@ -72,7 +76,8 @@ async function resolveVidlink(context, { fetchImpl = fetch, onDiagnostic = () =>
     const requestUrl = `${VIDEO_API}/${encodeURIComponent(token)}`;
     const response = await fetchImpl(requestUrl, {
       redirect: 'error', signal: AbortSignal.timeout(10000),
-      headers: { Accept: 'application/json', Origin: PLAYER_ORIGIN, Referer: `${PLAYER_ORIGIN}/` }
+      headers: { Accept: 'application/json', Origin: PLAYER_ORIGIN,
+        Referer: `${PLAYER_ORIGIN}/`, 'User-Agent': USER_AGENT }
     });
     if (response.status !== 200) {
       onDiagnostic({ stage: 'api', result: 'failed', reason: `http-${response.status}`, requestUrl });
