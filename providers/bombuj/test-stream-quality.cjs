@@ -5,8 +5,8 @@ const {formatBombujStream}=require('./stream-display');
 
 test('Bombuj uses the same provider/quality and three-line layout as SKTOnline',()=>{
  const out=formatBombujStream({name:'Bombuj • voe2.sx',description:'CZ dabing • přímý HLS • 1080p',url:'https://cdn.example/master.m3u8'});
- assert.equal(out.name,'Bombuj • 1080p');
- assert.equal(out.title,'🎧 🇨🇿 CZ\n💬 Neuvedeny\n🎬 1080p');
+ assert.equal(out.name,'Bombuj • voe2.sx • 1080p');
+ assert.equal(out.title,'🎧 🇨🇿 CZ\n💬 Neuvedeny\n🎬 voe2.sx • 1080p');
  assert.equal(formatBombujStream(out).title,out.title);
  assert.equal(formatBombujStream(out).name,out.name);
 });
