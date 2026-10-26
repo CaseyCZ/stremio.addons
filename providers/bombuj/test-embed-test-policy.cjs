@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {testUnblockAllowed,testDirectVoeAllowed}=require('./embed-test-policy');
+const {testUnblockAllowed,testDirectVoeAllowed,isVoeStream,voeWebStream}=require('./embed-test-policy');
 const {confirmedStremioEmbedFailure}=require('./provider-compat');
 test('unblock requires an explicit switch and exact permitted hostname',()=>{
   const on={BOMBUJ_TEST_UNBLOCK_EMBEDS:'1'};
@@ -15,7 +15,7 @@ test('preflight never publishes HTML embeds even with diagnostic switches',async
   const file=require.resolve('./preflight-front.js'),local=createRequire(file),mod={exports:{}};
   const env={BOMBUJ_TEST_UNBLOCK_EMBEDS:'1'};
   vm.runInNewContext(fs.readFileSync(file,'utf8')+'\nmodule.exports={preflightStreams};',{
-    require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./filtered-front.js'?{}:p==='./embed-test-policy.js'?{testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env)}:local(p),
+    require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./filtered-front.js'?{}:p==='./embed-test-policy.js'?{testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env),isVoeStream,voeWebStream}:local(p),
     module:mod,process:{env},console:{log(){},error(){}},URL,Headers,TextDecoder,AbortSignal,
     global:{fetch:()=>{throw Error('unexpected network request');}}
   });
@@ -111,7 +111,7 @@ test('front opt-in permits VOE fetch while default continues to block it without
     let calls=0;const env=enabled?{BOMBUJ_TEST_DIRECT_VOE:'1'}:{};
     const g={fetch:async()=>{calls++;return new Response('fixture');}};
     vm.runInNewContext(fs.readFileSync(file,'utf8'),{
-      require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./bootstrap.js'?{}:p==='./embed-test-policy.js'?{testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env)}:local(p),
+      require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./bootstrap.js'?{}:p==='./embed-test-policy.js'?{testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env),isVoeStream,voeWebStream}:local(p),
       process:{env},console:{log(){},error(){}},URL,global:g,AbortSignal
     });
     if(enabled)await g.fetch('https://voe.sx/e/test');else await assert.rejects(g.fetch('https://voe.sx/e/test'),/Keep original/);
@@ -132,7 +132,7 @@ test('VOE web player is preserved by public preflight without fetching video',as
   const env={BOMBUJ_DIRECT_VOE:'1'},logs=[];
   vm.runInNewContext(fs.readFileSync(file,'utf8')+'\nmodule.exports={preflightStreams};',{
     require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./filtered-front.js'?{}:p==='./embed-test-policy.js'?{
-      testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env)
+      testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env),isVoeStream,voeWebStream
     }:local(p),module:mod,process:{env},URL,AbortSignal,
     console:{log:value=>logs.push(value),error(){}},
     global:{fetch:()=>{throw Error('preflight must not fetch VOE or media');}}
@@ -145,7 +145,7 @@ test('VOE web player is preserved by public preflight without fetching video',as
   assert(logs.some(line=>line.includes('published=1 omitted=1')));
 });
 
-test('VOE upstream failures never expose a web player as a stream',async()=>{
+test('VOE web player remains available when upstream CDN is inaccessible',async()=>{
   const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
   const file=require.resolve('./index'),local=createRequire(file),mod={exports:{}};
   const sdk={addonBuilder:class{defineCatalogHandler(){}defineStreamHandler(){}getInterface(){return{}}},serveHTTP(){}};
@@ -156,7 +156,9 @@ test('VOE upstream failures never expose a web player as a stream',async()=>{
   });
   const embed='https://voe2.sx/e/original';
   const out=await mod.exports.playersToStreams([{provider:'voe2.sx',language:'SK dabing',resolvedUrl:embed}],'https://www.bombuj.si/online-film-example');
-  assert.equal(out.length,0);
+  assert.equal(out.length,1);
+  assert.equal(out[0].externalUrl,embed);
+  assert.equal(out[0].url,undefined);
 });
 
 test('custom movie VOE signed URLs are resolved again, while other sources retain their cache',async()=>{
