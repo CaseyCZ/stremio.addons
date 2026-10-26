@@ -65,6 +65,11 @@ test('Bombuj resolves BYSE and all VidLink MP4 qualities without mutating source
   assert.equal(new Set(Array.from(streams, stream => stream.behaviorHints.filename)).size, 4);
   assert.match(streams[0].description, /CZ dabing/);
   assert(streams.slice(1).every(stream => stream.description.includes('EN dab/tit')));
+  assert.equal(streams[0].behaviorHints.notWebReady, true);
+  assert(streams[0].behaviorHints.proxyHeaders);
+  assert(streams.slice(1).every(stream => stream.description.includes('WEB TEST')));
+  assert(streams.slice(1).every(stream => !('notWebReady' in stream.behaviorHints)));
+  assert(streams.slice(1).every(stream => !('proxyHeaders' in stream.behaviorHints)));
   assert(streams.slice(1).every(stream => stream.subtitles.some(sub => sub.url.endsWith('/cz.vtt'))));
 
   const logs = messages.filter(line => line.startsWith('[BOMBUJ RESOLVER] '))

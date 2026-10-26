@@ -31,6 +31,12 @@ v soukromém diagnostickém logu, ale webový přehrávač se nepřidá mezi str
   webová adresa se do výsledku Stremia nepřidává. Úspěšné načtení stránky (`HTTP 200`) samo o sobě nedokazuje
   dostupnost přímého videa nebo přehratelnost ve Stremio iOS.
 - Video ani titulky netečou přes Oracle server; vrací se zdrojová URL.
+- VidLink přímá MP4 jsou na zkoušku označena `WEB TEST`: nemají `notWebReady`
+  ani `proxyHeaders`, aby je mohl zkusit přímo otevřít i Stremio Web v Safari.
+  U ověřené CDN prošel požadavek HEAD bez dalších hlaviček (HTTP 200),
+  ale skutečné přehrání na iPhonu teprve musí potvrdit uživatel.
+  Ostatní streamy, zvláště HLS, stále mají `notWebReady: true` a původní
+  `proxyHeaders` podle specifikace Stremia.
 - Přímá HLS/MP4 URL se kontroluje jen omezenou sondou, nejsou stahována videa.
 - Expirované podepsané URL se nemají ukládat do pětiminutové cache.
 - BYSE a VidLink URL jsou krátkodobé a mohou být omezené na IP, na které byly získány;

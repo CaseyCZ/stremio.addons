@@ -89,11 +89,13 @@ function formatBombujStream(stream) {
   const provider = providerLabel(stream), direct = !!stream?.url;
   const quality = qualityLabel(stream);
   const subtitles = subtitleTracks([stream]);
+  const webTrial = direct && [stream?.description, stream?.name, stream?.title]
+    .some(value => /\bWEB TEST\b/i.test(String(value || '')));
   return {
     ...stream,
-    name: 'Bombuj • ' + (direct ? quality : provider),
+    name: 'Bombuj • ' + (direct ? quality + (webTrial ? ' • WEB TEST' : '') : provider),
     title: '🎧 ' + audioLabel(stream) + '\n💬 ' + subtitleLabel(stream) +
-      '\n' + (direct ? '🎬 ' + quality : '🌐 Web player • ' + provider),
+      '\n' + (direct ? '🎬 ' + quality + (webTrial ? ' • WEB TEST' : '') : '🌐 Web player • ' + provider),
     description: undefined,
     subtitles: subtitles.length ? subtitles : undefined
   };

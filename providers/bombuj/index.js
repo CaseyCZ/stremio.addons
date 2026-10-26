@@ -722,21 +722,26 @@ function makeDirectStream(player, direct, index, tracks) {
   const language = safeLabel(player.language) || 'Bombuj';
   const extension = direct.type === 'hls' ? 'm3u8' : 'mp4';
   const qualityTag = String(direct.quality || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 16);
+  // The owner's iPhone currently uses Stremio Web. VidLink's direct MP4 CDN
+  // answered a header-free HEAD request with HTTP 200. Let Web try it without
+  // proxyHeaders (which require notWebReady=true per the Stremio stream spec).
+  // Keep HLS and other providers unchanged until client playback is verified.
+  const webReadyMp4 = direct.type === 'mp4' && inferProvider(player) === 'vidlink';
   return {
     name: `Bombuj • ${provider}`,
-    description: `${language} • přímý ${direct.type === 'hls' ? 'HLS' : 'MP4'}${direct.quality ? ' • ' + direct.quality : ''}`,
+    description: `${language} • přímý ${direct.type === 'hls' ? 'HLS' : 'MP4'}${direct.quality ? ' • ' + direct.quality : ''}${webReadyMp4 ? ' • WEB TEST' : ''}`,
     url: direct.url,
     behaviorHints: {
-      notWebReady: true,
+      ...(!webReadyMp4 ? { notWebReady: true } : {}),
       bingeGroup: `bombuj-${normalize(provider) || index}${testDirectVoeAllowed(player.resolvedUrl) ? '-' + normalize(language).replace(/\s+/g, '-') : ''}`,
       filename: `bombuj-${index + 1}${qualityTag ? '-' + qualityTag : ''}.${extension}`,
-      proxyHeaders: {
+      ...(!webReadyMp4 ? { proxyHeaders: {
         request: {
           'User-Agent': USER_AGENT,
           ...(direct.referer ? { Referer: direct.referer } : {}),
           ...(direct.origin ? { Origin: direct.origin } : {})
         }
-      }
+      } } : {})
     },
     ...(tracks.length ? { subtitles: tracks } : {})
   };

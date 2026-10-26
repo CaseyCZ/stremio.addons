@@ -56,6 +56,23 @@ test('direct streams retain their media URL, headers and quality metadata', () =
   assert.deepEqual(out.behaviorHints,input.behaviorHints);
 });
 
+test('VidLink browser-ready MP4 keeps its WEB TEST label across formatting passes', () => {
+  const input = {
+    name: 'Bombuj • vidlink', description: 'CZ/SK titulky • přímý MP4 • 1080p • WEB TEST',
+    url: 'https://bcdn.hakunaymatata.com/test.mp4',
+    behaviorHints: { filename: 'bombuj-2-1080p.mp4' }
+  };
+  const once = formatBombujStream(input);
+  const twice = formatBombujStream(once);
+  assert.match(once.name, /WEB TEST/);
+  assert.match(once.title, /🎬 .*WEB TEST/);
+  assert.equal(twice.name, once.name);
+  assert.equal(twice.title, once.title);
+  assert.equal(twice.url, input.url);
+  assert(!('notWebReady' in twice.behaviorHints));
+  assert(!('proxyHeaders' in twice.behaviorHints));
+});
+
 test('unknown audio is labeled honestly, not mislabeled with a flag', () => {
   const stream=formatBombujStream({
     name:'Bombuj • Mystery',description:'Bombuj • externí player',
