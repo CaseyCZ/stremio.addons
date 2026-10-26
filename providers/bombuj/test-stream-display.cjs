@@ -123,7 +123,7 @@ test('two sources with the same resolution have visibly different names', () => 
 
 test('source capitalization is standardized without duplicating it in the details', () => {
   const cases = [
-    ['voe2.sx', 'VOE'], ['vidapi', 'VidAPI'], ['vidlink.pro', 'VidLink'],
+    ['voe2.sx', 'VOE'], ['vidapi', 'VidAPI'], ['vidapi (New)', 'VidAPI'], ['vidlink.pro', 'VidLink'],
     ['byse.sx', 'BYSE/FileMoon'], ['mixdrop.ag', 'Mixdrop'],
     ['streamtape.com', 'Streamtape'], ['unknown.host', 'unknown.host']
   ];
