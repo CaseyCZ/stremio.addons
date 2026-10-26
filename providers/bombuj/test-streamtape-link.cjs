@@ -31,5 +31,7 @@ test('public addon does not expose a Streamtape navigation redirect', () => {
   assert(!front.includes('open/streamtape'));
   assert(!front.includes('neutralRedirectUrl'));
   assert(!front.includes('Referrer-Policy'));
-  assert.match(front,/direct-only=\$\{direct\.length\} omitted-web=/);
+  assert.match(front,/published=\$\{published\.length\} omitted=/);
+  assert.match(front,/voeWebStream\(stream\)/);
+  assert.match(front,/if \(isVoeStream\(stream\)\) return \[\]/);
 });
