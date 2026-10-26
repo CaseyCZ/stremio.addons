@@ -8,14 +8,33 @@ const { createRequire } = require('node:module');
 const { vidapiId, vidapiMediaUrl, resolveVidapi } = require('./resolvers/vidapi.js');
 
 const cdn = index => `https://cdn.highperformancebrands.site/${index}/playlist.m3u8?sig=test`;
+const currentCdn = index => `https://strategicgrowthpartners.site/${index}/playlist.m3u8?sig=test`;
 
 test('VidAPI ID and CDN URL are restricted to verified movie format', () => {
   assert.equal(vidapiId('tt32393988'), 'tt32393988');
   assert.equal(vidapiId('1291595'), null);
   assert(vidapiMediaUrl(cdn('one')));
+  assert(vidapiMediaUrl(currentCdn('one')));
+  assert(!vidapiMediaUrl('https://cdn.strategicgrowthpartners.site/one/playlist.m3u8'));
+  assert(!vidapiMediaUrl('https://strategicgrowthpartners.site.evil.example/master.m3u8'));
+  assert(!vidapiMediaUrl('https://strategicgrowthpartners.site@evil.example/master.m3u8'));
   assert(!vidapiMediaUrl('https://highperformancebrands.site.evil.example/master.m3u8'));
   assert(!vidapiMediaUrl('http://cdn.highperformancebrands.site/master.m3u8'));
   assert(!vidapiMediaUrl('https://127.0.0.1/master.m3u8'));
+});
+
+test('VidAPI accepts current API CDN after validating the HLS manifest', async () => {
+  const apiCalls = [];
+  const mockFetch = async (url) => {
+    apiCalls.push(url);
+    if (url.includes('/api.php?')) return Response.json({ status_code: 200,
+      data: { stream_urls: [currentCdn('movie')] } });
+    return new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=2400000,RESOLUTION=1920x1080\nchunk.m3u8\n');
+  };
+  const stream = await resolveVidapi({ type: 'movie', imdbId: 'tt0468569' }, { fetchImpl: mockFetch });
+  assert.equal(stream.url, currentCdn('movie'));
+  assert.equal(stream.quality, '1080p');
+  assert.equal(apiCalls.length, 2);
 });
 
 test('VidAPI resolves all API candidates and prefers highest actual HLS resolution', async () => {

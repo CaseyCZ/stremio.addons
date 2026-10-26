@@ -5,6 +5,9 @@ const { inspectHls } = require('../stream-quality.js');
 const API = 'https://streamdata.vaplayer.ru/api.php';
 const ORIGIN = 'https://nextgencloudfabric.com';
 const MAX_BYTES = 256 * 1024;
+// The upstream API now also returns HLS manifests from this CDN. Keep an
+// exact hostname allowlist; never fetch arbitrary URLs supplied by the API.
+const NEW_CDN_HOST = 'strategicgrowthpartners.site';
 
 function vidapiId(value) {
   const imdb = /^tt\d{5,12}$/i.test(String(value || '')) ? String(value).toLowerCase() : '';
@@ -15,7 +18,8 @@ function vidapiMediaUrl(value) {
   try {
     const url = new URL(value);
     return url.protocol === 'https:' && !url.port && !url.username && !url.password &&
-      /(?:^|\.)highperformancebrands\.site$/i.test(url.hostname) &&
+      (url.hostname === NEW_CDN_HOST || url.hostname === 'highperformancebrands.site' ||
+        url.hostname.endsWith('.highperformancebrands.site')) &&
       /\.m3u8$/i.test(url.pathname);
   } catch { return false; }
 }
