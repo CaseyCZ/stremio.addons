@@ -95,6 +95,7 @@ function providerLabel(stream) {
 function displayProvider(provider) {
   // Standardize only names of known players. Unknown Bombuj labels remain
   // verbatim, so a newly added source is still identifiable in Stremio.
+  const lookup = provider.replace(/\s*\(\s*new\s*\)\s*$/i, '').trim();
   const known = [
     [/^voe(?:2)?(?:\.[\w.-]+)?$/i, 'VOE'],
     [/^vidapi(?:\.[\w.-]+)?$/i, 'VidAPI'],
@@ -107,7 +108,7 @@ function displayProvider(provider) {
     [/^videasy(?:\.[\w.-]+)?$/i, 'Videasy'],
     [/^vidara(?:\.[\w.-]+)?$/i, 'Vidara']
   ];
-  return known.find(([pattern]) => pattern.test(provider))?.[1] || provider;
+  return known.find(([pattern]) => pattern.test(lookup))?.[1] || provider;
 }
 
 function formatBombujStream(stream) {
