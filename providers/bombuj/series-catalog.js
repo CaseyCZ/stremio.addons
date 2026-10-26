@@ -492,10 +492,12 @@ function createSeriesService({ fetchText, core, log=console }) {
 
   async function streams(slug,season,episode) {
     if(!Number.isInteger(season)||!Number.isInteger(episode)||season<1||episode<1)return {streams:[]};
+    const info=process.env.BOMBUJ_DIRECT_PLOYAN==='1' ? await seriesDetail(slug).catch(()=>null) : null;
     const variants=(await seasonEpisodes(slug,season)).filter(item=>item.episode===episode);
     const lists=await Promise.all(variants.map(async item=>{
       const players=await core.discoverBombujPlayers(item.episodeUrl,SITE,item.language);
-      return core.playersToStreams(players,item.episodeUrl);
+      return core.playersToStreams(players,item.episodeUrl,
+        {type:'series',title:info?.name,season,episode});
     }));
     const unique=new Set();
     const streams=lists.flat().filter(s=>{

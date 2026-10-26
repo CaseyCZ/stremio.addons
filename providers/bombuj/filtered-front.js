@@ -583,13 +583,28 @@ async function customMovieStreams(id, slug) {
   const parser = require('./index.js');
   const detailUrl = BOMBUJ_BASE + '/online-film-' + slug;
   const players = await parser.discoverBombujPlayers(detailUrl, BOMBUJ_BASE);
-  const rawStreams = await parser.playersToStreams(players, detailUrl);
+  let context = { type: 'movie' };
+  if (players.some(player =>
+    (process.env.BOMBUJ_DIRECT_PLOYAN === '1' && /primewire/i.test(player.provider || '')) ||
+    (process.env.BOMBUJ_DIRECT_VIDAPI === '1' && /vidapi/i.test(player.provider || '')))) {
+    const metadata = await customMovieMeta(id, slug).catch(() => null);
+    context = { type: 'movie', title: metadata?.meta?.name,
+      year: String(metadata?.meta?.releaseInfo || '').match(/(?:19|20)\d{2}/)?.[0],
+      imdbId: metadata?.meta?.id };
+  }
+  const rawStreams = await parser.playersToStreams(players, detailUrl, context);
   const streams = sortBombujStreams(rawStreams.map(customStreamDisplay), providerRank);
   console.log('[catalog-stream] ' + id + ': players=' + players.length + ' streams=' + streams.length);
   // The lifetime/IP binding of VOE signatures is not established. Do not
   // retain these media URLs in the existing five-minute movie cache.
   if (players.some(player => testDirectVoeAllowed(player.resolvedUrl) ||
-    (process.env.BOMBUJ_DIRECT_VIDARA === '1' && vidaraEmbed(player.resolvedUrl)))) return streams;
+    (process.env.BOMBUJ_DIRECT_VIDARA === '1' && vidaraEmbed(player.resolvedUrl)) ||
+    (process.env.BOMBUJ_DIRECT_PLOYAN === '1' && /primewire/i.test(player.provider || '')) ||
+    (process.env.BOMBUJ_DIRECT_VIDAPI === '1' && /vidapi/i.test(player.provider || '')) ||
+    (process.env.BOMBUJ_DIRECT_VIDNEST === '1' && /vidnest/i.test(player.provider || '')) ||
+    (process.env.BOMBUJ_DIRECT_VIDEASY === '1' && /videasy/i.test(player.provider || '')) ||
+    (process.env.BOMBUJ_DIRECT_VIDLINK === '1' && /vidlink/i.test(player.provider || '')) ||
+    (process.env.BOMBUJ_DIRECT_STREAMTAPE === '1' && /streamtape/i.test(player.provider || '')))) return streams;
   return cacheSet(customStreamsCache, id, streams, 5 * 60 * 1000);
 }
 
