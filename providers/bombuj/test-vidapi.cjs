@@ -65,7 +65,7 @@ test('VidAPI accepts current API CDN after validating the HLS manifest', async (
   assert.equal(apiCalls.length, 2);
 });
 
-test('VidAPI resolves all API candidates and prefers highest actual HLS resolution', async () => {
+test('VidAPI returns every original API candidate, highest known resolution first', async () => {
   const calls = [];
   const mockFetch = async (url, options) => {
     calls.push({ url, headers: options?.headers });
@@ -77,11 +77,32 @@ test('VidAPI resolves all API candidates and prefers highest actual HLS resoluti
     return new Response(`#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1800000,RESOLUTION=1920x${height}\nmedia.m3u8\n`);
   };
   const result = await resolveVidapi({ type: 'movie', imdbId: 'tt32393988' }, { fetchImpl: mockFetch });
-  assert.equal(result.url, cdn('high'));
-  assert.equal(result.quality, '800p');
-  assert.equal(result.origin, 'https://nextgencloudfabric.com');
+  assert.deepEqual(result.map(x => x.url), [cdn('high'), cdn('medium'), cdn('low')]);
+  assert.deepEqual(result.map(x => x.quality), ['800p', '534p', '266p']);
+  assert(result.every(x => x.origin === 'https://nextgencloudfabric.com'));
   assert.equal(calls.length, 4);
   assert.match(calls[0].url, /imdb=tt32393988&type=movie/);
+});
+
+test('VidAPI returns all distinct unprobed public HLS alternatives unchanged', async () => {
+  const sourceUrls = [
+    'https://leadgenerationblueprint.site/video/one/master.m3u8?sig=one',
+    'https://leadgenerationblueprint.site/video/two/master.m3u8?sig=two',
+    'https://leadgenerationblueprint.site/video/three/master.m3u8?sig=three'
+  ];
+  const events = [], calls = [];
+  const result = await resolveVidapi({ type: 'movie', imdbId: 'tt27047903' }, {
+    fetchImpl: async url => {
+      calls.push(url);
+      if (!url.includes('api.php?')) throw Error('Unrecognized CDN must not be fetched');
+      return Response.json({ status_code: '200', data: { stream_urls: [...sourceUrls, sourceUrls[0]] } });
+    },
+    onDiagnostic: event => events.push(event)
+  });
+  assert.deepEqual(result.map(x => x.url), sourceUrls);
+  assert(result.every(x => x.type === 'hls' && x.ephemeral));
+  assert.equal(calls.length, 1);
+  assert.equal(events.filter(e => e.result === 'direct-unverified').length, 3);
 });
 
 test('unverified movie ID, invalid JSON or poisoned URLs safely fall back', async () => {
@@ -129,4 +150,28 @@ test('existing Bombuj VidAPI wrapper uses direct only with explicit test switch'
       assert.equal(streams[0].externalUrl, undefined);
     }
   }
+});
+
+test('Bombuj publishes every VidAPI alternative as its exact direct URL', async () => {
+  const file = require.resolve('./index.js'), local = createRequire(file);
+  const sdk = { addonBuilder: class {
+    defineCatalogHandler() {} defineStreamHandler() {} getInterface() { return {}; }
+  }, serveHTTP() {} };
+  const originalUrls = [cdn('first'), cdn('second'), cdn('third')];
+  const mod = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(file, 'utf8'), {
+    require: p => p === 'stremio-addon-sdk' ? sdk : p === './resolvers/vidapi.js' ? {
+      resolveVidapi: async () => originalUrls.map(url => ({ url, type: 'hls', ephemeral: true }))
+    } : local(p),
+    module: mod, process: { env: { BOMBUJ_DIRECT_VIDAPI: '1' } },
+    console: { log() {}, error() {}, warn() {} },
+    URL, URLSearchParams, AbortSignal, Buffer, Uint8Array,
+    fetch: () => { throw Error('unexpected network'); }
+  });
+  const streams = await mod.exports.playersToStreams([{ provider: 'vidapi (New)',
+    language: 'EN dab/tit', url: 'https://www.bombuj.si/prehravace_final/vidstream.php?iid=tt27047903',
+    resolvedUrl: 'https://vaplayer.ru/embed/movie/1291595' }],
+  'https://www.bombuj.si/online-film-example', { type: 'movie', imdbId: 'tt27047903' });
+  assert.deepEqual(Array.from(streams, x => x.url), originalUrls);
+  assert(streams.every(x => !x.externalUrl && x.behaviorHints.notWebReady));
 });
