@@ -80,7 +80,7 @@ function subtitleLabel(stream) {
 function providerLabel(stream) {
   const named = String(stream?.name || '').replace(/^Bombuj\s*•\s*/i, '').trim();
   // The stream crosses several display proxies. The first segment is the
-  // original Bombuj player name; later segments are quality/WEB TEST labels.
+  // original Bombuj player name; later segments may contain old quality labels.
   const first = named.split(/\s*•\s*/)[0]?.trim();
   if (first && !/^(?:Direct|Kvalita neuvedena|\d{3,4}p|4K|HD|SD|HDR)$/i.test(first)) return first;
 
@@ -92,20 +92,34 @@ function providerLabel(stream) {
   return webLine.replace(/^Web player\s*•\s*/i, '').trim() || 'Zdroj neuveden';
 }
 
+function displayProvider(provider) {
+  // Standardize only names of known players. Unknown Bombuj labels remain
+  // verbatim, so a newly added source is still identifiable in Stremio.
+  const known = [
+    [/^voe(?:2)?(?:\.[\w.-]+)?$/i, 'VOE'],
+    [/^vidapi(?:\.[\w.-]+)?$/i, 'VidAPI'],
+    [/^vidlink(?:\.[\w.-]+)?$/i, 'VidLink'],
+    [/^(?:byse(?:koze)?(?:\.[\w.-]+)?|filemoon(?:\.[\w.-]+)?|byse\s*\/\s*filemoon)$/i, 'BYSE/FileMoon'],
+    [/^mixdrop(?:\.[\w.-]+)?$/i, 'Mixdrop'],
+    [/^streamtape(?:\.[\w.-]+)?$/i, 'Streamtape'],
+    [/^vidnest(?:\.[\w.-]+)?$/i, 'VidNest'],
+    [/^primewire(?:\.[\w.-]+)?$/i, 'Primewire'],
+    [/^videasy(?:\.[\w.-]+)?$/i, 'Videasy'],
+    [/^vidara(?:\.[\w.-]+)?$/i, 'Vidara']
+  ];
+  return known.find(([pattern]) => pattern.test(provider))?.[1] || provider;
+}
+
 function formatBombujStream(stream) {
-  const provider = providerLabel(stream), direct = !!stream?.url;
+  const direct = !!stream?.url;
+  const provider = direct ? displayProvider(providerLabel(stream)) : providerLabel(stream);
   const quality = qualityLabel(stream);
   const subtitles = subtitleTracks([stream]);
-  const webTrial = direct && [stream?.description, stream?.name, stream?.title]
-    .some(value => /\bWEB TEST\b/i.test(String(value || '')))
-    || (direct && /\.mp4(?:$|[?#])/i.test(String(stream?.url || '')) &&
-      stream?.behaviorHints?.notWebReady !== true && !stream?.behaviorHints?.proxyHeaders);
-  const qualityText = quality + (webTrial ? ' • WEB TEST' : '');
   return {
     ...stream,
-    name: 'Bombuj • ' + (direct ? provider + ' • ' + qualityText : provider),
+    name: 'Bombuj • ' + provider,
     title: '🎧 ' + audioLabel(stream) + '\n💬 ' + subtitleLabel(stream) +
-      '\n' + (direct ? '🎬 ' + provider + ' • ' + qualityText : '🌐 Web player • ' + provider),
+      '\n' + (direct ? '🎬 ' + quality : '🌐 Web player • ' + provider),
     description: undefined,
     subtitles: subtitles.length ? subtitles : undefined
   };
