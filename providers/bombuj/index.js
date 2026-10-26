@@ -9,6 +9,7 @@ const { parseMovieCards } = require('./bombuj-listing.js');
 const { testDirectVoeAllowed } = require('./embed-test-policy.js');
 const { inspectHls } = require('./stream-quality.js');
 const { subtitleTracks } = require('./stream-display.js');
+const { resolveVidara, vidaraEmbed } = require('./resolvers/vidara.js');
 
 const BOMBUJ_BASE = 'https://www.bombuj.si';
 const BOMBUJ_SERIES_BASE = 'https://serialy.bombuj.si';
@@ -565,6 +566,7 @@ function inferProvider(player) {
   const signature = `${player.provider || ''} ${player.resolvedUrl || ''}`.toLowerCase();
   let host = '';
   try { host = new URL(player.resolvedUrl).hostname.toLowerCase(); } catch {}
+  if (vidaraEmbed(player.resolvedUrl)) return 'vidara';
   if (/\bvoe\b|voe\./i.test(signature) || /(^|\.)voe(?:2)?\./i.test(host)) return 'voe';
   if (/mixdrop|miixdrop|miiiixdrop/i.test(signature) || /mixdrop|miixdrop|miiiixdrop/i.test(host)) return 'mixdrop';
   return 'other';
@@ -581,6 +583,11 @@ async function resolveDirectPlayer(player, sourcePageUrl) {
   if (directType) return { url: player.resolvedUrl, referer: sourcePageUrl, type: directType };
 
   const provider = inferProvider(player);
+  // Experimental until client-side playback confirms signed HLS URLs from
+  // Oracle are usable on another public IP. Normal web-player fallback stays.
+  if (provider === 'vidara' && process.env.BOMBUJ_DIRECT_VIDARA === '1') {
+    return resolveVidara(player.resolvedUrl);
+  }
   if (provider === 'voe') return resolveVoe(player.resolvedUrl, sourcePageUrl);
   if (provider === 'mixdrop') return resolveMixdrop(player.resolvedUrl, sourcePageUrl);
   return null;
@@ -605,7 +612,8 @@ function makeDirectStream(player, direct, index, tracks) {
       proxyHeaders: {
         request: {
           'User-Agent': USER_AGENT,
-          ...(direct.referer ? { Referer: direct.referer } : {})
+          ...(direct.referer ? { Referer: direct.referer } : {}),
+          ...(direct.origin ? { Origin: direct.origin } : {})
         }
       }
     },
@@ -625,8 +633,11 @@ function makeExternalStream(player, index, tracks) {
 async function playersToStreams(players, sourcePageUrl) {
   const voeFallbacks = [];
   const resolved = await mapWithConcurrency(players, 3, async (player, index) => {
-    const tracks = subtitleTracks([{ externalUrl: player.resolvedUrl }]);
     const direct = await resolveDirectPlayer(player, sourcePageUrl).catch(() => null);
+    const tracks = subtitleTracks([{
+      externalUrl: player.resolvedUrl,
+      subtitles: direct?.subtitles || []
+    }]);
     if (direct?.url) {
       if (testDirectVoeAllowed(player.resolvedUrl)) voeFallbacks[index] = makeExternalStream(player, index, tracks);
       return makeDirectStream(player, direct, index, tracks);

@@ -8,6 +8,8 @@ const {
 } = require('./series-catalog.js');
 const { PAGE_SIZE, parseCatalogPath, browseUrl, manifestCatalogs, normalizeGenreLabel } = require('./movie-catalog-config.js');
 const { subtitleTracks: customSubtitleUrls, formatBombujStream: customStreamDisplay } = require('./stream-display.js');
+const { sortBombujStreams } = require('./stream-preference.js');
+const { vidaraEmbed } = require('./resolvers/vidara.js');
 const {
   movieImdbId, seriesImdbId, fetchCinemetaById, mergeCinemeta,
   enrichCinemetaSeries, enrichCinemetaEpisode,
@@ -136,8 +138,7 @@ function streamProviderName(stream) {
 }
 
 function sortDynamicStreamPayload(payload, type, id) {
-  const discovered = Array.isArray(payload?.streams) ? [...payload.streams] : [];
-  discovered.sort((a, b) => providerRank(a) - providerRank(b));
+  const discovered = sortBombujStreams(payload?.streams, providerRank);
   const providers = discovered.map(streamProviderName);
   console.log(`[dynamic] ${type}/${id}: discovered=${discovered.length} providers=${JSON.stringify(providers)}`);
   return { ...payload, streams: discovered };
@@ -583,11 +584,12 @@ async function customMovieStreams(id, slug) {
   const detailUrl = BOMBUJ_BASE + '/online-film-' + slug;
   const players = await parser.discoverBombujPlayers(detailUrl, BOMBUJ_BASE);
   const rawStreams = await parser.playersToStreams(players, detailUrl);
-  const streams = rawStreams.map(customStreamDisplay);
+  const streams = sortBombujStreams(rawStreams.map(customStreamDisplay), providerRank);
   console.log('[catalog-stream] ' + id + ': players=' + players.length + ' streams=' + streams.length);
   // The lifetime/IP binding of VOE signatures is not established. Do not
   // retain these media URLs in the existing five-minute movie cache.
-  if (players.some(player => testDirectVoeAllowed(player.resolvedUrl))) return streams;
+  if (players.some(player => testDirectVoeAllowed(player.resolvedUrl) ||
+    (process.env.BOMBUJ_DIRECT_VIDARA === '1' && vidaraEmbed(player.resolvedUrl)))) return streams;
   return cacheSet(customStreamsCache, id, streams, 5 * 60 * 1000);
 }
 
@@ -691,7 +693,8 @@ async function handle(req, res) {
       // Format only the Stremio labels; URL/externalUrl remain provider-direct.
       const payload = await seriesService.streams(series.slug, series.season, series.episode);
       return sendJson(res, 200, {
-        ...payload, streams: (payload.streams || []).map(customStreamDisplay)
+        ...payload, streams: sortBombujStreams(
+          (payload.streams || []).map(customStreamDisplay), providerRank)
       }, req.method === 'HEAD');
     }
 
