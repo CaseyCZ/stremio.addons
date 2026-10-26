@@ -23,6 +23,48 @@ test('preflight keeps opted-in embeds without inventing playback success or open
   const out=await mod.exports.preflightStreams({streams},'movie','tt0133093');
   assert.equal(out.streams.length,3);assert.equal(out.streams[0].externalUrl,streams[0].externalUrl);
 });
+test('owner show-all mode preserves every web source without network preflight',async()=>{
+  const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
+  const file=require.resolve('./preflight-front.js'),local=createRequire(file),mod={exports:{}};
+  const env={BOMBUJ_SHOW_ALL_SOURCES:'1'};
+  vm.runInNewContext(fs.readFileSync(file,'utf8')+'\nmodule.exports={preflightStreams};',{
+    require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./filtered-front.js'?{}:local(p),
+    module:mod,process:{env},console:{log(){},error(){}},URL,Headers,TextDecoder,AbortSignal,
+    global:{fetch:()=>{throw Error('owner show-all mode must not preflight external players');}}
+  });
+  const streams=['mixdrop.ag','byse.sx','player.videasy.to','some-player.example'].map(host=>({name:host,externalUrl:`https://${host}/e/test`}));
+  streams.unshift({name:'direct',url:'https://cdn.example/video.m3u8'});
+  const out=await mod.exports.preflightStreams({streams},'movie','tt0468569');
+  assert.equal(out.streams.length,streams.length);
+  assert.deepEqual(Array.from(out.streams,s=>s.externalUrl||s.url),streams.map(s=>s.externalUrl||s.url));
+});
+test('owner show-all mode permits Mixdrop page fetch and preserves its web fallback',async()=>{
+  const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
+  const frontFile=require.resolve('./front.js'),frontRequire=createRequire(frontFile);
+  let requests=0;
+  const globalObj={fetch:async()=>{requests++;return new Response('fixture');}};
+  vm.runInNewContext(fs.readFileSync(frontFile,'utf8'),{
+    require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./bootstrap.js'?{}:frontRequire(p),
+    process:{env:{BOMBUJ_SHOW_ALL_SOURCES:'1'}},console:{log(){},error(){}},URL,global:globalObj,AbortSignal
+  });
+  await globalObj.fetch('https://mixdrop.ag/e/test',{headers:{Accept:'text/html'}});
+  assert.equal(requests,1);
+
+  const file=require.resolve('./index.js'),local=createRequire(file),mod={exports:{}};
+  const sdk={addonBuilder:class{defineCatalogHandler(){}defineStreamHandler(){}getInterface(){return{}}},serveHTTP(){}};
+  vm.runInNewContext(fs.readFileSync(file,'utf8'),{
+    require:p=>p==='stremio-addon-sdk'?sdk:local(p),module:mod,
+    process:{env:{BOMBUJ_SHOW_ALL_SOURCES:'1'}},console:{log(){},error(){},warn(){}},
+    URL,URLSearchParams,AbortSignal,Buffer,Uint8Array,
+    fetch:async()=>new Response('<script>MDCore.wurl="https://mxcontent.net/fixture.mp4";</script>')
+  });
+  const embed='https://mixdrop.ag/e/test';
+  const out=await mod.exports.playersToStreams([{provider:'Mixdrop',language:'CZ dabing',resolvedUrl:embed}],
+    'https://www.bombuj.si/online-film-fixture');
+  assert.equal(out.length,2);
+  assert.equal(out[0].url,'https://mxcontent.net/fixture.mp4');
+  assert.equal(out[1].externalUrl,embed);
+});
 test('filter exclusion is disabled only while the diagnostic switch is set',()=>{
   const old=process.env.BOMBUJ_TEST_UNBLOCK_EMBEDS;
   try{

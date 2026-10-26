@@ -35,7 +35,9 @@ function keepExternalFallback(input, init = {}) {
 // Let index.js fall back to the original external player instead. Real direct
 // media URLs (.mp4/.m3u8/...) still pass through normally.
 global.fetch = async function preferWebFallback(input, init = {}) {
-  if (keepExternalFallback(input, init) && !testUnblockAllowed(rawUrlOf(input)) && !testDirectVoeAllowed(rawUrlOf(input))) {
+  if (process.env.BOMBUJ_SHOW_ALL_SOURCES !== '1' &&
+      keepExternalFallback(input, init) &&
+      !testUnblockAllowed(rawUrlOf(input)) && !testDirectVoeAllowed(rawUrlOf(input))) {
     throw new Error('Keep original external player fallback');
   }
   return nativeFetch(input, init);

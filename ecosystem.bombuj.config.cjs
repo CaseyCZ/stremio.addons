@@ -28,7 +28,12 @@ module.exports = {
       BOMBUJ_DIRECT_VIDNEST: '1',
       BOMBUJ_DIRECT_VIDLINK: '1',
       BOMBUJ_DIRECT_VIDEASY: '1',
-      BOMBUJ_DIRECT_STREAMTAPE: '1'
+      BOMBUJ_DIRECT_STREAMTAPE: '1',
+      // Owner requested every discovered source remain selectable. This only
+      // bypasses our own filtering; it cannot defeat a provider-side block.
+      BOMBUJ_SHOW_ALL_SOURCES: '1',
+      // Also allow direct extraction attempts from previously blocked embeds.
+      BOMBUJ_TEST_UNBLOCK_EMBEDS: '1'
     }
   }]
 };

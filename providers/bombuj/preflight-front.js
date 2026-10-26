@@ -189,6 +189,11 @@ async function preflightStreams(payload, type, id) {
     if (!stream?.externalUrl || !/^https?:\/\//i.test(String(stream.externalUrl))) {
       return { stream, state: 'unknown', reason: 'no-http-url', provider: providerName(stream) };
     }
+    // Preserve every discovered web fallback in the owner's personal setup.
+    // A failed server-side preflight cannot establish actual client playback.
+    if (process.env.BOMBUJ_SHOW_ALL_SOURCES === '1') {
+      return { stream, state: 'unknown', reason: 'owner-enabled-all-sources', provider: providerName(stream) };
+    }
     // Preserve the exact web fallback for opted-in VOE even if a server HTML
     // preflight fails. Server reachability does not establish client playback.
     if (testDirectVoeAllowed(stream.externalUrl)) {

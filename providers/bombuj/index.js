@@ -681,7 +681,7 @@ async function playersToStreams(players, sourcePageUrl, context = {}) {
     if (direct?.url) {
       // Signed CDN URLs may be bound to the resolver's IP or expire before
       // client playback. Keep the original player selectable as a fallback.
-      if (direct.ephemeral || testDirectVoeAllowed(player.resolvedUrl)) {
+      if (process.env.BOMBUJ_SHOW_ALL_SOURCES === '1' || direct.ephemeral || testDirectVoeAllowed(player.resolvedUrl)) {
         webFallbacks[index] = makeExternalStream(player, index, tracks);
       }
       return makeDirectStream(player, direct, index, tracks);
