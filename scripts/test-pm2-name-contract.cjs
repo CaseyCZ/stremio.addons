@@ -17,7 +17,7 @@ assert.equal(bombuj.script, 'preflight-front.js');
 assert.equal(main.env.RUNNER_TRACKING_ID, '');
 assert.equal(bombuj.env.RUNNER_TRACKING_ID, '');
 assert.equal(main.env.CONFIG_ENCRYPTION_KEY_FILE, '/home/ubuntu/.stremio-sktonline-config-key');
-assert.equal(bombuj.env.BOMBUJ_DIRECT_VOE, '0');
+assert.equal(bombuj.env.BOMBUJ_DIRECT_VOE, '1');
 
 const deploy = fs.readFileSync(path.join(root,'deploy-server.sh'),'utf8');
 assert.ok(deploy.includes('bash "$PWD/scripts/migrate-pm2-unified-names.sh"'));
