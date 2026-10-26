@@ -2,7 +2,7 @@
 
 const http = require('http');
 const { subtitleTracks, formatBombujStream } = require('./stream-display.js');
-const { testUnblockAllowed, testDirectVoeAllowed, isVoeStream, voeWebStream } = require('./embed-test-policy.js');
+const { testUnblockAllowed, testDirectVoeAllowed } = require('./embed-test-policy.js');
 
 const PUBLIC_PORT = Number(process.env.PORT || 7004);
 const MIDDLE_PORT = Number(process.env.BOMBUJ_MIDDLE_PORT || (PUBLIC_PORT + 1));
@@ -68,15 +68,11 @@ function transformStreams(type, id, payload) {
   const subtitles = uniqueSubtitles(discovered);
   subtitleCache.set(streamKey(type, id), { expiresAt: Date.now() + 20 * 60 * 1000, subtitles });
 
-  const published = discovered.flatMap(stream => {
-    const web = voeWebStream(stream);
-    if (web) return [formatBombujStream(web)];
-    if (isVoeStream(stream)) return [];
-    if (!stream?.url || !/^https?:\/\//i.test(String(stream.url))) return [];
-    return [displayDirect(stream)];
-  });
-  console.log(`[front] ${type}/${id}: published=${published.length} omitted=${discovered.length - published.length} discovered=${discovered.length} subtitles=${subtitles.length}`);
-  return { streams: published };
+  const direct = discovered
+    .filter((stream) => stream?.url && /^https?:\/\//i.test(String(stream.url)))
+    .map(displayDirect);
+  console.log(`[front] ${type}/${id}: direct=${direct.length} omitted-web=${discovered.length - direct.length} discovered=${discovered.length} subtitles=${subtitles.length}`);
+  return { streams: direct };
 }
 
 function parseResource(pathname, resource) {

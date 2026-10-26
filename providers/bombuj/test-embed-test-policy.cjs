@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {testUnblockAllowed,testDirectVoeAllowed,isVoeStream,voeWebStream}=require('./embed-test-policy');
+const {testUnblockAllowed,testDirectVoeAllowed}=require('./embed-test-policy');
 const {confirmedStremioEmbedFailure}=require('./provider-compat');
 test('unblock requires an explicit switch and exact permitted hostname',()=>{
   const on={BOMBUJ_TEST_UNBLOCK_EMBEDS:'1'};
@@ -15,7 +15,7 @@ test('preflight never publishes HTML embeds even with diagnostic switches',async
   const file=require.resolve('./preflight-front.js'),local=createRequire(file),mod={exports:{}};
   const env={BOMBUJ_TEST_UNBLOCK_EMBEDS:'1'};
   vm.runInNewContext(fs.readFileSync(file,'utf8')+'\nmodule.exports={preflightStreams};',{
-    require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./filtered-front.js'?{}:p==='./embed-test-policy.js'?{testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env),isVoeStream,voeWebStream}:local(p),
+    require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./filtered-front.js'?{}:p==='./embed-test-policy.js'?{testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env)}:local(p),
     module:mod,process:{env},console:{log(){},error(){}},URL,Headers,TextDecoder,AbortSignal,
     global:{fetch:()=>{throw Error('unexpected network request');}}
   });
@@ -81,22 +81,26 @@ test('VOE direct test is separate and limited to the two expected hosts',()=>{
   assert.equal(testDirectVoeAllowed('https://voe2.sx/e/test',env),true);
   for(const u of ['https://voe.sx.evil.test/e/test','https://mixdrop.ag/e/test','http://voe.sx/e/test'])assert.equal(testDirectVoeAllowed(u,env),false);
 });
-test('VOE is web-only with zero video resolver fetches', async () => {
+test('VOE opt-in only publishes direct media and preserves language',async()=>{
   const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
   const file=require.resolve('./index'),local=createRequire(file),mod={exports:{}};
   const sdk={addonBuilder:class{defineCatalogHandler(){}defineStreamHandler(){}getInterface(){return{}}},serveHTTP(){}};
-  let calls=0;
   vm.runInNewContext(fs.readFileSync(file,'utf8'),{
-    require:p=>p==='stremio-addon-sdk'?sdk:local(p),module:mod,
-    process:{env:{BOMBUJ_DIRECT_VOE:'1'}},console:{log(){},error(){},warn(){}},
-    URL,URLSearchParams,AbortSignal,Buffer,Uint8Array,
-    fetch:async()=>{calls++;throw Error('unexpected VOE fetch');}
+    require:p=>p==='stremio-addon-sdk'?sdk:p==='./embed-test-policy.js'?{testDirectVoeAllowed:u=>testDirectVoeAllowed(u,{BOMBUJ_TEST_DIRECT_VOE:'1'})}:local(p),
+    module:mod,process:{env:{}},console:{log(){},error(){},warn(){}},URL,URLSearchParams,AbortSignal,Buffer,Uint8Array,
+    fetch:async url=>new Response(String(url).includes('cdn.example') ? '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1,RESOLUTION=1920x1080\nhttps://cdn.example/1080p/index.m3u8' : '<script type="application/json">"https://cdn.example/movie.m3u8"</script>')
   });
-  const embed='https://voe.sx/e/fixture?subtitles='+encodeURIComponent('CZSK;cs;https://www.bombuj.si/titulky/cz.vtt');
-  const result=await mod.exports.playersToStreams([{provider:'voe2.sx',language:'CZ dabing',resolvedUrl:embed}],
-    'https://www.bombuj.si/online-film-fixture');
-  assert.equal(result.length,1);assert.equal(result[0].externalUrl,embed);
-  assert.equal(result[0].url,undefined);assert.equal(result[0].subtitles[0].lang,'ces');assert.equal(calls,0);
+  const embed='https://voe.sx/e/fixture?subtitles='+encodeURIComponent('CZSK;cs;https://www.bombuj.si/titulky/fixture.vtt');
+  const out=await mod.exports.playersToStreams([{provider:'voe2.sx',language:'CZ dabing',resolvedUrl:embed}],'https://www.bombuj.si/online-film-temny-rytir');
+  assert.equal(out.length,1);assert.equal(out[0].url,'https://cdn.example/1080p/index.m3u8');
+  assert.match(out[0].description,/CZ dabing/);
+  assert.equal(out[0].subtitles[0].lang,'ces');assert.equal(out[0].subtitles[0].url,'https://www.bombuj.si/titulky/fixture.vtt');
+  const variants=await mod.exports.playersToStreams([
+    {provider:'voe2.sx',language:'CZ dabing',resolvedUrl:'https://voe.sx/e/cz'},
+    {provider:'voe2.sx',language:'SK dabing',resolvedUrl:'https://voe.sx/e/sk'}
+  ],'https://www.bombuj.si/online-film-temny-rytir');
+  const direct=variants.filter(s=>s.url);
+  assert.equal(direct.length,2);assert.notEqual(direct[0].behaviorHints.bingeGroup,direct[1].behaviorHints.bingeGroup);
 });
 test('VOE subtitles use explicit language codes and reject malformed source parameters',()=>{
   const {voeSubtitles}=require('./resolvers/voe-subtitles');
@@ -111,7 +115,7 @@ test('front opt-in permits VOE fetch while default continues to block it without
     let calls=0;const env=enabled?{BOMBUJ_TEST_DIRECT_VOE:'1'}:{};
     const g={fetch:async()=>{calls++;return new Response('fixture');}};
     vm.runInNewContext(fs.readFileSync(file,'utf8'),{
-      require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./bootstrap.js'?{}:p==='./embed-test-policy.js'?{testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env),isVoeStream,voeWebStream}:local(p),
+      require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./bootstrap.js'?{}:p==='./embed-test-policy.js'?{testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env)}:local(p),
       process:{env},console:{log(){},error(){}},URL,global:g,AbortSignal
     });
     if(enabled)await g.fetch('https://voe.sx/e/test');else await assert.rejects(g.fetch('https://voe.sx/e/test'),/Keep original/);
@@ -126,13 +130,13 @@ test('normal VOE switch is host-limited and explicit disable overrides legacy op
     assert.equal(testDirectVoeAllowed(url,{BOMBUJ_DIRECT_VOE:'1'}),false);
 });
 
-test('VOE web player is preserved by public preflight without fetching video',async()=>{
+test('VOE web player is excluded from public preflight without fetching video',async()=>{
   const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
   const file=require.resolve('./preflight-front'),local=createRequire(file),mod={exports:{}};
   const env={BOMBUJ_DIRECT_VOE:'1'},logs=[];
   vm.runInNewContext(fs.readFileSync(file,'utf8')+'\nmodule.exports={preflightStreams};',{
     require:p=>p==='http'?{createServer:()=>({listen(){}})}:p==='./filtered-front.js'?{}:p==='./embed-test-policy.js'?{
-      testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env),isVoeStream,voeWebStream
+      testUnblockAllowed:u=>testUnblockAllowed(u,env),testDirectVoeAllowed:u=>testDirectVoeAllowed(u,env)
     }:local(p),module:mod,process:{env},URL,AbortSignal,
     console:{log:value=>logs.push(value),error(){}},
     global:{fetch:()=>{throw Error('preflight must not fetch VOE or media');}}
@@ -140,12 +144,11 @@ test('VOE web player is preserved by public preflight without fetching video',as
   const streams=[{name:'Bombuj • VOE',url:'https://cdn.example/video.m3u8'},
     {name:'Bombuj • VOE',externalUrl:'https://voe.sx/e/original'}];
   const out=await mod.exports.preflightStreams({streams},'movie','tt0468569');
-  assert.equal(out.streams.length,1);assert.equal(out.streams[0].externalUrl,streams[1].externalUrl);
-  assert.equal(out.streams[0].url,undefined);
-  assert(logs.some(line=>line.includes('published=1 omitted=1')));
+  assert.equal(out.streams.length,1);assert.equal(out.streams[0].url,streams[0].url);
+  assert(logs.some(line=>line.includes('direct-only=1 omitted-web=1')));
 });
 
-test('VOE web player remains available when upstream CDN is inaccessible',async()=>{
+test('VOE upstream failures never expose a web player as a stream',async()=>{
   const fs=require('node:fs'),vm=require('node:vm'),{createRequire}=require('node:module');
   const file=require.resolve('./index'),local=createRequire(file),mod={exports:{}};
   const sdk={addonBuilder:class{defineCatalogHandler(){}defineStreamHandler(){}getInterface(){return{}}},serveHTTP(){}};
@@ -156,9 +159,7 @@ test('VOE web player remains available when upstream CDN is inaccessible',async(
   });
   const embed='https://voe2.sx/e/original';
   const out=await mod.exports.playersToStreams([{provider:'voe2.sx',language:'SK dabing',resolvedUrl:embed}],'https://www.bombuj.si/online-film-example');
-  assert.equal(out.length,1);
-  assert.equal(out[0].externalUrl,embed);
-  assert.equal(out[0].url,undefined);
+  assert.equal(out.length,0);
 });
 
 test('custom movie VOE signed URLs are resolved again, while other sources retain their cache',async()=>{

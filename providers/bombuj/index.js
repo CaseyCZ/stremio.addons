@@ -6,6 +6,7 @@ const { movieImdbId, seriesImdbId } = require('./bombuj-cinemeta.js');
 const { parseSeriesCards, parseSeriesBrowseCards, parseEpisodeList, seriesBrowseUrl } = require('./series-catalog.js');
 const { rememberSource, findSource, sourceIdentity, normalizeTitle } = require('./source-identity.js');
 const { parseMovieCards } = require('./bombuj-listing.js');
+const { testDirectVoeAllowed } = require('./embed-test-policy.js');
 const { inspectHls } = require('./stream-quality.js');
 const { subtitleTracks } = require('./stream-display.js');
 const { resolveVidara, vidaraEmbed } = require('./resolvers/vidara.js');
@@ -707,6 +708,7 @@ async function resolveDirectPlayer(player, sourcePageUrl, context = {}, onDiagno
   if (provider === 'streamtape' && process.env.BOMBUJ_DIRECT_STREAMTAPE === '1') {
     return resolveStreamtape(player.resolvedUrl, { onDiagnostic });
   }
+  if (provider === 'voe') return resolveVoe(player.resolvedUrl, sourcePageUrl);
   if (provider === 'mixdrop') return resolveMixdrop(player.resolvedUrl, sourcePageUrl, onDiagnostic);
   return null;
 }
@@ -731,7 +733,7 @@ function makeDirectStream(player, direct, index, tracks) {
     url: direct.url,
     behaviorHints: {
       ...(!webReadyMp4 ? { notWebReady: true } : {}),
-      bingeGroup: `bombuj-${normalize(provider) || index}`,
+      bingeGroup: `bombuj-${normalize(provider) || index}${testDirectVoeAllowed(player.resolvedUrl) ? '-' + normalize(language).replace(/\s+/g, '-') : ''}`,
       filename: `bombuj-${index + 1}${qualityTag ? '-' + qualityTag : ''}.${extension}`,
       ...(!webReadyMp4 ? { proxyHeaders: {
         request: {
@@ -750,22 +752,6 @@ async function playersToStreams(players, sourcePageUrl, context = {}) {
   const resolved = await mapWithConcurrency(players, 3, async (player, index) => {
     const started = Date.now();
     const onDiagnostic = (event) => logResolver(requestId, player, event);
-    // VOE CDN tokens are IP-bound; never resolve its video on Oracle.
-    if (inferProvider(player) === 'voe') {
-      let valid = false;
-      try {
-        const parsed = new URL(String(player.resolvedUrl || ''));
-        valid = parsed.protocol === 'https:' && !parsed.username && !parsed.password &&
-          !parsed.port && !directUrlType(parsed.href);
-      } catch {}
-      if (!valid) return [];
-      const tracks = subtitleTracks([{ externalUrl: player.resolvedUrl }]);
-      onDiagnostic({ stage: 'result', result: 'web-player', elapsedMs: Date.now() - started });
-      return [{ name: 'Bombuj • VOE',
-        description: `${safeLabel(player.language) || 'Bombuj'} • externí player`,
-        externalUrl: player.resolvedUrl,
-        ...(tracks.length ? { subtitles: tracks } : {}) }];
-    }
     let direct = null;
     try { direct = await resolveDirectPlayer(player, sourcePageUrl, context, onDiagnostic); }
     catch (error) { onDiagnostic({ stage: 'resolve', result: 'error', reason: resolverErrorReason(error) }); }
@@ -789,7 +775,7 @@ async function playersToStreams(players, sourcePageUrl, context = {}) {
     return [];
   });
 
-  return resolved.flat().filter((stream) => stream?.url || stream?.externalUrl);
+  return resolved.flat().filter((stream) => stream?.url);
 }
 
 

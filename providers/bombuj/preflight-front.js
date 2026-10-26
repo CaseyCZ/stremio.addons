@@ -3,7 +3,7 @@
 const http = require('http');
 const { confirmedStremioEmbedFailure } = require('./provider-compat.js');
 const { validStreamtapeEmbed } = require('./streamtape-link.js');
-const { testUnblockAllowed, testDirectVoeAllowed, isVoeStream, voeWebStream } = require('./embed-test-policy.js');
+const { testUnblockAllowed, testDirectVoeAllowed } = require('./embed-test-policy.js');
 
 const PUBLIC_PORT = Number(process.env.PORT || 7004);
 const INNER_PORT = Number(process.env.BOMBUJ_PREFLIGHT_INNER_PORT || (PUBLIC_PORT + 1));
@@ -182,15 +182,13 @@ async function preflightExternal(url, neutralReferrer = false) {
 
 async function preflightStreams(payload, type, id) {
   const streams = Array.isArray(payload?.streams) ? payload.streams : [];
-  // Final boundary: original VOE web players only; other sources stay direct.
-  const published = streams.flatMap(stream => {
-    const web = voeWebStream(stream);
-    if (web) return [web];
-    if (isVoeStream(stream)) return [];
-    return stream?.url && /^https?:\/\//i.test(String(stream.url)) ? [stream] : [];
-  });
-  console.log(`[preflight] ${type}/${id}: published=${published.length} omitted=${streams.length - published.length} discovered=${streams.length}`);
-  return { ...payload, streams: published };
+  // Final public boundary: only real direct video URLs can reach Stremio.
+  // Internal discovery still processes every original Bombuj player, but
+  // HTML embeds / externalUrl must never be handed off as playable streams.
+  const direct = streams.filter(stream =>
+    stream?.url && /^https?:\/\//i.test(String(stream.url)));
+  console.log(`[preflight] ${type}/${id}: direct-only=${direct.length} omitted-web=${streams.length - direct.length} discovered=${streams.length}`);
+  return { ...payload, streams: direct };
 }
 
 async function fetchInner(pathname) {

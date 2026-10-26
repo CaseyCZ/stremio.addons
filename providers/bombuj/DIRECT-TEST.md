@@ -2,17 +2,15 @@
 
 Rozšíření je součástí **stávajícího doplňku Bombuj**, nikoli samostatný Stremio addon.
 Stávající katalogy, objevování všech původních přehrávačů a značky `🎧` (audio),
-`💬` (titulky), `🎬` (kvalita) zůstávají zachované. **Stremio dostává přímé
-HLS/MP4 streamy v poli `url`, s jedinou výjimkou: VOE jako webový přehrávač
-v poli `externalUrl`.**
+`💬` (titulky), `🎬` (kvalita) zůstávají zachované. **Stremio však dostane jen
+přímé HLS/MP4 streamy v poli `url`, nikoliv stránky v `externalUrl`.**
 Primární pořadí je český dabing, potom anglické audio
 se **skutečnou URL českých titulků**, následně deklarované CZ titulky a ostatní.
 
 ## Experimentální přímé resolvery
 
 Přepínače lze ovládat jednotlivě. **Na osobní produkční instanci jsou všechny
-níže uvedené přímé resolvery zapnuté**. Starý `BOMBUJ_DIRECT_VOE=1` je
-pro přehrávání ignorován, protože VOE se nyní nabízí výhradně přes web.
+níže uvedené přímé resolvery zapnuté**, včetně `BOMBUJ_DIRECT_VOE=1`.
 Při vypnutí resolveru se původní adresa stále rozpoznává a může být uvedena
 v soukromém diagnostickém logu, ale webový přehrávač se nepřidá mezi streamy.
 
@@ -27,11 +25,10 @@ v soukromém diagnostickém logu, ale webový přehrávač se nepřidá mezi str
 | `BOMBUJ_DIRECT_VIDEASY` | Videasy | Přes příslušný backend VidNest (best effort) |
 | `BOMBUJ_DIRECT_STREAMTAPE` | Streamtape | Statické složení tokenu → originální MP4 CDN, pokud projde krátká range sonda |
 
-- VOE se nyní nabízí jako webový přehrávač (`externalUrl`); přímý VOE resolver
-  v kódu zůstává neaktivní. Mixdrop má nadále svůj přímý resolver.
+- VOE a Mixdrop mají vlastní existující přímé resolvery; nic se v nich nemaže.
 - FileMoon, pokud nevede na ověřený BYSE přehrávač, VidSrc a další původní
   přehrávače se dále vyhledávají a zaznamenávají; pokud z nich nelze získat přímé HLS/MP4, jejich
-  webová adresa se do výsledku Stremia nepřidává (výjimkou je VOE). Úspěšné načtení stránky (`HTTP 200`) samo o sobě nedokazuje
+  webová adresa se do výsledku Stremia nepřidává. Úspěšné načtení stránky (`HTTP 200`) samo o sobě nedokazuje
   dostupnost přímého videa nebo přehratelnost ve Stremio iOS.
 - Video ani titulky netečou přes Oracle server; vrací se zdrojová URL.
 - VidLink přímá MP4 byla potvrzena přehratelná uživatelem ve Stremio Web na iPhonu.
@@ -46,7 +43,6 @@ v soukromém diagnostickém logu, ale webový přehrávač se nepřidá mezi str
 - Filmy musí odpovídat ověřenému ID/titulu; u seriálů rovněž řadě a dílu.
 - Pokud resolver nenajde přímé video, daný zdroj se pro tento požadavek
   nezobrazí ve Stremiu; důvod a původní URL zůstávají v diagnostice.
-  VOE se místo přímého videa zobrazuje jako původní webový přehrávač.
   `BOMBUJ_SHOW_ALL_SOURCES=1` nesmí toto pravidlo změnit. Přímé URL je
   kandidát k přehrání, ne záruka přehratelnosti na každém zařízení.
 
