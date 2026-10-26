@@ -70,21 +70,10 @@ if [[ "$healthy" != "1" ]]; then
   exit 1
 fi
 
-# The public IP used to proxy this addon to port 7002. The PM2 service now
-# listens on 7003, so migrate only nginx proxy_pass directives that still
-# target the old local SKTOnline port. This fixes the public /configure page
-# continuing to serve the stale 0.1.0 instance.
-if command -v nginx >/dev/null 2>&1; then
-  mapfile -t nginx_files < <(sudo grep -RIlE 'proxy_pass[[:space:]]+http://(127\.0\.0\.1|localhost):7002' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true)
-  if (( ${#nginx_files[@]} > 0 )); then
-    echo "Updating nginx SKTOnline proxy from port 7002 to 7003: ${nginx_files[*]}"
-    for nginx_file in "${nginx_files[@]}"; do
-      sudo sed -i -E 's#proxy_pass[[:space:]]+http://(127\.0\.0\.1|localhost):7002#proxy_pass http://127.0.0.1:7003#g' "$nginx_file"
-    done
-    sudo nginx -t
-    sudo systemctl reload nginx
-  fi
-fi
+# The old SKTOnline port migration must not run here. A previous global
+# 7002 -> 7003 replacement also rewrote the independent dashboard upstream,
+# breaking /dashboard/. Provider routes are managed by the scoped nginx
+# installer scripts below; never rewrite unrelated proxy_pass directives.
 
 # Root-level token links from Stremio's Configure action need an nginx
 # redirect before the broad legacy Sosac token handler. Idempotent and
