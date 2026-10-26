@@ -79,10 +79,17 @@ function subtitleLabel(stream) {
 
 function providerLabel(stream) {
   const named = String(stream?.name || '').replace(/^Bombuj\s*•\s*/i, '').trim();
-  if (named && !/^(?:Direct|\d{3,4}p|4K|HD|SD|HDR)$/i.test(named)) return named;
-  const previous = String(stream?.title || '').split(/\r?\n/)
-    .find(line => /^(?:🎬|🌐).*? • .+/.test(line));
-  return previous?.match(/ • (.+)$/)?.[1] || named || 'Zdroj';
+  // The stream crosses several display proxies. The first segment is the
+  // original Bombuj player name; later segments are quality/WEB TEST labels.
+  const first = named.split(/\s*•\s*/)[0]?.trim();
+  if (first && !/^(?:Direct|Kvalita neuvedena|\d{3,4}p|4K|HD|SD|HDR)$/i.test(first)) return first;
+
+  const videoLine = titleLine(stream, '🎬');
+  const savedProvider = videoLine.split(/\s*•\s*/)[0]?.trim();
+  if (savedProvider && !/^(?:Direct|Kvalita neuvedena|\d{3,4}p|4K|HD|SD|HDR)$/i.test(savedProvider)) return savedProvider;
+
+  const webLine = titleLine(stream, '🌐');
+  return webLine.replace(/^Web player\s*•\s*/i, '').trim() || 'Zdroj neuveden';
 }
 
 function formatBombujStream(stream) {
@@ -90,12 +97,15 @@ function formatBombujStream(stream) {
   const quality = qualityLabel(stream);
   const subtitles = subtitleTracks([stream]);
   const webTrial = direct && [stream?.description, stream?.name, stream?.title]
-    .some(value => /\bWEB TEST\b/i.test(String(value || '')));
+    .some(value => /\bWEB TEST\b/i.test(String(value || '')))
+    || (direct && /\.mp4(?:$|[?#])/i.test(String(stream?.url || '')) &&
+      stream?.behaviorHints?.notWebReady !== true && !stream?.behaviorHints?.proxyHeaders);
+  const qualityText = quality + (webTrial ? ' • WEB TEST' : '');
   return {
     ...stream,
-    name: 'Bombuj • ' + (direct ? quality + (webTrial ? ' • WEB TEST' : '') : provider),
+    name: 'Bombuj • ' + (direct ? provider + ' • ' + qualityText : provider),
     title: '🎧 ' + audioLabel(stream) + '\n💬 ' + subtitleLabel(stream) +
-      '\n' + (direct ? '🎬 ' + quality + (webTrial ? ' • WEB TEST' : '') : '🌐 Web player • ' + provider),
+      '\n' + (direct ? '🎬 ' + provider + ' • ' + qualityText : '🌐 Web player • ' + provider),
     description: undefined,
     subtitles: subtitles.length ? subtitles : undefined
   };
