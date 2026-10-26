@@ -82,7 +82,7 @@ test('Bombuj VidNest wrapper preserves external fallback until test flag is enab
         vidnestId, resolveVidnest: async context => {
           called++;
           assert.equal(context.tmdbId, '1291595');
-          return { url: cdn, type: 'hls', quality: '1080p' };
+          return { url: cdn, type: 'hls', quality: '1080p', ephemeral: true };
         }
       } : local(p),
       module: mod, process: { env: enabled ? { BOMBUJ_DIRECT_VIDNEST: '1' } : {} },
@@ -94,8 +94,9 @@ test('Bombuj VidNest wrapper preserves external fallback until test flag is enab
       { url: original, resolvedUrl: embed, provider: 'vidnest (New)', language: 'EN dab/tit' }
     ], 'https://www.bombuj.si/online-film-example', { type: 'movie' });
     assert.equal(called, enabled ? 1 : 0);
-    assert.equal(streams.length, 1);
+    assert.equal(streams.length, enabled ? 2 : 1);
     assert.equal(enabled ? streams[0].url : streams[0].externalUrl, enabled ? cdn : embed);
+    if (enabled) assert.equal(streams[1].externalUrl, embed);
   }
 });
 
@@ -113,7 +114,7 @@ test('Bombuj VidLink and Videasy may use exact-ID VidNest backend in isolation',
           seen++;
           assert.equal(context.tmdbId, '1291595');
           assert.equal(options.backends[0], source);
-          return { url: cdn, type: 'hls' };
+          return { url: cdn, type: 'hls', ephemeral: true };
         }
       } : local(p),
       module: mod, process: { env: { [`BOMBUJ_DIRECT_${source.toUpperCase()}`]: '1' } },
@@ -128,5 +129,6 @@ test('Bombuj VidLink and Videasy may use exact-ID VidNest backend in isolation',
     }], 'https://www.bombuj.si/online-film-example', { type: 'movie' });
     assert.equal(seen, 1);
     assert.equal(streams[0].url, cdn);
+    assert(streams[1].externalUrl);
   }
 });

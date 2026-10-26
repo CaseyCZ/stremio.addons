@@ -671,7 +671,7 @@ function makeExternalStream(player, index, tracks) {
 }
 
 async function playersToStreams(players, sourcePageUrl, context = {}) {
-  const voeFallbacks = [];
+  const webFallbacks = [];
   const resolved = await mapWithConcurrency(players, 3, async (player, index) => {
     const direct = await resolveDirectPlayer(player, sourcePageUrl, context).catch(() => null);
     const tracks = subtitleTracks([{
@@ -679,14 +679,18 @@ async function playersToStreams(players, sourcePageUrl, context = {}) {
       subtitles: direct?.subtitles || []
     }]);
     if (direct?.url) {
-      if (testDirectVoeAllowed(player.resolvedUrl)) voeFallbacks[index] = makeExternalStream(player, index, tracks);
+      // Signed CDN URLs may be bound to the resolver's IP or expire before
+      // client playback. Keep the original player selectable as a fallback.
+      if (direct.ephemeral || testDirectVoeAllowed(player.resolvedUrl)) {
+        webFallbacks[index] = makeExternalStream(player, index, tracks);
+      }
       return makeDirectStream(player, direct, index, tracks);
     }
     return makeExternalStream(player, index, tracks);
   });
 
   const direct = resolved.filter((stream) => stream?.url);
-  const external = [...resolved.filter((stream) => stream?.externalUrl), ...voeFallbacks.filter(Boolean)];
+  const external = [...resolved.filter((stream) => stream?.externalUrl), ...webFallbacks.filter(Boolean)];
   return [...direct, ...external];
 }
 

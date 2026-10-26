@@ -131,7 +131,7 @@ test('existing Bombuj Primewire player is not altered until test flag enabled', 
           called++;
           assert.equal(context.title, 'Insidious');
           return { url: 'https://ployan.me/hls/test/master.m3u8', type: 'hls',
-            referer: 'https://ployan.me/watch/', subtitles: [] };
+            referer: 'https://ployan.me/watch/', subtitles: [], ephemeral: true };
         }
       } : local(p),
       module: mod, process: { env: enabled ? { BOMBUJ_DIRECT_PLOYAN: '1' } : {} },
@@ -144,9 +144,10 @@ test('existing Bombuj Primewire player is not altered until test flag enabled', 
     ], 'https://www.bombuj.si/online-film-example',
     { type: 'movie', title: 'Insidious', year: 2011 });
     assert.equal(called, enabled ? 1 : 0);
-    assert.equal(streams.length, 1);
+    assert.equal(streams.length, enabled ? 2 : 1);
     assert.equal(enabled ? streams[0].url : streams[0].externalUrl,
       enabled ? 'https://ployan.me/hls/test/master.m3u8' : embed);
     assert.match(streams[0].description, /EN dab\/tit/);
+    if (enabled) assert.equal(streams[1].externalUrl, embed);
   }
 });

@@ -68,7 +68,7 @@ test('Bombuj Streamtape player stays external unless the direct test is enabled'
         resolveStreamtape: async url => {
           calls++;
           assert.equal(url, embed);
-          return { url: cdn, type: 'mp4' };
+          return { url: cdn, type: 'mp4', ephemeral: true };
         }
       } : local(p),
       module: mod, process: { env: enabled ? { BOMBUJ_DIRECT_STREAMTAPE: '1' } : {} },
@@ -81,5 +81,6 @@ test('Bombuj Streamtape player stays external unless the direct test is enabled'
     ], 'https://www.bombuj.si/online-film-example');
     assert.equal(calls, enabled ? 1 : 0);
     assert.equal(enabled ? streams[0].url : streams[0].externalUrl, enabled ? cdn : embed);
+    if (enabled) assert.equal(streams[1].externalUrl, embed);
   }
 });
