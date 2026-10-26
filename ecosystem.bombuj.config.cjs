@@ -33,7 +33,9 @@ module.exports = {
       // bypasses our own filtering; it cannot defeat a provider-side block.
       BOMBUJ_SHOW_ALL_SOURCES: '1',
       // Also allow direct extraction attempts from previously blocked embeds.
-      BOMBUJ_TEST_UNBLOCK_EMBEDS: '1'
+      BOMBUJ_TEST_UNBLOCK_EMBEDS: '1',
+      // Exact attempted and returned URLs appear only in private PM2 logs.
+      BOMBUJ_RESOLVER_LOG_URLS: '1'
     }
   }]
 };

@@ -55,17 +55,27 @@ function streamCandidates(data) {
   return [...new Set(found)].filter(vidnestMediaUrl);
 }
 
-async function limitedJson(url, fetchImpl) {
+async function limitedJson(url, fetchImpl, onDiagnostic, backend) {
   const response = await fetchImpl(url, {
     redirect: 'error', signal: AbortSignal.timeout(8000),
     headers: { Accept: 'application/json, */*', Origin: PLAYER, Referer: `${PLAYER}/` }
   });
-  if (response.status !== 200 || Number(response.headers.get('content-length') || 0) > MAX_JSON_BYTES) {
+  if (response.status !== 200) {
+    onDiagnostic({ stage: 'api', backend, result: 'failed',
+      reason: `http-${response.status}`, requestUrl: url });
+    await response.body?.cancel();
+    return null;
+  }
+  if (Number(response.headers.get('content-length') || 0) > MAX_JSON_BYTES) {
+    onDiagnostic({ stage: 'api', backend, result: 'failed', reason: 'response-too-large', requestUrl: url });
     await response.body?.cancel();
     return null;
   }
   const reader = response.body?.getReader();
-  if (!reader) return null;
+  if (!reader) {
+    onDiagnostic({ stage: 'api', backend, result: 'failed', reason: 'response-empty', requestUrl: url });
+    return null;
+  }
   let bytes = 0;
   const chunks = [];
   try {
@@ -73,17 +83,27 @@ async function limitedJson(url, fetchImpl) {
       const { done, value } = await reader.read();
       if (done) break;
       bytes += value.byteLength;
-      if (bytes > MAX_JSON_BYTES) return null;
+      if (bytes > MAX_JSON_BYTES) {
+        onDiagnostic({ stage: 'api', backend, result: 'failed', reason: 'response-too-large', requestUrl: url });
+        return null;
+      }
       chunks.push(Buffer.from(value));
     }
   } finally { await reader.cancel().catch(() => {}); }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-  catch { return null; }
+  catch {
+    onDiagnostic({ stage: 'api', backend, result: 'failed', reason: 'invalid-json', requestUrl: url });
+    return null;
+  }
 }
 
-async function resolveVidnest(context, { fetchImpl = fetch, backends = BACKENDS } = {}) {
+async function resolveVidnest(context, { fetchImpl = fetch, backends = BACKENDS,
+  onDiagnostic = () => {} } = {}) {
   const id = vidnestId(context?.tmdbId);
-  if (!id || !['movie', 'series'].includes(context?.type)) return null;
+  if (!id || !['movie', 'series'].includes(context?.type)) {
+    onDiagnostic({ stage: 'context', result: 'failed', reason: 'missing-tmdb-id' });
+    return null;
+  }
   const season = Number(context.season), episode = Number(context.episode);
   if (context.type === 'series' && !(Number.isInteger(season) && season > 0 &&
       season < 100 && Number.isInteger(episode) && episode > 0 && episode < 1000)) return null;
@@ -92,19 +112,31 @@ async function resolveVidnest(context, { fetchImpl = fetch, backends = BACKENDS 
   // Each request is bounded. Fail closed on TLS errors: never disable SSL
   // verification even if third-party resolver examples do so.
   for (const backend of backends.filter(name => BACKENDS.includes(name)).slice(0, BACKENDS.length)) {
+    const requestUrl = `${API}/${backend}/${path}`;
     try {
-      const result = await limitedJson(`${API}/${backend}/${path}`, fetchImpl);
+      const result = await limitedJson(requestUrl, fetchImpl, onDiagnostic, backend);
       if (!result) continue;
       const payload = result.encrypted ? decodeAlphabet(result.data) : result;
       const candidates = streamCandidates(payload).slice(0, 3);
+      if (!candidates.length) onDiagnostic({ stage: 'parse', backend,
+        result: 'failed', reason: 'no-allowed-hls', requestUrl });
       for (const url of candidates) {
         const hls = await inspectHls(url, {
           fetchImpl, headers: { Referer: `${PLAYER}/`, Origin: PLAYER }, timeoutMs: 5000
         }).catch(() => null);
+        if (!hls) onDiagnostic({ stage: 'hls', backend, result: 'failed',
+          reason: 'hls-unreadable', requestUrl: url });
         if (hls) return { url, type: 'hls', quality: hls.quality || undefined,
           referer: `${PLAYER}/`, origin: PLAYER, ephemeral: true };
       }
-    } catch { /* Another backend can still supply a working source. */ }
+    } catch (error) {
+      const code = String(error?.cause?.code || error?.code || '');
+      const reason = error?.name === 'TimeoutError' || error?.name === 'AbortError' ? 'timeout'
+        : /^(?:EAI_AGAIN|ENOTFOUND|ETIMEDOUT|ECONNRESET|ECONNREFUSED)$/.test(code)
+          ? code.toLowerCase() : 'request-failed';
+      onDiagnostic({ stage: 'api', backend, result: 'error', reason, requestUrl });
+      // Another backend can still supply a working source.
+    }
   }
   return null;
 }

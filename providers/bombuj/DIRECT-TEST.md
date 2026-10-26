@@ -7,8 +7,9 @@ se **skutečnou URL českých titulků**, následně deklarované CZ titulky a o
 
 ## Experimentální přímé resolvery
 
-Každý přepínač je záměrně **vypnutý** a dá se aktivovat jednotlivě, výhradně
-v izolované testovací instanci. Bez přepínače se používá původní přehrávač.
+Přepínače lze ovládat jednotlivě. **Na osobní produkční instanci jsou všechny
+níže uvedené přímé resolvery zapnuté**, včetně `BOMBUJ_DIRECT_VOE=1`.
+Bez přepínače se používá původní přehrávač.
 
 | Přepínač (`=1`) | Zdroj v Bombuj | Přímé video, pokud existuje |
 | --- | --- | --- |
@@ -29,7 +30,27 @@ v izolované testovací instanci. Bez přepínače se používá původní přeh
 - Expirované podepsané URL se nemají ukládat do pětiminutové cache.
 - Filmy musí odpovídat ověřenému ID/titulu; u seriálů rovněž řadě a dílu.
 - Pokud resolver nedostane jednoznačný výsledek, zůstává původní externí
-  přehrávač (případné starší filtry nefunkčních iOS embedů se nemění).
+  přehrávač. V osobní produkci `BOMBUJ_SHOW_ALL_SOURCES=1` zachovává všechny
+  nalezené webové odkazy i při neúspěšné předběžné kontrole. Samotná dostupnost
+  zdroje v seznamu nezaručuje jeho přehratelnost v aplikaci.
+
+## Diagnostika v soukromém Dashboardu
+
+V **Dashboard → Log Manager → stremio-addons-bombuj → výstup** vyhledej
+`[BOMBUJ RESOLVER]`. Každý záznam obsahuje čas a `requestId`, podle kterého
+lze spojit jednotlivé pokusy stejného požadavku.
+
+- `playerUrl`: původní adresa přehrávače objevená na Bombuj.
+- `requestUrl`: **přesná adresa volaná resolverem**, například API VidNest
+  nebo stránka Mixdrop. Při chybě `http-403` je vidět i tato konkrétní URL.
+- `mediaUrl`: přímá HLS/MP4 adresa nalezená při rozboru stránky.
+- `handedToStremio`: **přesná adresa, kterou dostane Stremio** (přímé video
+  nebo původní webový odkaz). `result=direct` či `result=web-fallback`.
+- `reason` a `stage`: kde pokus skončil a proč (HTTP, token, HLS apod.).
+
+Přesné adresy se zapisují pouze při `BOMBUJ_RESOLVER_LOG_URLS=1`.
+Zpravidla obsahují krátkodobé CDN podpisy či tokeny, proto soukromý log
+nikam veřejně nekopírovat. PM2 logrotate omezuje dobu uchování.
 
 ## Ověření před zapnutím v provozu
 
@@ -42,4 +63,4 @@ Automatizované testy používají simulované odpovědi. Úspěšné testy **ne
 ověřené koncové přehrávání pro každou variantu přehrávače. Případné API rate
 limit, změna HTML/tokenů či IP vazba se musí řešit podle reálných výsledků.
 
-Produkční server, výchozí větev ani stávající instalace se nemění automaticky.
+Nasazení osobní produkce probíhá přes existující GitHub Actions a Oracle PM2.

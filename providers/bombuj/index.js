@@ -37,6 +37,64 @@ const MIXDROP_HOSTS = [
 ];
 
 const cache = new Map();
+let resolverRequestCounter = 0;
+
+function resolverErrorReason(error) {
+  const message = String(error?.message || '');
+  const http = message.match(/\bHTTP\s+(\d{3})\b/i);
+  if (http) return `http-${http[1]}`;
+  if (error?.name === 'TimeoutError' || error?.name === 'AbortError') return 'timeout';
+  const code = String(error?.cause?.code || error?.code || '');
+  return /^(?:EAI_AGAIN|ENOTFOUND|ETIMEDOUT|ECONNRESET|ECONNREFUSED|CERT_[A-Z_]+)$/.test(code)
+    ? code.toLowerCase() : 'request-failed';
+}
+
+function resolverHost(url) {
+  try { return new URL(url).hostname.toLowerCase().slice(0, 120); }
+  catch { return 'unknown'; }
+}
+
+function resolverLogUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    if (!['http:', 'https:'].includes(url.protocol)) return undefined;
+    // Never expose embedded HTTP Basic Auth credentials in a diagnostic log.
+    url.username = '';
+    url.password = '';
+    return url.href.slice(0, 16384);
+  } catch { return undefined; }
+}
+
+function logResolver(requestId, player, event) {
+  const record = {
+    at: new Date().toISOString(), requestId,
+    provider: String(player?.provider || 'unknown').replace(/[\r\n]+/g, ' ').slice(0, 64),
+    language: String(player?.language || '').replace(/[\r\n]+/g, ' ').slice(0, 48),
+    host: resolverHost(player?.resolvedUrl),
+    stage: String(event?.stage || 'result').slice(0, 30),
+    result: String(event?.result || 'unknown').slice(0, 30),
+    ...(event?.reason ? { reason: String(event.reason).slice(0, 70) } : {}),
+    ...(event?.backend ? { backend: String(event.backend).slice(0, 24) } : {}),
+    ...(event?.candidateHost ? { candidateHost: resolverHost(`https://${event.candidateHost}/`) } : {}),
+    ...(event?.quality ? { quality: String(event.quality).slice(0, 15) } : {}),
+    ...(Number.isFinite(event?.elapsedMs) ? { elapsedMs: event.elapsedMs } : {})
+  };
+  if (process.env.BOMBUJ_RESOLVER_LOG_URLS === '1') {
+    // Only the owner's private PM2 log; signatures may expire or be IP-bound.
+    const urls = {
+      playerUrl: player?.resolvedUrl,
+      requestUrl: event?.requestUrl,
+      mediaUrl: event?.mediaUrl,
+      handedToStremio: event?.handedToStremio,
+      referer: event?.referer
+    };
+    for (const [key, raw] of Object.entries(urls)) {
+      const safe = resolverLogUrl(raw);
+      if (safe) record[key] = safe;
+    }
+  }
+  console.log('[BOMBUJ RESOLVER] ' + JSON.stringify(record));
+}
 
 function cacheGet(key) {
   const item = cache.get(key);
@@ -550,18 +608,30 @@ function mixdropCandidates(embedUrl) {
   }
 }
 
-async function resolveMixdrop(embedUrl, sourcePageUrl) {
+async function resolveMixdrop(embedUrl, sourcePageUrl, onDiagnostic = () => {}) {
   for (const candidate of mixdropCandidates(embedUrl)) {
-    const page = await fetchPage(candidate, {
+    const candidateHost = resolverHost(candidate);
+    let page;
+    try { page = await fetchPage(candidate, {
       headers: {
         Referer: sourcePageUrl || candidate,
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
-    }).catch(() => null);
+    }); } catch (error) {
+      onDiagnostic({ stage: 'embed', result: 'failed', candidateHost,
+        requestUrl: candidate, reason: resolverErrorReason(error) });
+      continue;
+    }
     if (!page) continue;
     const finalUrl = page.finalUrl || candidate;
     const streamUrl = extractMixdropStream(page.text, finalUrl);
-    if (streamUrl) return { url: streamUrl, referer: finalUrl, type: 'mp4' };
+    if (streamUrl) {
+      onDiagnostic({ stage: 'parse', result: 'found', candidateHost: resolverHost(finalUrl),
+        requestUrl: candidate, mediaUrl: streamUrl });
+      return { url: streamUrl, referer: finalUrl, type: 'mp4' };
+    }
+    onDiagnostic({ stage: 'parse', result: 'failed', candidateHost: resolverHost(finalUrl),
+      requestUrl: candidate, reason: 'wurl-not-found' });
   }
   return null;
 }
@@ -588,7 +658,7 @@ function directUrlType(url) {
   return null;
 }
 
-async function resolveDirectPlayer(player, sourcePageUrl, context = {}) {
+async function resolveDirectPlayer(player, sourcePageUrl, context = {}, onDiagnostic = () => {}) {
   const directType = directUrlType(player.resolvedUrl);
   if (directType) return { url: player.resolvedUrl, referer: sourcePageUrl, type: directType };
 
@@ -608,7 +678,7 @@ async function resolveDirectPlayer(player, sourcePageUrl, context = {}) {
       catch {}
     }
     if (!imdbId) imdbId = String(player.resolvedUrl || '').match(/tt\d{5,12}/i)?.[0];
-    return resolveVidapi({ ...context, imdbId });
+    return resolveVidapi({ ...context, imdbId }, { onDiagnostic });
   }
   if ((provider === 'vidnest' && process.env.BOMBUJ_DIRECT_VIDNEST === '1') ||
       (provider === 'vidlink' && process.env.BOMBUJ_DIRECT_VIDLINK === '1') ||
@@ -623,13 +693,13 @@ async function resolveDirectPlayer(player, sourcePageUrl, context = {}) {
       tmdbId = vidnestId(matched?.[1]);
     }
     const backend = provider === 'vidlink' || provider === 'videasy' ? [provider] : undefined;
-    return resolveVidnest({ ...context, tmdbId }, backend ? { backends: backend } : undefined);
+    return resolveVidnest({ ...context, tmdbId }, { ...(backend ? { backends: backend } : {}), onDiagnostic });
   }
   if (provider === 'streamtape' && process.env.BOMBUJ_DIRECT_STREAMTAPE === '1') {
-    return resolveStreamtape(player.resolvedUrl);
+    return resolveStreamtape(player.resolvedUrl, { onDiagnostic });
   }
   if (provider === 'voe') return resolveVoe(player.resolvedUrl, sourcePageUrl);
-  if (provider === 'mixdrop') return resolveMixdrop(player.resolvedUrl, sourcePageUrl);
+  if (provider === 'mixdrop') return resolveMixdrop(player.resolvedUrl, sourcePageUrl, onDiagnostic);
   return null;
 }
 
@@ -672,13 +742,21 @@ function makeExternalStream(player, index, tracks) {
 
 async function playersToStreams(players, sourcePageUrl, context = {}) {
   const webFallbacks = [];
+  const requestId = `${Date.now().toString(36)}-${(++resolverRequestCounter).toString(36)}`;
   const resolved = await mapWithConcurrency(players, 3, async (player, index) => {
-    const direct = await resolveDirectPlayer(player, sourcePageUrl, context).catch(() => null);
+    const started = Date.now();
+    const onDiagnostic = (event) => logResolver(requestId, player, event);
+    let direct = null;
+    try { direct = await resolveDirectPlayer(player, sourcePageUrl, context, onDiagnostic); }
+    catch (error) { onDiagnostic({ stage: 'resolve', result: 'error', reason: resolverErrorReason(error) }); }
     const tracks = subtitleTracks([{
       externalUrl: player.resolvedUrl,
       subtitles: direct?.subtitles || []
     }]);
     if (direct?.url) {
+      onDiagnostic({ stage: 'result', result: 'direct', quality: direct.quality || direct.type,
+        handedToStremio: direct.url, referer: direct.referer,
+        elapsedMs: Date.now() - started });
       // Signed CDN URLs may be bound to the resolver's IP or expire before
       // client playback. Keep the original player selectable as a fallback.
       if (process.env.BOMBUJ_SHOW_ALL_SOURCES === '1' || direct.ephemeral || testDirectVoeAllowed(player.resolvedUrl)) {
@@ -686,6 +764,9 @@ async function playersToStreams(players, sourcePageUrl, context = {}) {
       }
       return makeDirectStream(player, direct, index, tracks);
     }
+    onDiagnostic({ stage: 'result', result: 'web-fallback', reason: 'no-direct-media',
+      handedToStremio: player.resolvedUrl,
+      elapsedMs: Date.now() - started });
     return makeExternalStream(player, index, tracks);
   });
 

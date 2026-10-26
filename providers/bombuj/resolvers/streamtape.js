@@ -80,12 +80,13 @@ function extractGate(html, id) {
   } catch { return null; }
 }
 
-async function validMp4Range(url, pageUrl, fetchImpl) {
+async function validMp4Range(url, pageUrl, fetchImpl, onDiagnostic) {
   const response = await fetchImpl(url, {
     redirect: 'error', signal: AbortSignal.timeout(5000),
     headers: { Range: 'bytes=0-31', Referer: pageUrl, 'User-Agent': 'Mozilla/5.0' }
   });
   if (![200, 206].includes(response.status)) {
+    onDiagnostic({ stage: 'cdn', result: 'failed', reason: `http-${response.status}`, requestUrl: url });
     await response.body?.cancel();
     return false;
   }
@@ -94,33 +95,60 @@ async function validMp4Range(url, pageUrl, fetchImpl) {
   try {
     const { done, value } = await reader.read();
     const bytes = done ? Buffer.alloc(0) : Buffer.from(value.subarray(0, 64));
-    return bytes.length >= 12 && bytes.toString('latin1', 4, 8) === 'ftyp';
+    const isMp4 = bytes.length >= 12 && bytes.toString('latin1', 4, 8) === 'ftyp';
+    if (!isMp4) onDiagnostic({ stage: 'cdn', result: 'failed', reason: 'not-mp4', requestUrl: url });
+    return isMp4;
   } finally { await reader.cancel().catch(() => {}); }
 }
 
-async function resolveStreamtape(embed, { fetchImpl = fetch } = {}) {
+async function resolveStreamtape(embed, { fetchImpl = fetch,
+  onDiagnostic = () => {} } = {}) {
   const valid = validStreamtapeEmbed(embed);
-  if (!valid) return null;
+  if (!valid) {
+    onDiagnostic({ stage: 'embed', result: 'failed', reason: 'invalid-embed', requestUrl: embed });
+    return null;
+  }
   const id = new URL(valid).pathname.split('/')[2];
   const pageUrl = `${BASE}/v/${id}`;
   try {
     const page = await fetchImpl(pageUrl, { redirect: 'error', signal: AbortSignal.timeout(8000),
       headers: { 'User-Agent': 'Mozilla/5.0', Referer: `${BASE}/` } });
+    if (page.status !== 200) {
+      onDiagnostic({ stage: 'page', result: 'failed', reason: `http-${page.status}`, requestUrl: pageUrl });
+      await page.body?.cancel();
+      return null;
+    }
     const html = await boundedText(page);
     const gate = extractGate(html, id);
-    if (!gate) return null;
+    if (!gate) {
+      onDiagnostic({ stage: 'parse', result: 'failed', reason: 'gate-not-found', requestUrl: pageUrl });
+      return null;
+    }
     const redirect = await fetchImpl(gate, { redirect: 'manual', signal: AbortSignal.timeout(8000),
       headers: { Referer: pageUrl, 'User-Agent': 'Mozilla/5.0' } });
     if (![301, 302, 303, 307, 308].includes(redirect.status)) {
+      onDiagnostic({ stage: 'gate', result: 'failed', reason: `http-${redirect.status}`, requestUrl: gate });
       await redirect.body?.cancel();
       return null;
     }
     const rawLocation = redirect.headers.get('location');
     const cdn = rawLocation ? new URL(rawLocation, gate).href : null;
     await redirect.body?.cancel();
-    if (!isStreamtapeCdn(cdn) || !(await validMp4Range(cdn, pageUrl, fetchImpl))) return null;
+    if (!isStreamtapeCdn(cdn)) {
+      onDiagnostic({ stage: 'redirect', result: 'failed', reason: 'untrusted-cdn', requestUrl: gate });
+      return null;
+    }
+    if (!(await validMp4Range(cdn, pageUrl, fetchImpl, onDiagnostic))) return null;
+    onDiagnostic({ stage: 'cdn', result: 'found', mediaUrl: cdn, requestUrl: gate });
     return { url: cdn, type: 'mp4', referer: pageUrl, ephemeral: true };
-  } catch { return null; }
+  } catch (error) {
+    const code = String(error?.cause?.code || error?.code || '');
+    const reason = error?.name === 'TimeoutError' || error?.name === 'AbortError' ? 'timeout'
+      : /^(?:EAI_AGAIN|ENOTFOUND|ETIMEDOUT|ECONNRESET|ECONNREFUSED)$/.test(code)
+        ? code.toLowerCase() : 'request-failed';
+    onDiagnostic({ stage: 'request', result: 'error', reason, requestUrl: pageUrl });
+    return null;
+  }
 }
 
 module.exports = { isStreamtapeGate, isStreamtapeCdn, staticStringExpression,
