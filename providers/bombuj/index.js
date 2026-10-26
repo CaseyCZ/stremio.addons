@@ -729,7 +729,7 @@ function makeDirectStream(player, direct, index, tracks) {
   const webReadyMp4 = direct.type === 'mp4' && inferProvider(player) === 'vidlink';
   return {
     name: `Bombuj • ${provider}`,
-    description: `${language} • přímý ${direct.type === 'hls' ? 'HLS' : 'MP4'}${direct.quality ? ' • ' + direct.quality : ''}${webReadyMp4 ? ' • WEB TEST' : ''}`,
+    description: `${language} • přímý ${direct.type === 'hls' ? 'HLS' : 'MP4'}${direct.quality ? ' • ' + direct.quality : ''}`,
     url: direct.url,
     behaviorHints: {
       ...(!webReadyMp4 ? { notWebReady: true } : {}),

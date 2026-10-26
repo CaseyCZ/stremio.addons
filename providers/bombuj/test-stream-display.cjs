@@ -50,22 +50,22 @@ test('direct streams retain their media URL, headers and quality metadata', () =
     behaviorHints:{proxyHeaders:{request:{Referer:'https://serialy.bombuj.si/'}}}
   };
   const out=formatBombujStream(input);
-  assert.equal(out.name,'Bombuj • Kvalita neuvedena');
+  assert.equal(out.name,'Bombuj • VOE');
   assert.equal(out.title,'🎧 🇬🇧 EN\n💬 Neuvedeny\n🎬 Kvalita neuvedena');
   assert.equal(out.url,input.url);
   assert.deepEqual(out.behaviorHints,input.behaviorHints);
 });
 
-test('VidLink browser-ready MP4 keeps its WEB TEST label across formatting passes', () => {
+test('VidLink browser-ready MP4 stays playable without a test label across formatting passes', () => {
   const input = {
-    name: 'Bombuj • vidlink', description: 'CZ/SK titulky • přímý MP4 • 1080p • WEB TEST',
+    name: 'Bombuj • vidlink', description: 'CZ/SK titulky • přímý MP4 • 1080p',
     url: 'https://bcdn.hakunaymatata.com/test.mp4',
     behaviorHints: { filename: 'bombuj-2-1080p.mp4' }
   };
   const once = formatBombujStream(input);
   const twice = formatBombujStream(once);
-  assert.match(once.name, /WEB TEST/);
-  assert.match(once.title, /🎬 .*WEB TEST/);
+  assert.equal(once.name, 'Bombuj • VidLink');
+  assert.match(once.title, /🎬 1080p$/);
   assert.equal(twice.name, once.name);
   assert.equal(twice.title, once.title);
   assert.equal(twice.url, input.url);
@@ -73,9 +73,69 @@ test('VidLink browser-ready MP4 keeps its WEB TEST label across formatting passe
   assert(!('proxyHeaders' in twice.behaviorHints));
   const front = wrapperFunctions('./front.js', ['displayDirect']);
   const publicStream = front.displayDirect(twice);
-  assert.match(publicStream.name, /WEB TEST/);
-  assert.match(publicStream.title, /🎬 .*WEB TEST/);
+  assert.equal(publicStream.name, 'Bombuj • VidLink');
+  assert.match(publicStream.title, /🎬 1080p$/);
   assert.equal(publicStream.url, input.url);
+});
+
+test('source name survives bootstrap, front and final display for all direct players', () => {
+  const boot = wrapperFunctions('./bootstrap.js', ['transformStreamPayload']);
+  const front = wrapperFunctions('./front.js', ['displayDirect']);
+  const sources = ['BYSE/FileMoon', 'VidLink', 'VidAPI', 'VOE', 'Mixdrop',
+    'Streamtape', 'VidNest', 'Primewire', 'Videasy', 'Vidara'];
+
+  const originals = sources.map((provider, index) => ({
+    name: 'Bombuj • ' + provider,
+    description: 'CZ dabing • přímý HLS • 1080p',
+    url: `https://cdn-${index}.example/video.m3u8?token=original-${index}`,
+    behaviorHints: {
+      notWebReady: true,
+      filename: `bombuj-${index}.m3u8`,
+      proxyHeaders: { request: { Referer: 'https://bombuj.si/' } }
+    },
+    subtitles: [{ id: 'cz', lang: 'cs', url: 'https://subtitle.example/cz.vtt' }]
+  }));
+
+  const bootstrapped = boot.transformStreamPayload('movie', 'tt1234567', { streams: originals }).streams;
+  assert.equal(bootstrapped.length, sources.length);
+  sources.forEach((provider, index) => {
+    const original = originals[index];
+    const final = formatBombujStream(front.displayDirect(bootstrapped[index]));
+    assert.equal(final.name, `Bombuj • ${provider}`);
+    assert.equal(final.title, '🎧 🇨🇿 CZ\n💬 🇨🇿 CZ\n🎬 1080p');
+    assert.equal(final.url, original.url);
+    assert.deepEqual(final.behaviorHints, original.behaviorHints);
+    assert.deepEqual(final.subtitles, original.subtitles.map(sub => ({ ...sub, lang: 'ces' })));
+    assert(!final.externalUrl);
+    assert.equal(formatBombujStream(final).name, final.name);
+    assert.equal(formatBombujStream(final).title, final.title);
+  });
+});
+
+test('two sources with the same resolution have visibly different names', () => {
+  const common = { description: 'EN dab/tit • přímý HLS • 1080p', url: 'https://cdn.example/master.m3u8' };
+  const byse = formatBombujStream({ ...common, name: 'Bombuj • BYSE/FileMoon' });
+  const vidapi = formatBombujStream({ ...common, name: 'Bombuj • VidAPI' });
+  assert.notEqual(byse.name, vidapi.name);
+  assert.equal(byse.title, '🎧 🇬🇧 EN\n💬 Neuvedeny\n🎬 1080p');
+  assert.equal(vidapi.title, byse.title);
+});
+
+test('source capitalization is standardized without duplicating it in the details', () => {
+  const cases = [
+    ['voe2.sx', 'VOE'], ['vidapi', 'VidAPI'], ['vidlink.pro', 'VidLink'],
+    ['byse.sx', 'BYSE/FileMoon'], ['mixdrop.ag', 'Mixdrop'],
+    ['streamtape.com', 'Streamtape'], ['unknown.host', 'unknown.host']
+  ];
+  for (const [input, expected] of cases) {
+    const formatted = formatBombujStream({
+      name: `Bombuj • ${input}`, description: 'CZ dabing • přímý HLS • 1080p',
+      url: 'https://cdn.example/video.m3u8'
+    });
+    assert.equal(formatted.name, `Bombuj • ${expected}`);
+    assert.equal(formatted.title, '🎧 🇨🇿 CZ\n💬 Neuvedeny\n🎬 1080p');
+    assert.deepEqual(formatBombujStream(formatted), formatted);
+  }
 });
 
 test('unknown audio is labeled honestly, not mislabeled with a flag', () => {
