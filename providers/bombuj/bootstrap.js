@@ -2,6 +2,7 @@
 
 const http = require('http');
 const { subtitleTracks, formatBombujStream } = require('./stream-display.js');
+const { isVoeStream, voeWebStream } = require('./embed-test-policy.js');
 
 const originalFetch = global.fetch.bind(global);
 const PUBLIC_PORT = Number(process.env.PORT || 7004);
@@ -320,12 +321,13 @@ function transformStreamPayload(type, id, payload) {
   const subtitles = collectSubtitles(discovered);
   if (subtitles.length) subtitleCache.set(streamCacheKey(type, id), { expiresAt: Date.now() + 20 * 60 * 1000, subtitles });
 
-  const streams = discovered
-    .filter((stream) => stream?.url && /^https?:\/\//i.test(String(stream.url)))
-    .map((stream) => ({
-      ...formatBombujStream(stream),
-      externalUrl: undefined
-    }));
+  const streams = discovered.flatMap(stream => {
+    const web = voeWebStream(stream);
+    if (web) return [formatBombujStream(web)];
+    if (isVoeStream(stream)) return [];
+    if (!stream?.url || !/^https?:\/\//i.test(String(stream.url))) return [];
+    return [{ ...formatBombujStream(stream), externalUrl: undefined }];
+  });
 
   console.log(`[native] ${type}/${id}: playable=${streams.length} discovered=${discovered.length} subtitles=${subtitles.length}`);
   return { streams };

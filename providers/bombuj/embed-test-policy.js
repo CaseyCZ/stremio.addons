@@ -21,4 +21,18 @@ function testDirectVoeAllowed(rawUrl, env = process.env) {
       ['voe.sx', 'voe2.sx'].includes(u.hostname.toLowerCase().replace(/^www\./, ''));
   } catch { return false; }
 }
-module.exports = { testUnblockAllowed, testDirectVoeAllowed };
+// Only VOE web players are published. CDN media and other HTML embeds are not.
+function isVoeStream(stream) {
+  return /^voe(?:2)?(?:\.[a-z0-9.-]+)?$/i.test(
+    String(stream?.name || '').replace(/^Bombuj\s*•\s*/i, '').trim());
+}
+function voeWebStream(stream) {
+  if (!isVoeStream(stream)) return null;
+  try {
+    const url = new URL(String(stream?.externalUrl || ''));
+    if (url.protocol !== 'https:' || url.username || url.password || url.port ||
+        /\.(?:mp4|m3u8|webm|m4v|mov|ts)$/i.test(url.pathname)) return null;
+    return { ...stream, url: undefined, behaviorHints: undefined, externalUrl: url.href };
+  } catch { return null; }
+}
+module.exports = { testUnblockAllowed, testDirectVoeAllowed, isVoeStream, voeWebStream };

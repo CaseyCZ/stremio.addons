@@ -81,7 +81,7 @@ test('VidLink browser-ready MP4 stays playable without a test label across forma
 test('source name survives bootstrap, front and final display for all direct players', () => {
   const boot = wrapperFunctions('./bootstrap.js', ['transformStreamPayload']);
   const front = wrapperFunctions('./front.js', ['displayDirect']);
-  const sources = ['BYSE/FileMoon', 'VidLink', 'VidAPI', 'VOE', 'Mixdrop',
+  const sources = ['BYSE/FileMoon', 'VidLink', 'VidAPI', 'Mixdrop',
     'Streamtape', 'VidNest', 'Primewire', 'Videasy', 'Vidara'];
 
   const originals = sources.map((provider, index) => ({
@@ -110,6 +110,26 @@ test('source name survives bootstrap, front and final display for all direct pla
     assert.equal(formatBombujStream(final).name, final.name);
     assert.equal(formatBombujStream(final).title, final.title);
   });
+});
+
+test('VOE stays web-only through all wrappers; other providers remain unchanged', async () => {
+  const boot=wrapperFunctions('./bootstrap.js',['transformStreamPayload']);
+  const front=wrapperFunctions('./front.js',['transformStreams']);
+  const pre=wrapperFunctions('./preflight-front.js',['preflightStreams']);
+  const voe={name:'Bombuj • VOE',description:'CZ dabing • externí player',
+    externalUrl:'https://voe.sx/e/fixture?subtitles='+encodeURIComponent('CZ;cs;https://cdn.example/cz.vtt')};
+  const mp4={name:'Bombuj • VidLink',url:'https://cdn.example/film.mp4'};
+  const mixdrop={name:'Bombuj • Mixdrop',externalUrl:'https://mixdrop.ag/e/fixture'};
+  const forbidden={name:'Bombuj • VOE',url:'https://cdn.example/voe.m3u8'};
+  const b=boot.transformStreamPayload('movie','tt1234567',{streams:[voe,mp4,mixdrop,forbidden]});
+  const f=front.transformStreams('movie','tt1234567',b);
+  const p=await pre.preflightStreams(f,'movie','tt1234567');
+  assert.equal(p.streams.length,2);
+  const web=p.streams.find(s=>s.externalUrl);
+  assert.equal(web.name,'Bombuj • VOE');assert.equal(web.url,undefined);
+  assert.equal(web.externalUrl,voe.externalUrl);
+  assert.match(web.title,/🌐 Web player • VOE/);
+  assert.equal(p.streams.find(s=>s.url).url,mp4.url);
 });
 
 test('two sources with the same resolution have visibly different names', () => {
@@ -159,7 +179,7 @@ function wrapperFunctions(filename, names) {
   const mod = { exports: {} };
   vm.runInNewContext(fs.readFileSync(file, 'utf8') + `\nmodule.exports={${names.join(',')}};`, {
     require: p => p === 'http' ? { createServer: () => ({ listen() {} }) } :
-      ['./index.js', './bootstrap.js'].includes(p) ? {} : local(p),
+      ['./index.js', './bootstrap.js', './filtered-front.js'].includes(p) ? {} : local(p),
     module: mod, process: { env: {} }, console: { log() {}, error() {} },
     global: { fetch: () => { throw Error('unexpected network request'); } }, URL, AbortSignal
   });
