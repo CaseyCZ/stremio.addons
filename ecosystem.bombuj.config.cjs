@@ -18,7 +18,16 @@ module.exports = {
       RUNNER_TRACKING_ID: '',
       PORT: '7004',
       // Cross-network CDN requests return 403; keep VOE in its web player.
-      BOMBUJ_DIRECT_VOE: '0'
+      BOMBUJ_DIRECT_VOE: '0',
+      // Personal production trial: each opt-in resolver retains the original
+      // web player as a fallback for expiring or IP-bound direct media links.
+      BOMBUJ_DIRECT_VIDARA: '1',
+      BOMBUJ_DIRECT_PLOYAN: '1',
+      BOMBUJ_DIRECT_VIDAPI: '1',
+      BOMBUJ_DIRECT_VIDNEST: '1',
+      BOMBUJ_DIRECT_VIDLINK: '1',
+      BOMBUJ_DIRECT_VIDEASY: '1',
+      BOMBUJ_DIRECT_STREAMTAPE: '1'
     }
   }]
 };

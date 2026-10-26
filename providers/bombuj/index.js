@@ -9,6 +9,11 @@ const { parseMovieCards } = require('./bombuj-listing.js');
 const { testDirectVoeAllowed } = require('./embed-test-policy.js');
 const { inspectHls } = require('./stream-quality.js');
 const { subtitleTracks } = require('./stream-display.js');
+const { resolveVidara, vidaraEmbed } = require('./resolvers/vidara.js');
+const { resolvePrimewireViaPloyan } = require('./resolvers/ployan.js');
+const { resolveVidapi } = require('./resolvers/vidapi.js');
+const { resolveVidnest, vidnestId } = require('./resolvers/vidnest.js');
+const { resolveStreamtape } = require('./resolvers/streamtape.js');
 
 const BOMBUJ_BASE = 'https://www.bombuj.si';
 const BOMBUJ_SERIES_BASE = 'https://serialy.bombuj.si';
@@ -565,6 +570,13 @@ function inferProvider(player) {
   const signature = `${player.provider || ''} ${player.resolvedUrl || ''}`.toLowerCase();
   let host = '';
   try { host = new URL(player.resolvedUrl).hostname.toLowerCase(); } catch {}
+  if (vidaraEmbed(player.resolvedUrl)) return 'vidara';
+  if (/\bprimewire\b/i.test(signature) || /(^|\.)primewire\./i.test(host)) return 'primewire';
+  if (/\bvidapi\b|\bvaplayer\b/i.test(signature) || /(^|\.)(?:vaplayer\.ru|nextgencloudfabric\.com)$/i.test(host)) return 'vidapi';
+  if (/\bvidnest\b/i.test(signature) || /(^|\.)(?:vidnest\.fun|new\.vidnest\.fun)$/i.test(host)) return 'vidnest';
+  if (/\bvideasy\b/i.test(signature) || /(^|\.)player\.videasy\.(?:net|to)$/i.test(host)) return 'videasy';
+  if (/\bvidlink\b/i.test(signature) || /(^|\.)vidlink\.pro$/i.test(host)) return 'vidlink';
+  if (/\bstreamtape\b/i.test(signature) || /(^|\.)streamtape\.(?:com|to)$/i.test(host)) return 'streamtape';
   if (/\bvoe\b|voe\./i.test(signature) || /(^|\.)voe(?:2)?\./i.test(host)) return 'voe';
   if (/mixdrop|miixdrop|miiiixdrop/i.test(signature) || /mixdrop|miixdrop|miiiixdrop/i.test(host)) return 'mixdrop';
   return 'other';
@@ -576,11 +588,46 @@ function directUrlType(url) {
   return null;
 }
 
-async function resolveDirectPlayer(player, sourcePageUrl) {
+async function resolveDirectPlayer(player, sourcePageUrl, context = {}) {
   const directType = directUrlType(player.resolvedUrl);
   if (directType) return { url: player.resolvedUrl, referer: sourcePageUrl, type: directType };
 
   const provider = inferProvider(player);
+  // Experimental until client-side playback confirms signed HLS URLs from
+  // Oracle are usable on another public IP. Normal web-player fallback stays.
+  if (provider === 'vidara' && process.env.BOMBUJ_DIRECT_VIDARA === '1') {
+    return resolveVidara(player.resolvedUrl);
+  }
+  if (provider === 'primewire' && process.env.BOMBUJ_DIRECT_PLOYAN === '1') {
+    return resolvePrimewireViaPloyan(context);
+  }
+  if (provider === 'vidapi' && process.env.BOMBUJ_DIRECT_VIDAPI === '1') {
+    let imdbId = context?.imdbId;
+    if (!imdbId) {
+      try { imdbId = new URL(player.url).searchParams.get('iid'); }
+      catch {}
+    }
+    if (!imdbId) imdbId = String(player.resolvedUrl || '').match(/tt\d{5,12}/i)?.[0];
+    return resolveVidapi({ ...context, imdbId });
+  }
+  if ((provider === 'vidnest' && process.env.BOMBUJ_DIRECT_VIDNEST === '1') ||
+      (provider === 'vidlink' && process.env.BOMBUJ_DIRECT_VIDLINK === '1') ||
+      (provider === 'videasy' && process.env.BOMBUJ_DIRECT_VIDEASY === '1')) {
+    let tmdbId = vidnestId(context?.tmdbId);
+    if (!tmdbId) {
+      try { tmdbId = vidnestId(new URL(player.url).searchParams.get('iid')); }
+      catch {}
+    }
+    if (!tmdbId) {
+      const matched = String(player.resolvedUrl || '').match(/\/(?:movie|tv)\/(\d{1,12})(?:\/|$|\?)/i);
+      tmdbId = vidnestId(matched?.[1]);
+    }
+    const backend = provider === 'vidlink' || provider === 'videasy' ? [provider] : undefined;
+    return resolveVidnest({ ...context, tmdbId }, backend ? { backends: backend } : undefined);
+  }
+  if (provider === 'streamtape' && process.env.BOMBUJ_DIRECT_STREAMTAPE === '1') {
+    return resolveStreamtape(player.resolvedUrl);
+  }
   if (provider === 'voe') return resolveVoe(player.resolvedUrl, sourcePageUrl);
   if (provider === 'mixdrop') return resolveMixdrop(player.resolvedUrl, sourcePageUrl);
   return null;
@@ -605,7 +652,8 @@ function makeDirectStream(player, direct, index, tracks) {
       proxyHeaders: {
         request: {
           'User-Agent': USER_AGENT,
-          ...(direct.referer ? { Referer: direct.referer } : {})
+          ...(direct.referer ? { Referer: direct.referer } : {}),
+          ...(direct.origin ? { Origin: direct.origin } : {})
         }
       }
     },
@@ -622,20 +670,27 @@ function makeExternalStream(player, index, tracks) {
   };
 }
 
-async function playersToStreams(players, sourcePageUrl) {
-  const voeFallbacks = [];
+async function playersToStreams(players, sourcePageUrl, context = {}) {
+  const webFallbacks = [];
   const resolved = await mapWithConcurrency(players, 3, async (player, index) => {
-    const tracks = subtitleTracks([{ externalUrl: player.resolvedUrl }]);
-    const direct = await resolveDirectPlayer(player, sourcePageUrl).catch(() => null);
+    const direct = await resolveDirectPlayer(player, sourcePageUrl, context).catch(() => null);
+    const tracks = subtitleTracks([{
+      externalUrl: player.resolvedUrl,
+      subtitles: direct?.subtitles || []
+    }]);
     if (direct?.url) {
-      if (testDirectVoeAllowed(player.resolvedUrl)) voeFallbacks[index] = makeExternalStream(player, index, tracks);
+      // Signed CDN URLs may be bound to the resolver's IP or expire before
+      // client playback. Keep the original player selectable as a fallback.
+      if (direct.ephemeral || testDirectVoeAllowed(player.resolvedUrl)) {
+        webFallbacks[index] = makeExternalStream(player, index, tracks);
+      }
       return makeDirectStream(player, direct, index, tracks);
     }
     return makeExternalStream(player, index, tracks);
   });
 
   const direct = resolved.filter((stream) => stream?.url);
-  const external = [...resolved.filter((stream) => stream?.externalUrl), ...voeFallbacks.filter(Boolean)];
+  const external = [...resolved.filter((stream) => stream?.externalUrl), ...webFallbacks.filter(Boolean)];
   return [...direct, ...external];
 }
 
@@ -753,12 +808,15 @@ async function bombujStreams(args) {
 
   if (type === 'movie') {
     const players = await discoverBombujPlayers(best.detailUrl, BOMBUJ_BASE).catch(() => []);
-    return { streams: await playersToStreams(players, best.detailUrl) };
+    const year = String(meta?.releaseInfo || meta?.year || best.year || '').match(/(?:19|20)\d{2}/)?.[0];
+    return { streams: await playersToStreams(players, best.detailUrl,
+      { type: 'movie', title: meta?.name || best.title, year, imdbId }) };
   }
   const target = await findBombujSeriesEpisode(best, season, episode).catch(() => null);
   if (!target) return { streams: [] };
   const players = await discoverBombujPlayers(target.episodeUrl, BOMBUJ_SERIES_BASE, target.language).catch(() => []);
-  return { streams: await playersToStreams(players, target.episodeUrl) };
+  return { streams: await playersToStreams(players, target.episodeUrl,
+    { type: 'series', title: meta?.name || best.title, season, episode, imdbId }) };
 }
 
 const manifest = {
