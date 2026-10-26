@@ -27,7 +27,7 @@ test('VidAPI accepts current API CDN after validating the HLS manifest', async (
   const apiCalls = [];
   const mockFetch = async (url) => {
     apiCalls.push(url);
-    if (url.includes('/api.php?')) return Response.json({ status_code: 200,
+    if (url.includes('/api.php?')) return Response.json({ status_code: '200',
       data: { stream_urls: [currentCdn('movie')] } });
     return new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=2400000,RESOLUTION=1920x1080\nchunk.m3u8\n');
   };

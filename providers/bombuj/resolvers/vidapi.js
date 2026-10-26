@@ -58,7 +58,9 @@ async function resolveVidapi(context, { fetchImpl = fetch } = {}) {
       headers: { Accept: 'application/json', Origin: ORIGIN, Referer: `${ORIGIN}/` }
     });
     const result = await responseJson(response);
-    if (result?.status_code !== 200 || !Array.isArray(result?.data?.stream_urls)) return null;
+    // VidAPI currently serializes status_code as the string "200". Accept
+    // both representations without treating unrelated truthy values as OK.
+    if (![200, '200'].includes(result?.status_code) || !Array.isArray(result?.data?.stream_urls)) return null;
     const sources = [...new Set(result.data.stream_urls.filter(vidapiMediaUrl))].slice(0, 3);
     let chosen = null;
     for (const candidate of sources) {
