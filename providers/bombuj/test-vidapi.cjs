@@ -10,17 +10,45 @@ const { vidapiId, vidapiMediaUrl, resolveVidapi } = require('./resolvers/vidapi.
 const cdn = index => `https://cdn.highperformancebrands.site/${index}/playlist.m3u8?sig=test`;
 const currentCdn = index => `https://strategicgrowthpartners.site/${index}/playlist.m3u8?sig=test`;
 
-test('VidAPI ID and CDN URL are restricted to verified movie format', () => {
+test('VidAPI accepts public media CDNs without accepting local or malformed URLs', () => {
   assert.equal(vidapiId('tt32393988'), 'tt32393988');
   assert.equal(vidapiId('1291595'), null);
   assert(vidapiMediaUrl(cdn('one')));
   assert(vidapiMediaUrl(currentCdn('one')));
-  assert(!vidapiMediaUrl('https://cdn.strategicgrowthpartners.site/one/playlist.m3u8'));
+  assert(vidapiMediaUrl('https://cdn.strategicgrowthpartners.site/one/playlist.m3u8'));
+  assert(vidapiMediaUrl('https://another-cdn.net/master.m3u8'));
+  assert(vidapiMediaUrl('https://cdn.samplemedia.net/movie.mp4'));
   assert(!vidapiMediaUrl('https://strategicgrowthpartners.site.evil.example/master.m3u8'));
   assert(!vidapiMediaUrl('https://strategicgrowthpartners.site@evil.example/master.m3u8'));
   assert(!vidapiMediaUrl('https://highperformancebrands.site.evil.example/master.m3u8'));
   assert(!vidapiMediaUrl('http://cdn.highperformancebrands.site/master.m3u8'));
   assert(!vidapiMediaUrl('https://127.0.0.1/master.m3u8'));
+  assert(!vidapiMediaUrl('https://localhost/master.m3u8'));
+});
+
+test('VidAPI passes an unrecognized public CDN directly without fetching it on Oracle', async () => {
+  const candidate = 'https://cdn.otherplayer.net/2026/master.m3u8?token=test';
+  const calls = [];
+  const events = [];
+  const mockFetch = async (url) => {
+    calls.push(url);
+    if (!url.includes('/api.php?')) throw Error('unknown CDN must not be probed');
+    return Response.json({ status_code: 200, data: { stream_urls: [candidate] } });
+  };
+  const result = await resolveVidapi({ type: 'movie', imdbId: 'tt27047903' },
+    { fetchImpl: mockFetch, onDiagnostic: event => events.push(event) });
+  assert.equal(result.url, candidate);
+  assert.equal(result.type, 'hls');
+  assert.equal(calls.length, 1);
+  assert(events.some(event => event.stage === 'media' && event.mediaUrl === candidate));
+});
+
+test('VidAPI retains CDN URL when server-side HLS inspection is temporarily unreadable', async () => {
+  const mockFetch = async (url) => url.includes('/api.php?')
+    ? Response.json({ status_code: 200, data: { stream_urls: [currentCdn('movie')] } })
+    : new Response('temporarily blocked', { status: 403 });
+  const result = await resolveVidapi({ type: 'movie', imdbId: 'tt27047903' }, { fetchImpl: mockFetch });
+  assert.equal(result.url, currentCdn('movie'));
 });
 
 test('VidAPI accepts current API CDN after validating the HLS manifest', async () => {

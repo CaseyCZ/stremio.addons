@@ -757,11 +757,10 @@ async function playersToStreams(players, sourcePageUrl, context = {}) {
       onDiagnostic({ stage: 'result', result: 'direct', quality: direct.quality || direct.type,
         handedToStremio: direct.url, referer: direct.referer,
         elapsedMs: Date.now() - started });
-      // Signed CDN URLs may be bound to the resolver's IP or expire before
-      // client playback. Keep the original player selectable as a fallback.
-      if (process.env.BOMBUJ_SHOW_ALL_SOURCES === '1' || direct.ephemeral || testDirectVoeAllowed(player.resolvedUrl)) {
-        webFallbacks[index] = makeExternalStream(player, index, tracks);
-      }
+      // The owner requires every original Bombuj player link to remain
+      // selectable exactly as discovered, even when a direct CDN URL exists.
+      // A resolver only ADDS an option; it never replaces the source link.
+      webFallbacks[index] = makeExternalStream(player, index, tracks);
       return makeDirectStream(player, direct, index, tracks);
     }
     onDiagnostic({ stage: 'result', result: 'web-fallback', reason: 'no-direct-media',

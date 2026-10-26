@@ -1,12 +1,14 @@
 'use strict';
 
 const { inspectHls } = require('../stream-quality.js');
+const { isIP } = require('node:net');
 
 const API = 'https://streamdata.vaplayer.ru/api.php';
 const ORIGIN = 'https://nextgencloudfabric.com';
 const MAX_BYTES = 256 * 1024;
-// The upstream API now also returns HLS manifests from this CDN. Keep an
-// exact hostname allowlist; never fetch arbitrary URLs supplied by the API.
+// These CDNs were tested for server-side HLS quality inspection. Other public
+// CDN links received from VidAPI are still returned directly to Stremio, but
+// we never fetch an unknown host from our Oracle server.
 const NEW_CDN_HOST = 'strategicgrowthpartners.site';
 
 function vidapiId(value) {
@@ -17,10 +19,22 @@ function vidapiId(value) {
 function vidapiMediaUrl(value) {
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && !url.port && !url.username && !url.password &&
-      (url.hostname === NEW_CDN_HOST || url.hostname === 'highperformancebrands.site' ||
-        url.hostname.endsWith('.highperformancebrands.site')) &&
-      /\.m3u8$/i.test(url.pathname);
+    if (url.protocol !== 'https:' || url.port || url.username || url.password ||
+        !/\.(?:m3u8|mp4)$/i.test(url.pathname)) return false;
+    const host = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (!host.includes('.') || host === 'localhost' ||
+        /\.(?:localhost|local|internal|test|invalid|example)$/.test(host)) return false;
+    // Avoid passing private/loopback IP targets to a client as playable media.
+    if (isIP(host) !== 0) return false;
+    return true;
+  } catch { return false; }
+}
+
+function vidapiInspectedCdn(value) {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return host === NEW_CDN_HOST || host === 'highperformancebrands.site' ||
+      host.endsWith('.highperformancebrands.site');
   } catch { return false; }
 }
 
@@ -73,10 +87,23 @@ async function resolveVidapi(context, { fetchImpl = fetch,
       onDiagnostic({ stage: 'api', result: 'failed', reason: 'invalid-response', requestUrl: url });
       return null;
     }
-    const sources = [...new Set(result.data.stream_urls.filter(vidapiMediaUrl))].slice(0, 3);
-    if (!sources.length) onDiagnostic({ stage: 'parse', result: 'failed', reason: 'no-allowed-hls', requestUrl: url });
+    // The source decides its CDN hostname. Do not silently discard a new CDN
+    // merely because it has not appeared in a previous resolver test.
+    const sources = [...new Set(result.data.stream_urls.filter(vidapiMediaUrl))].slice(0, 16);
+    if (!sources.length) onDiagnostic({ stage: 'parse', result: 'failed', reason: 'no-public-media-url', requestUrl: url });
     let chosen = null;
     for (const candidate of sources) {
+      const type = /\.mp4$/i.test(new URL(candidate).pathname) ? 'mp4' : 'hls';
+      // Even a known CDN's inspection may fail transiently. The link is not
+      // removed: the player can try it and the original embed stays available.
+      if (!chosen) chosen = { url: candidate, type, height: 0 };
+      // An unknown CDN can be handed to Stremio, but MUST NOT be probed from
+      // the server (untrusted upstream URLs can point to internal networks).
+      if (!vidapiInspectedCdn(candidate) || type === 'mp4') {
+        onDiagnostic({ stage: 'media', result: 'direct-unverified', mediaUrl: candidate,
+          reason: 'cdn-not-probed-from-server' });
+        continue;
+      }
       const inspected = await inspectHls(candidate, {
         fetchImpl, headers: { Origin: ORIGIN, Referer: `${ORIGIN}/` }, timeoutMs: 5000
       }).catch(() => null);
@@ -85,10 +112,10 @@ async function resolveVidapi(context, { fetchImpl = fetch,
       if (!inspected) continue;
       const height = Number.parseInt(inspected.quality || '0', 10) || 0;
       if (!chosen || height > chosen.height) {
-        chosen = { url: candidate, height, quality: inspected.quality || undefined };
+        chosen = { url: candidate, type, height, quality: inspected.quality || undefined };
       }
     }
-    return chosen ? { url: chosen.url, type: 'hls', quality: chosen.quality,
+    return chosen ? { url: chosen.url, type: chosen.type, quality: chosen.quality,
       referer: `${ORIGIN}/`, origin: ORIGIN, ephemeral: true } : null;
   } catch (error) {
     const code = String(error?.cause?.code || error?.code || '');

@@ -56,7 +56,8 @@ test('private Bombuj log includes exact player, attempted, and handed-off media 
     const direct = 'https://mxcontent.net/movie.mp4?token=temporary123';
     vm.runInNewContext(fs.readFileSync(file, 'utf8'), {
       require: p => p === 'stremio-addon-sdk' ? sdk : local(p), module: mod,
-      process: { env: { BOMBUJ_SHOW_ALL_SOURCES: '1',
+      // Original link preservation must never depend on a feature flag.
+      process: { env: {
         ...(enabled ? { BOMBUJ_RESOLVER_LOG_URLS: '1' } : {}) } },
       console: { log: value => messages.push(String(value)), error() {}, warn() {} },
       URL, URLSearchParams, AbortSignal, Buffer, Uint8Array,
