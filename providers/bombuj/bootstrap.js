@@ -1,8 +1,7 @@
 'use strict';
 
 const http = require('http');
-const { qualityLabel } = require('./stream-quality.js');
-const { subtitleTracks, audioLabel, subtitleLabel, providerLabel } = require('./stream-display.js');
+const { subtitleTracks, formatBombujStream } = require('./stream-display.js');
 
 const originalFetch = global.fetch.bind(global);
 const PUBLIC_PORT = Number(process.env.PORT || 7004);
@@ -309,7 +308,7 @@ function collectSubtitles(streams) {
 
 
 function nativeTitle(stream) {
-  return `🎧 ${audioLabel(stream)}\n💬 ${subtitleLabel(stream)}\n🎬 ${qualityLabel(stream)}`;
+  return formatBombujStream(stream).title;
 }
 
 function streamCacheKey(type, id) {
@@ -324,10 +323,7 @@ function transformStreamPayload(type, id, payload) {
   const streams = discovered
     .filter((stream) => stream?.url && /^https?:\/\//i.test(String(stream.url)))
     .map((stream) => ({
-      ...stream,
-      name: `Bombuj • ${qualityLabel(stream)}`,
-      title: nativeTitle(stream, subtitleUrlsFromStream(stream)),
-      description: undefined,
+      ...formatBombujStream(stream),
       externalUrl: undefined
     }));
 
