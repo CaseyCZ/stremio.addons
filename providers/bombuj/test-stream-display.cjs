@@ -71,6 +71,11 @@ test('VidLink browser-ready MP4 keeps its WEB TEST label across formatting passe
   assert.equal(twice.url, input.url);
   assert(!('notWebReady' in twice.behaviorHints));
   assert(!('proxyHeaders' in twice.behaviorHints));
+  const front = wrapperFunctions('./front.js', ['displayDirect']);
+  const publicStream = front.displayDirect(twice);
+  assert.match(publicStream.name, /WEB TEST/);
+  assert.match(publicStream.title, /🎬 .*WEB TEST/);
+  assert.equal(publicStream.url, input.url);
 });
 
 test('unknown audio is labeled honestly, not mislabeled with a flag', () => {
