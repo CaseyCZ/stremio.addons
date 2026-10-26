@@ -17,8 +17,9 @@ module.exports = {
       // PM2 services must survive GitHub Actions job cleanup.
       RUNNER_TRACKING_ID: '',
       PORT: '7004',
-      // Cross-network CDN requests return 403; keep VOE in its web player.
-      BOMBUJ_DIRECT_VOE: '0',
+      // Enable VOE direct for the owner's production trial. Cross-IP
+      // playback still needs to be verified on the Stremio client.
+      BOMBUJ_DIRECT_VOE: '1',
       // Personal production trial: each opt-in resolver retains the original
       // web player as a fallback for expiring or IP-bound direct media links.
       BOMBUJ_DIRECT_VIDARA: '1',
