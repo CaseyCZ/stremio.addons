@@ -198,13 +198,14 @@ async function findPrehrajtoAccountStreams({ cfg, meta, type, season, episode },
           const url = publicHttpsUrl(await api.link({ ...credentials, id: item.id }));
           if (!url || seenUrls.has(url)) continue;
           seenUrls.add(url);
+          const subtitles = mappedSubtitles(item.subtitles, item.id);
           streams[index] = {
             name: 'Přehraj.to • Direct (účet)',
             title: ['🎧 Neuvedeno',
-              '💬 ' + (Array.isArray(item.subtitles) && item.subtitles.length ? 'Dostupné titulky' : 'Bez ověřených titulků'),
+              '💬 ' + (subtitles.length ? subtitles.length + ' ověřených VTT titulků' : 'Bez ověřených titulků'),
               '🎬 Direct', '🎞 ' + item.title.slice(0, 180)].join('\n'),
             url,
-            subtitles: mappedSubtitles(item.subtitles, item.id),
+            subtitles,
             behaviorHints: { notWebReady: false }
           };
         } catch (_) {
