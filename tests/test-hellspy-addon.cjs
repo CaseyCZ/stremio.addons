@@ -82,3 +82,38 @@ test('HellSpy HTTP 429 cannot return phantom streams or retry endlessly', async 
   await assert.rejects(findHellspyStreams(input, { api }), /rate limited/);
   assert.equal(requests, 1);
 });
+
+
+test('HellSpy follows Streamlet-style search/link using only bounded alternate title queries', async () => {
+  const { hellspySearchVariants } = require('../api/hellspy');
+  assert.deepEqual(hellspySearchVariants(['Český název', 'Original Title'], 'movie', '2026'),
+    ['Český název 2026', 'Český název', 'Original Title 2026']);
+  assert.deepEqual(hellspySearchVariants(['Ted Lasso'], 'series', '', 4, 1),
+    ['Ted Lasso S04E01', 'Ted Lasso S4E1']);
+
+  const queries = [];
+  const api = {
+    search: async ({ query }) => {
+      queries.push(query);
+      return query === 'Original Title 2026'
+        ? [{ id: 4, title: 'Original Title 2026 1080p', fileHash }] : [];
+    },
+    resolveOriginal: async () => 'https://cdn.example.org/video.mp4',
+    getVideoDetails: async () => ({ subtitles: [] })
+  };
+  const streams = await findHellspyStreams({
+    meta: { name: 'Český název', originalName: 'Original Title', year: '2026' },
+    type: 'movie'
+  }, { api });
+  assert.deepEqual(queries, ['Český název 2026', 'Český název', 'Original Title 2026']);
+  assert.equal(streams.length, 1);
+  assert.equal(streams[0].url, 'https://cdn.example.org/video.mp4');
+});
+
+test('HellSpy alternate queries never bypass a server HTTP 429 response', async () => {
+  let attempts = 0;
+  await assert.rejects(findHellspyStreams({
+    meta: { name: 'Český název', originalName: 'Original Title', year: 2026 }, type: 'movie'
+  }, { api: { search: async () => { attempts++; throw Error('HTTP 429'); } } }), /429/);
+  assert.equal(attempts, 1);
+});
