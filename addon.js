@@ -8,6 +8,7 @@ const { SocksProxyAgent } = require('socks-proxy-agent');
 const { CinemetaApi, uniqueStrings } = require('./api/cinemeta');
 const { findOnlineStreams, findOnlineSourceBundle } = require('./api/sktonline');
 const { findPrehrajtoStreams } = require('./api/prehrajto');
+const { findPrehrajtoAccountStreams } = require('./api/prehrajto-account');
 const { findHellspyStreams } = require('./api/hellspy');
 const { findSledujtetoStreams } = require('./api/sledujteto');
 const { SosacOverlay } = require('./api/sosac-overlay');
@@ -101,6 +102,8 @@ function normalizeConfig(value) {
   const wantsTorrents = addonType === 'sktorrent' || (addonType === 'combined' && value.enableTorrents === true);
   const sosacUsername = String(value.sosacUsername || '').trim().slice(0, 128);
   const sosacPassword = String(value.sosacPassword || '').slice(0, 256);
+  const prehrajtoEmail = String(value.prehrajtoEmail || '').trim().slice(0, 254);
+  const prehrajtoPassword = String(value.prehrajtoPassword || '').slice(0, 256);
   const sledujtetoEmail = String(value.sledujtetoEmail || '').trim().slice(0, 254);
   const sledujtetoPassword = String(value.sledujtetoPassword || '').slice(0, 256);
   return {
@@ -112,6 +115,8 @@ function normalizeConfig(value) {
     sktPassword: wantsTorrents ? sktPassword : '',
     sosacUsername: sosacUsername && sosacPassword ? sosacUsername : '',
     sosacPassword: sosacUsername && sosacPassword ? sosacPassword : '',
+    prehrajtoEmail: addonType === 'prehrajto' ? prehrajtoEmail : '',
+    prehrajtoPassword: addonType === 'prehrajto' ? prehrajtoPassword : '',
     sledujtetoEmail: addonType === 'sledujteto' ? sledujtetoEmail : '',
     sledujtetoPassword: addonType === 'sledujteto' ? sledujtetoPassword : ''
   };
@@ -121,6 +126,8 @@ function configFingerprint(cfg) {
   const material = JSON.stringify({
     addonType: cfg.addonType, online: cfg.enableOnline,
     p2p: cfg.enableTorrents ? [cfg.sktUsername, cfg.sktPassword] : null,
+    prehrajto: cfg.addonType === 'prehrajto' && cfg.prehrajtoEmail && cfg.prehrajtoPassword
+      ? [cfg.prehrajtoEmail, cfg.prehrajtoPassword] : null,
     sledujteto: cfg.addonType === 'sledujteto' ? [cfg.sledujtetoEmail, cfg.sledujtetoPassword] : null,
     sosac: cfg.sosacUsername && cfg.sosacPassword ? [cfg.sosacUsername, cfg.sosacPassword] : null
   });
@@ -482,6 +489,10 @@ app.post('/api/config-token', async (req, res) => {
   if ((body.enableTorrents === true || cfg.addonType === 'sktorrent') && !cfg.enableTorrents) {
     return res.status(400).json({ error: 'Pro torrenty vyplň uživatelské jméno a heslo SKTorrent.' });
   }
+  if (cfg.addonType === 'prehrajto' && (cfg.prehrajtoEmail || cfg.prehrajtoPassword) &&
+      (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cfg.prehrajtoEmail) || !cfg.prehrajtoPassword)) {
+    return res.status(400).json({ error: 'Pro Přehraj.to vyplň e-mail i heslo, nebo obě pole nech prázdná.' });
+  }
   if (cfg.addonType === 'sledujteto' &&
       (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cfg.sledujtetoEmail) || !cfg.sledujtetoPassword)) {
     return res.status(400).json({ error: 'Pro Sledujteto vyplň e-mail a heslo svého účtu.' });
@@ -600,10 +611,30 @@ async function handlePrehrajtoStream(req, res, cfg = {}) {
     }
     const meta = await cinemeta.getMeta(type, parsed.imdbId);
     if (!meta) return res.json(empty);
-    const streams = await resolveWithin(findPrehrajtoStreams({
-      meta, type, season: parsed.season, episode: parsed.episode
-    }), 30000, 'prehrajto');
-    return res.json({ ...empty, streams: Array.isArray(streams) ? streams : [] });
+    const params = { meta, type, season: parsed.season, episode: parsed.episode };
+    // Streamlet-style optional account API v2. The existing no-account resolver
+    // remains available, even when a free account rejects the download endpoint.
+    const lookups = [resolveWithin(findPrehrajtoStreams(params), 25000, 'prehrajto-guest')];
+    if (cfg.prehrajtoEmail && cfg.prehrajtoPassword) {
+      lookups.push(resolveWithin(findPrehrajtoAccountStreams({ ...params, cfg }),
+        25000, 'prehrajto-account'));
+    }
+    const results = await Promise.allSettled(lookups);
+    const seen = new Set();
+    const streams = [];
+    for (const result of results) {
+      if (result.status !== 'fulfilled' || !Array.isArray(result.value)) continue;
+      for (const stream of result.value) {
+        if (!stream || !stream.url) continue;
+        // Signed query strings may differ for the same underlying MP4.
+        let identity = stream.url;
+        try { const url = new URL(stream.url); identity = url.origin + url.pathname; } catch (_) {}
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+        streams.push(stream);
+      }
+    }
+    return res.json({ ...empty, streams: streams.slice(0, 24) });
   } catch (error) {
     console.warn('[prehrajto] stream lookup failed: ' + error.message);
     return res.json(empty);
