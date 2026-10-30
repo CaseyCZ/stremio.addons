@@ -5,6 +5,7 @@
 // External APIs are best-effort third-party services, not guaranteed contracts.
 const axios = require('axios');
 const NodeCache = require('node-cache');
+const { episodeTokens } = require('./search-matching');
 
 const SEARCH_API = process.env.PREHRAJTO_SEARCH_API || 'https://blaniok.azurewebsites.net/api/search';
 const RESOLVE_API = process.env.PREHRAJTO_RESOLVE_API || 'https://ceskarepublika.wiki/api/movies/video-url';
@@ -222,7 +223,7 @@ const movieReleaseWords = new Set([
   "paramount"
 ]);
 
-function movieReleaseMatches(candidate, title) {
+function movieReleaseMatches(candidate, title, wantedYear) {
   const wanted = normalize(title);
   if (!wanted) return false;
   const raw = String(candidate || '');
@@ -240,8 +241,13 @@ function movieReleaseMatches(candidate, title) {
   if (source === wanted) return true;
   if (!source.startsWith(wanted + ' ')) return false;
   const remainder = source.slice(wanted.length).trim().split(' ');
+  // Some original films are uploaded as "Title 1 (YEAR)". Accept the first
+  // installment marker only when the file explicitly confirms the requested
+  // year. "Title 2 (YEAR)" and undated aliases remain ambiguous/rejected.
+  const explicitYear = wantedYear && source.split(' ').includes(wantedYear);
   let hasMediaTag = false;
-  for (const word of remainder) {
+  for (const [index, word] of remainder.entries()) {
+    if (index === 0 && word === '1' && explicitYear) continue;
     if (/^(?:19|20)\d{2}$/.test(word)) continue;
     if (movieReleaseWords.has(word)) { hasMediaTag = true; continue; }
     // Czech/English conjunctions occur in language tags (CZ a SK / CZ and SK).
@@ -254,27 +260,12 @@ function movieReleaseMatches(candidate, title) {
   return true;
 }
 
-function episodeTokens(text) {
-  const source = String(text || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const tokens = [];
-  for (const re of [
-    /(?:^|[^a-z0-9])s0*(\d{1,2})[\s._-]*e0*(\d{1,3})(?=$|[^a-z0-9])/g,
-    /(?:^|[^a-z0-9])0*(\d{1,2})\s*[x×]\s*0*(\d{1,3})(?=$|[^a-z0-9])/g
-  ]) {
-    for (const match of source.matchAll(re)) {
-      const offset = match[0].length - match[0].trimStart().length;
-      tokens.push({ season: Number(match[1]), episode: Number(match[2]), pos: match.index + offset, end: match.index + match[0].length });
-    }
-  }
-  return tokens.sort((a, b) => a.pos - b.pos);
-}
-
 function acceptsCandidate(candidateTitle, titles, type, year, season, episode) {
   const raw = String(candidateTitle || '');
   if (!raw || !titles.length || /\b(?:trailer|teaser|recap|review|reaction|parody)\b/i.test(raw)) return false;
   if (type === 'movie') {
     if (episodeTokens(raw).length || !hasMatchingYear(raw, year)) return false;
-    return titles.some(title => movieReleaseMatches(raw, title));
+    return titles.some(title => movieReleaseMatches(raw, title, year));
   }
   if (type !== 'series' || !Number.isInteger(season) || season < 1 ||
       !Number.isInteger(episode) || episode < 1) return false;
@@ -292,23 +283,29 @@ function acceptsCandidate(candidateTitle, titles, type, year, season, episode) {
 
 function makeQueries(titles, type, year, season, episode) {
   const queries = [];
-  for (const title of titles.slice(0, 3)) {
+  for (const [index, title] of titles.slice(0, 3).entries()) {
     if (type === 'series') {
       if (!Number.isInteger(season) || !Number.isInteger(episode)) continue;
       queries.push(title + ' S' + String(season).padStart(2, '0') + 'E' + String(episode).padStart(2, '0'));
+      // Some uploads use S4E4 instead of S04E04; only query this for the
+      // primary title to avoid overloading the upstream search service.
+      if (index === 0) queries.push(title + ' S' + season + 'E' + episode);
     } else {
       queries.push(year ? title + ' ' + year : title);
     }
   }
   if (type === 'movie' && titles[0] && year) queries.push(titles[0]);
   if (type === 'series' && titles[0]) queries.push(titles[0]);
-  return [...new Set(queries)].slice(0, 4);
+  return [...new Set(queries)].slice(0, type === 'series' ? 5 : 4);
 }
 
-const MAX_STREAMS = 8;
-const MAX_RESOLVE_ATTEMPTS = 12;
+// Keep more distinct uploads for episodes with many valid releases. The
+// four-worker concurrency and overall deadline still bound upstream load.
+const MAX_STREAMS = 16;
+const MAX_RESOLVE_ATTEMPTS = 24;
 const RESOLVE_CONCURRENCY = 4;
 const LOOKUP_BUDGET_MS = 22000;
+const MAX_SUBTITLE_TRACKS = 20;
 
 // Upstream lookup shares one deadline and aborts unfinished HTTP requests.
 async function searchApi(query, { signal } = {}) {
@@ -317,7 +314,7 @@ async function searchApi(query, { signal } = {}) {
   if (found !== undefined) return found;
   const resp = await http.get(SEARCH_API, { params: { q: query }, signal });
   if (!resp.data || resp.data.success !== true || !Array.isArray(resp.data.movies)) throw Error('search API returned no valid movie list');
-  const movies = resp.data.movies.slice(0, 40);
+  const movies = resp.data.movies.slice(0, 60);
   cache.set(key, movies, movies.length ? 60 : 10);
   return movies;
 }
@@ -382,8 +379,19 @@ function makeStream(item, pageUrl, resolved) {
   const url = validCdnUrl(resolved && (resolved.video_url || resolved.videoUrl), 'mp4');
   if (!url) return null;
   const id = new URL(pageUrl).pathname.split('/').filter(Boolean).pop();
-  const subtitles = (Array.isArray(resolved.subtitles) ? resolved.subtitles : [])
-    .slice(0, 20).map((sub, index) => mapSubtitle(sub, id, index)).filter(Boolean);
+  // The upstream may send dozens of caption variants. Scan all of them before
+  // applying the display limit; Czech and Slovak may appear after 20 English.
+  const subtitleRank = { ces: 0, slk: 1, eng: 2 };
+  const uniqueSubtitles = new Map();
+  for (const [index, sub] of (Array.isArray(resolved.subtitles) ? resolved.subtitles : []).entries()) {
+    const track = mapSubtitle(sub, id, index);
+    if (!track) continue;
+    const key = track.lang + '|' + track.label + '|' + track.url;
+    if (!uniqueSubtitles.has(key)) uniqueSubtitles.set(key, track);
+  }
+  const subtitles = [...uniqueSubtitles.values()]
+    .sort((left, right) => subtitleRank[left.lang] - subtitleRank[right.lang])
+    .slice(0, MAX_SUBTITLE_TRACKS);
   const releaseTitle = String(item.title || '').trim().slice(0, 180);
   const quality = releaseQuality(releaseTitle);
   const subtitleFlags = { ces: '🇨🇿 CZ', slk: '🇸🇰 SK', eng: '🇬🇧 EN' };
@@ -453,6 +461,7 @@ async function findPrehrajtoStreams({ meta, type, season, episode }, injected = 
 
     let next = 0;
     let found = 0;
+    const seenMediaUrls = new Set();
     async function worker() {
       while (next < candidates.length && found < MAX_STREAMS && !controller.signal.aborted) {
         const index = next++;
@@ -461,7 +470,8 @@ async function findPrehrajtoStreams({ meta, type, season, episode }, injected = 
           const data = await resolve(pageUrl, { signal: controller.signal });
           if (controller.signal.aborted) return;
           const stream = makeStream(item, pageUrl, data);
-          if (stream) {
+          if (stream && !seenMediaUrls.has(stream.url)) {
+            seenMediaUrls.add(stream.url);
             resolved[index] = stream;
             found++;
           }

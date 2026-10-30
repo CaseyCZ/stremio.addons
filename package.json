@@ -2,7 +2,7 @@
   "name": "stremio-addons",
   "version": "0.2.1",
   "private": true,
-  "description": "Four independently installable Stremio sources: SKTOnline Direct, SKTorrent P2P, Bombuj and Prehraj.to Direct",
+  "description": "Six independent Stremio sources including experimental HellSpy and Sledujteto Direct (test branch only)",
   "main": "addon.js",
   "scripts": {
     "start": "node addon.js",

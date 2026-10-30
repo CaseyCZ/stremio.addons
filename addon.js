@@ -8,6 +8,9 @@ const { SocksProxyAgent } = require('socks-proxy-agent');
 const { CinemetaApi, uniqueStrings } = require('./api/cinemeta');
 const { findOnlineStreams, findOnlineSourceBundle } = require('./api/sktonline');
 const { findPrehrajtoStreams } = require('./api/prehrajto');
+const { findPrehrajtoAccountStreams } = require('./api/prehrajto-account');
+const { findHellspyStreams } = require('./api/hellspy');
+const { findSledujtetoStreams } = require('./api/sledujteto');
 const { SosacOverlay } = require('./api/sosac-overlay');
 const { resolveBombujId } = require('./api/bombuj-overlay');
 const { getBombujJson, bombujManifest, bombujRequestPath } = require('./api/bombuj-bridge');
@@ -95,10 +98,14 @@ function normalizeConfig(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const sktUsername = String(value.sktUsername || value.username || '').trim().slice(0, 128);
   const sktPassword = String(value.sktPassword || value.password || '').slice(0, 256);
-  const addonType = ['sktonline', 'sktorrent', 'bombuj', 'prehrajto'].includes(value.addonType) ? value.addonType : 'combined';
+  const addonType = ['sktonline', 'sktorrent', 'bombuj', 'prehrajto', 'hellspy', 'sledujteto'].includes(value.addonType) ? value.addonType : 'combined';
   const wantsTorrents = addonType === 'sktorrent' || (addonType === 'combined' && value.enableTorrents === true);
   const sosacUsername = String(value.sosacUsername || '').trim().slice(0, 128);
   const sosacPassword = String(value.sosacPassword || '').slice(0, 256);
+  const prehrajtoEmail = String(value.prehrajtoEmail || '').trim().slice(0, 254);
+  const prehrajtoPassword = String(value.prehrajtoPassword || '').slice(0, 256);
+  const sledujtetoEmail = String(value.sledujtetoEmail || '').trim().slice(0, 254);
+  const sledujtetoPassword = String(value.sledujtetoPassword || '').slice(0, 256);
   return {
     uiLanguage: ['cs', 'sk', 'en'].includes(value.uiLanguage) ? value.uiLanguage : 'cs',
     addonType,
@@ -107,7 +114,11 @@ function normalizeConfig(value) {
     sktUsername: wantsTorrents ? sktUsername : '',
     sktPassword: wantsTorrents ? sktPassword : '',
     sosacUsername: sosacUsername && sosacPassword ? sosacUsername : '',
-    sosacPassword: sosacUsername && sosacPassword ? sosacPassword : ''
+    sosacPassword: sosacUsername && sosacPassword ? sosacPassword : '',
+    prehrajtoEmail: addonType === 'prehrajto' ? prehrajtoEmail : '',
+    prehrajtoPassword: addonType === 'prehrajto' ? prehrajtoPassword : '',
+    sledujtetoEmail: addonType === 'sledujteto' ? sledujtetoEmail : '',
+    sledujtetoPassword: addonType === 'sledujteto' ? sledujtetoPassword : ''
   };
 }
 
@@ -115,6 +126,9 @@ function configFingerprint(cfg) {
   const material = JSON.stringify({
     addonType: cfg.addonType, online: cfg.enableOnline,
     p2p: cfg.enableTorrents ? [cfg.sktUsername, cfg.sktPassword] : null,
+    prehrajto: cfg.addonType === 'prehrajto' && cfg.prehrajtoEmail && cfg.prehrajtoPassword
+      ? [cfg.prehrajtoEmail, cfg.prehrajtoPassword] : null,
+    sledujteto: cfg.addonType === 'sledujteto' ? [cfg.sledujtetoEmail, cfg.sledujtetoPassword] : null,
     sosac: cfg.sosacUsername && cfg.sosacPassword ? [cfg.sosacUsername, cfg.sosacPassword] : null
   });
   return crypto.createHash('sha256').update(material).digest('hex').slice(0, 16);
@@ -475,6 +489,14 @@ app.post('/api/config-token', async (req, res) => {
   if ((body.enableTorrents === true || cfg.addonType === 'sktorrent') && !cfg.enableTorrents) {
     return res.status(400).json({ error: 'Pro torrenty vyplň uživatelské jméno a heslo SKTorrent.' });
   }
+  if (cfg.addonType === 'prehrajto' && (cfg.prehrajtoEmail || cfg.prehrajtoPassword) &&
+      (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cfg.prehrajtoEmail) || !cfg.prehrajtoPassword)) {
+    return res.status(400).json({ error: 'Pro Přehraj.to vyplň e-mail i heslo, nebo obě pole nech prázdná.' });
+  }
+  if (cfg.addonType === 'sledujteto' &&
+      (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cfg.sledujtetoEmail) || !cfg.sledujtetoPassword)) {
+    return res.status(400).json({ error: 'Pro Sledujteto vyplň e-mail a heslo svého účtu.' });
+  }
 
   try {
     let loginVerified = false;
@@ -514,11 +536,11 @@ app.get('/:cfg/configure', (req, res) => {
 // NOT necessarily /configure. For encrypted manifests that directory is one of:
 //   /enc1.<iv>.<cipher>.<tag>
 //   /enc1.<iv>.<cipher>.<tag>/bombuj
-//   /enc1.<iv>.<cipher>.<tag>/prehrajto
+  //   /enc1.<iv>.<cipher>.<tag>/prehrajto
 // Validate the token and its provider before redirecting. A relative Location
 // keeps the public nginx mount prefix (e.g. /stremio-sktonline/) unchanged,
 // while removing credentials from the final browser address.
-const CONFIGURE_INSTALL_ROOT = /^\/enc1\.[^/]+(?:\/(?:bombuj|prehrajto))?\/?$/;
+const CONFIGURE_INSTALL_ROOT = /^\/enc1\.[^/]+(?:\/(?:bombuj|prehrajto|hellspy|sledujteto))?\/?$/;
 app.get(CONFIGURE_INSTALL_ROOT, (req, res) => {
   noCache(res);
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -589,10 +611,30 @@ async function handlePrehrajtoStream(req, res, cfg = {}) {
     }
     const meta = await cinemeta.getMeta(type, parsed.imdbId);
     if (!meta) return res.json(empty);
-    const streams = await resolveWithin(findPrehrajtoStreams({
-      meta, type, season: parsed.season, episode: parsed.episode
-    }), 30000, 'prehrajto');
-    return res.json({ ...empty, streams: Array.isArray(streams) ? streams : [] });
+    const params = { meta, type, season: parsed.season, episode: parsed.episode };
+    // Streamlet-style optional account API v2. The existing no-account resolver
+    // remains available, even when a free account rejects the download endpoint.
+    const lookups = [resolveWithin(findPrehrajtoStreams(params), 25000, 'prehrajto-guest')];
+    if (cfg.prehrajtoEmail && cfg.prehrajtoPassword) {
+      lookups.push(resolveWithin(findPrehrajtoAccountStreams({ ...params, cfg }),
+        25000, 'prehrajto-account'));
+    }
+    const results = await Promise.allSettled(lookups);
+    const seen = new Set();
+    const streams = [];
+    for (const result of results) {
+      if (result.status !== 'fulfilled' || !Array.isArray(result.value)) continue;
+      for (const stream of result.value) {
+        if (!stream || !stream.url) continue;
+        // Signed query strings may differ for the same underlying MP4.
+        let identity = stream.url;
+        try { const url = new URL(stream.url); identity = url.origin + url.pathname; } catch (_) {}
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+        streams.push(stream);
+      }
+    }
+    return res.json({ ...empty, streams: streams.slice(0, 24) });
   } catch (error) {
     console.warn('[prehrajto] stream lookup failed: ' + error.message);
     return res.json(empty);
@@ -619,6 +661,118 @@ app.get('/:cfg/prehrajto/stream/:type/:id.json', (req, res) => {
   return handlePrehrajtoStream(req, res, cfg);
 });
 
+// Independent experimental HellSpy source. It never proxies video or VTT
+// bytes; the provider's HTTP 429 results in an empty stream list.
+function hellspyManifest(cfg = {}) {
+  const sosacLinked = Boolean(cfg.sosacUsername && cfg.sosacPassword);
+  return {
+    id: 'cz.caseycz.stremio.hellspy.direct.test',
+    version: VERSION,
+    name: 'HellSpy Direct TEST',
+    description: 'Experimentální přímé CDN streamy HellSpy a všechny dostupné VTT titulky. Dostupnost závisí na síti.',
+    types: ['movie', 'series'],
+    idPrefixes: ['tt', 'bombuj-movie-', 'bombuj-series-', 'bombuj-episode-',
+      ...(sosacLinked ? ['sosac_m_', 'sosac_s_', 'sosac_ep_'] : [])],
+    resources: ['stream'],
+    catalogs: [],
+    behaviorHints: { configurable: sosacLinked, configurationRequired: false }
+  };
+}
+
+app.get('/hellspy/manifest.json', (req, res) => {
+  noCache(res);
+  return res.json(hellspyManifest());
+});
+
+async function handleHellspyStream(req, res, cfg = {}) {
+  noCache(res);
+  const empty = { streams: [], cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 };
+  const type = req.params.type;
+  if (!['movie', 'series'].includes(type)) return res.json(empty);
+  try {
+    const parsed = await resolveIncomingStremioId(cfg, type, String(req.params.id || ''));
+    if (!parsed || (type === 'series' && (!Number.isInteger(parsed.season) ||
+        parsed.season < 1 || !Number.isInteger(parsed.episode) || parsed.episode < 1))) {
+      return res.json(empty);
+    }
+    const meta = await cinemeta.getMeta(type, parsed.imdbId);
+    if (!meta) return res.json(empty);
+    const streams = await resolveWithin(findHellspyStreams({
+      meta, type, season: parsed.season, episode: parsed.episode
+    }), 30000, 'hellspy');
+    return res.json({ ...empty, streams });
+  } catch (error) {
+    console.warn('[hellspy] stream lookup failed: ' + error.message);
+    return res.json(empty);
+  }
+}
+
+app.get('/hellspy/stream/:type/:id.json', (req, res) => handleHellspyStream(req, res));
+app.get('/:cfg/hellspy/manifest.json', (req, res) => {
+  noCache(res);
+  const cfg = normalizeConfig(decryptConfig(req.params.cfg));
+  if (!cfg || cfg.addonType !== 'hellspy')
+    return res.status(400).json({ error: 'Invalid HellSpy configuration' });
+  return res.json(hellspyManifest(cfg));
+});
+app.get('/:cfg/hellspy/stream/:type/:id.json', (req, res) => {
+  const cfg = normalizeConfig(decryptConfig(req.params.cfg));
+  if (!cfg || cfg.addonType !== 'hellspy')
+    return res.status(400).json({ error: 'Invalid HellSpy configuration' });
+  return handleHellspyStream(req, res, cfg);
+});
+
+// Independent, authenticated Sledujteto Direct TEST source. Credentials are
+// present only in the encrypted installer token; CDN video is never proxied.
+function sledujtetoManifest(cfg = {}) {
+  const sosacLinked = Boolean(cfg.sosacUsername && cfg.sosacPassword);
+  return {
+    id: 'cz.caseycz.stremio.sledujteto.direct.test',
+    version: VERSION,
+    name: 'Sledujteto Direct TEST',
+    description: 'Experimentální přímé MP4 streamy Sledujteto s vlastním účtem a dostupnými VTT titulky.',
+    types: ['movie', 'series'],
+    idPrefixes: ['tt', 'bombuj-movie-', 'bombuj-series-', 'bombuj-episode-',
+      ...(sosacLinked ? ['sosac_m_', 'sosac_s_', 'sosac_ep_'] : [])],
+    resources: ['stream'], catalogs: [],
+    behaviorHints: { configurable: true, configurationRequired: false }
+  };
+}
+
+async function handleSledujtetoStream(req, res, cfg) {
+  noCache(res);
+  const empty = { streams: [], cacheMaxAge: 0, staleRevalidate: 0, staleError: 0 };
+  if (!['movie', 'series'].includes(req.params.type)) return res.json(empty);
+  try {
+    const parsed = await resolveIncomingStremioId(cfg, req.params.type, String(req.params.id || ''));
+    if (!parsed || (req.params.type === 'series' && (!Number.isInteger(parsed.season) ||
+        parsed.season < 1 || !Number.isInteger(parsed.episode) || parsed.episode < 1))) return res.json(empty);
+    const meta = await cinemeta.getMeta(req.params.type, parsed.imdbId);
+    if (!meta) return res.json(empty);
+    const streams = await resolveWithin(findSledujtetoStreams({
+      cfg, meta, type: req.params.type, season: parsed.season, episode: parsed.episode
+    }), 30000, 'sledujteto');
+    return res.json({ ...empty, streams: Array.isArray(streams) ? streams : [] });
+  } catch (error) {
+    console.warn('[sledujteto] lookup unavailable: ' + error.message);
+    return res.json(empty);
+  }
+}
+
+app.get('/:cfg/sledujteto/manifest.json', (req, res) => {
+  noCache(res);
+  const cfg = normalizeConfig(decryptConfig(req.params.cfg));
+  if (!cfg || cfg.addonType !== 'sledujteto' || !cfg.sledujtetoEmail || !cfg.sledujtetoPassword)
+    return res.status(400).json({ error: 'Invalid Sledujteto configuration' });
+  return res.json(sledujtetoManifest(cfg));
+});
+app.get('/:cfg/sledujteto/stream/:type/:id.json', (req, res) => {
+  const cfg = normalizeConfig(decryptConfig(req.params.cfg));
+  if (!cfg || cfg.addonType !== 'sledujteto' || !cfg.sledujtetoEmail || !cfg.sledujtetoPassword)
+    return res.status(400).json({ error: 'Invalid Sledujteto configuration' });
+  return handleSledujtetoStream(req, res, cfg);
+});
+
 // Uniform flat encrypted-manifest structure, identical to SKTOnline/SKTorrent.
 // Nested legacy /<token>/bombuj and /<token>/prehrajto manifests still work.
 app.get('/:cfg/manifest.json', async (req, res) => {
@@ -626,6 +780,8 @@ app.get('/:cfg/manifest.json', async (req, res) => {
   const cfg = normalizeConfig(decryptConfig(req.params.cfg));
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
   if (cfg.addonType === 'prehrajto') return res.json(prehrajtoManifest(cfg));
+  if (cfg.addonType === 'hellspy') return res.json(hellspyManifest(cfg));
+  if (cfg.addonType === 'sledujteto') return res.json(sledujtetoManifest(cfg));
   if (cfg.addonType === 'bombuj') {
     try {
       const source = await getBombujJson('/manifest.json');
@@ -712,6 +868,8 @@ app.get('/:cfg/stream/:type/:id.json', async (req, res) => {
   const cfg = normalizeConfig(decryptConfig(req.params.cfg));
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
   if (cfg.addonType === 'prehrajto') return handlePrehrajtoStream(req, res, cfg);
+  if (cfg.addonType === 'hellspy') return handleHellspyStream(req, res, cfg);
+  if (cfg.addonType === 'sledujteto') return handleSledujtetoStream(req, res, cfg);
   if (cfg.addonType === 'bombuj') return handleFlatBombujResource(req, res, 'stream');
   if (!['movie', 'series'].includes(req.params.type)) return res.json({ streams: [], cacheMaxAge: 0 });
   const parsed = await resolveIncomingStremioId(cfg, req.params.type, req.params.id);
@@ -778,7 +936,7 @@ function handleFlatSubtitles(req, res) {
   const cfg = normalizeConfig(decryptConfig(req.params.cfg));
   if (!cfg) return res.status(400).json({ error: 'Invalid configuration' });
   if (cfg.addonType === 'bombuj') return handleFlatBombujResource(req, res, 'subtitles');
-  if (cfg.addonType === 'prehrajto') {
+  if (cfg.addonType === 'prehrajto' || cfg.addonType === 'hellspy' || cfg.addonType === 'sledujteto') {
     noCache(res);
     return res.json({ subtitles: [] }); // VTTs are embedded in stream.subtitles.
   }

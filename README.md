@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  Čtyři komunitní doplňky pro <strong>Stremio</strong> na jednom místě.<br>
+  Komunitní doplňky pro <strong>Stremio</strong> na jednom místě.<br>
   Vyber si zdroje filmů a seriálů, které chceš používat.
 </p>
 
@@ -21,7 +21,9 @@
 
 ## O projektu
 
-**CaseyCZ Stremio Addons** přidává do Stremia další možnosti, kde hledat a přehrávat filmy a seriály. Všechny čtyři doplňky jsou **samostatné** – můžeš si nainstalovat jeden, několik nebo všechny.
+**CaseyCZ Stremio Addons** přidává do Stremia další možnosti, kde hledat a přehrávat filmy a seriály. Doplňky jsou **samostatné** – můžeš si nainstalovat jeden, několik nebo všechny.
+
+> **Pouze větev `feature/search-improvements`:** HellSpy Direct TEST a Sledujteto Direct TEST jsou experimentální zdroje. Nejsou nasazené na produkčním serveru. HellSpy vyhledávání z Oracle bylo omezeno HTTP 429. Sledujteto zatím prošlo ručními testy API a HTTP Range z českého PC, nikoli testem na Oracle nebo ve Stremio iOS.
 
 ## Dostupné doplňky
 
@@ -30,7 +32,9 @@
 | 🎬 **SKTOnline Direct** | Přímé video streamy a dostupné titulky. | **Ne** |
 | 🧲 **SKTorrent P2P** | Torrentové zdroje včetně informací o kvalitě a seederech. | **Ano, SKTorrent** |
 | 🍿 **Bombuj** | Filmy, seriály, katalogy a dostupné možnosti přehrávání. | **Ne** |
-| ▶️ **Přehraj.to Direct** | Přímé přehrávání videí, více dostupných verzí a titulky. | **Ne** |
+| ▶️ **Přehraj.to Direct** | Původní streamy bez účtu a volitelné přihlášení běžným registrovaným účtem přes API v2 (test). | **Ne; účet je volitelný** |
+| 🧪 **HellSpy Direct TEST** | Přímé CDN odkazy na původní videa a všechny dostupné VTT titulky. Zatím experimentální. | **Ne** |
+| 🧪 **Sledujteto Direct TEST** | Přímé MP4 odkazy z autorizovaného vyhledávání, dostupné přímé VTT titulky. Zatím experimentální. | **Ano, Sledujteto** |
 
 Každý zdroj funguje nezávisle na ostatních. Když u jednoho filmu něco nenajdeš, můžeš zkusit jiný doplněk.
 
@@ -46,16 +50,38 @@ Každý zdroj funguje nezávisle na ostatních. Když u jednoho filmu něco nena
 ## Instalace
 
 1. Otevři **[konfigurační stránku](https://130.61.49.108/stremio-addons/configure)**.
-2. Vyber doplněk, který chceš používat. Pro **SKTorrent P2P** vyplň svůj účet; ostatní zdroje účet nevyžadují.
+2. Vyber doplněk, který chceš používat. **SKTorrent P2P** a testovací **Sledujteto Direct TEST** vyžadují vlastní účet. U **Přehraj.to** lze volitelně zadat i bezplatný účet, nebo pokračovat bez přihlášení.
 3. Použij vygenerovaný instalační odkaz a přidej doplněk do **Stremia**.
 
 Doplňky můžeš kdykoliv přidávat samostatně. Není nutné instalovat celou sadu.
+
+### Porovnání se Streamletem (testovací větev)
+
+Vybrané zdroje jsou **HellSpy, SKT Online, Přehraj.to a Sledujte.to**. Webshare ani Fastshare nepřidáváme.
+
+- **HellSpy:** oddělené vyhledání souboru od získání přímé HTTPS adresy. Až 50 výsledků v jednom vyhledání; když první dotaz nic nenajde, maximálně další dvě varianty celého názvu. Při HTTP 429 žádné další pokusy. Platné VTT titulky zůstávají zachované.
+- **SKT Online:** zachována existující vyhledávací a streamovací logika, včetně přesné shody epizod a stránkování. Nepřidáváme duplicitní resolver.
+- **Přehraj.to:** zachováno přehrávání bez přihlášení. Nový **volitelný testovací** postup login → vyhledávání v API v2 → získání `download_link`. Když se přihlášení nebo odkaz nepodaří, původní nezávislý guest resolver může dál fungovat. Žádný požadavek neobchází omezení účtu.
+- **Sledujte.to:** rozšířený omezený offset paging (max. 3 strany, jen pokud na předchozí straně nebyl validní výsledek), podporované alternativní názvy JSON polí pro link a VTT, přímé CDN adresy bez proxy.
+
+Model odděleného `stream_search` a `link` vychází z [veřejné dokumentace Streamlet](https://streamlet.info/dev). V iOS IPA byl přibalen pouze TMDB modul; samotné aktuální JSON definice poskytovatelů nebyly v době rozboru dostupné. Konkrétní API v2 Přehraj.to proto zatím považujeme za experimentální, dokud se neověří funkčnost na běžném registrovaném účtu.
+
+Žádný z těchto testovacích zdrojů se zatím automaticky nenasazuje z této větve na Oracle.
+
+### Sledujteto Direct TEST – omezení testovací verze
+
+- Přihlašování používá rozhraní `/api/v1/token`, vyhledávání `/api/v1/videos` a přímý odkaz `/api/v1/video/{id}/link` z Kodi doplňku Sledujteto.
+- Údaje o účtu jsou v instalaci součástí **šifrovaného konfiguračního tokenu**. Instalační URL je i tak citlivá a nesmí se veřejně sdílet. Nezapisuj ji do issue, logů ani screenshotů.
+- Server získává jen metadata a podepsanou adresu videa. Vlastní MP4 nepřenáší, nestahuje ani neukládá.
+- Bezplatný účet v ručním testu vrátil video URL a CDN odpovědělo `206 video/mp4` na dva jednorázové Range požadavky. **To nepotvrzuje plné přehrání, životnost odkazu ani nárok na neomezené přehrávání**.
+- Nyní se nabízejí jen přímé VTT titulky; odkazy na SRT se nepřevádějí. Přesné epizody filtrujeme podle označení sezóny a epizody.
+- Doplněk má vlastní instalační token a volitelné propojení se Sosáčem; nezasahuje do vyhledávání HellSpy, Přehraj.to a dalších zdrojů.
 
 ## Volitelné propojení se Sosáčem
 
 V konfiguraci můžeš volitelně propojit doplňky se svým účtem Sosáč. U podporovaných titulů z jeho katalogu pak mohou být dostupné také streamy z těchto zdrojů.
 
-Propojení je **dobrovolné**. Bez něj všechny čtyři doplňky dál fungují běžným způsobem.
+Propojení je **dobrovolné**. Bez něj ostatní doplňky dál fungují běžným způsobem.
 
 ## Kvalita, jazyky a přehrávání
 
@@ -74,11 +100,11 @@ Funkčnost konkrétního streamu závisí na jeho dostupnosti a na možnostech p
 
 ## Soukromí a důležité informace
 
-Údaje k SKTorrentu a volitelnému propojení se Sosáčem jsou součástí chráněné konfigurace. **Vygenerované instalační odkazy s přihlašovacími údaji nikde veřejně nesdílej.**
+Údaje k SKTorrentu, Sledujteto, volitelnému Přehraj.to účtu a volitelnému propojení se Sosáčem jsou součástí chráněné konfigurace. **Vygenerované instalační odkazy s přihlašovacími údaji nikde veřejně nesdílej.**
 
 Analytika na konfigurační stránce je volitelná a zapne se pouze po souhlasu. Svou volbu můžeš kdykoliv změnit v nastavení cookies.
 
-Jde o **neoficiální komunitní projekt**. Není oficiálně propojen ani podporován službami Stremio, SKTOnline, SKTorrent, Bombuj, Přehraj.to či Sosáč. Projekt nehostuje samotná videa a dostupnost obsahu se může měnit.
+Jde o **neoficiální komunitní projekt**. Není oficiálně propojen ani podporován službami Stremio, SKTOnline, SKTorrent, Bombuj, Přehraj.to, HellSpy, Sledujteto či Sosáč. Projekt nehostuje samotná videa a dostupnost obsahu se může měnit.
 
 ## Podpora
 
