@@ -277,24 +277,29 @@ input::placeholder{color:#7c8ca3}
     <article class="addon" id="prehrajto" role="tabpanel" aria-labelledby="tab-prehrajto" hidden>
       <div class="addon-top"><span class="provider-icon" aria-hidden="true">▶</span><span class="provider-pill">MP4 DIRECT</span></div>
       <h2>Přehraj.to</h2><p class="sub">Přímé streamy a titulky</p>
-      <p class="description">Filmy a epizody z Přehraj.to s výběrem dostupných verzí a titulky podle konkrétního videa.</p>
+      <p class="description">Filmy a epizody z Přehraj.to s výběrem dostupných verzí a titulky. Bez účtu funguje původní resolver; volitelně lze použít také běžný bezplatný účet přes API v2 jako ve Streamletu.</p>
       <ul class="features"><li>Bez účtu</li><li>MP4 direct</li><li>CZ / SK titulky</li></ul>
       <div class="card-bottom">
-        <p class="account-note"><span class="dot"></span> Bez přihlášení</p>
+        <p class="account-note"><span class="dot"></span> Bez účtu nebo s volitelnou registrací zdarma</p>
+        <div class="torrent-fields">
+          <div class="field"><label for="prehrajtoEmail">Přehraj.to – e-mail (volitelné)</label><input id="prehrajtoEmail" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="E-mail registrovaného účtu"></div>
+          <div class="field"><label for="prehrajtoPassword">Přehraj.to – heslo (volitelné)</label><div class="password-row"><input id="prehrajtoPassword" type="password" autocomplete="current-password" placeholder="Heslo Přehraj.to"><button class="reveal show-password" data-target="prehrajtoPassword" type="button" aria-pressed="false">Zobrazit</button></div></div>
+        </div>
+        <p class="settings-hint">Pro použití API v2 vyplň obě pole. Když je necháš prázdná, funguje původní doplněk bez účtu. Placené Premium není podmínkou instalace, konkrétní odkaz ale může poskytovatel omezit.</p>
         <div id="prehrajtoNative">
-          <a class="action" id="prehrajtoInstall" href="#">Instalovat Přehraj.to <span aria-hidden="true">→</span></a>
+          <a class="action" id="prehrajtoInstall" href="#">Instalovat Přehraj.to bez účtu <span aria-hidden="true">→</span></a>
           <div class="output" style="display:block;margin-top:10px">
             <label for="prehrajtoUrl">Instalační manifest bez Sosáče</label>
             <div class="result-row"><input id="prehrajtoUrl" readonly aria-label="Přehraj.to manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
           </div>
         </div>
         <div id="prehrajtoLinked" hidden>
-          <button class="action generate" data-addon="prehrajto" type="button">Vytvořit odkaz se Sosáčem <span aria-hidden="true">→</span></button>
+          <button class="action generate" data-addon="prehrajto" type="button">Vytvořit šifrovaný instalační odkaz <span aria-hidden="true">→</span></button>
           <p class="feedback" role="status" aria-live="polite"></p>
           <div class="output bridge-output" hidden>
-            <label for="prehrajtoBridgeUrl">Přehraj.to + propojení Sosáč</label>
+            <label for="prehrajtoBridgeUrl">Přehraj.to – volitelný účet / Sosáč (šifrovaný odkaz)</label>
             <div class="result-row"><input id="prehrajtoBridgeUrl" readonly aria-label="Přehraj.to se Sosáčem"><button class="copy-btn copy" type="button">Kopírovat</button></div>
-            <a class="action install" href="#">Instalovat Přehraj.to se Sosáčem <span aria-hidden="true">→</span></a>
+            <a class="action install" href="#">Instalovat Přehraj.to s nastavením <span aria-hidden="true">→</span></a>
           </div>
         </div>
       </div>
@@ -412,8 +417,9 @@ function refreshSosac() {
   $('sosacHint').classList.toggle('warn',partial);
   $('bombujNative').hidden=linked;
   $('bombujLinked').hidden=!linked;
-  $('prehrajtoNative').hidden=linked;
-  $('prehrajtoLinked').hidden=!linked;
+  const accountSelected=Boolean($('prehrajtoEmail').value.trim() || $('prehrajtoPassword').value);
+  $('prehrajtoNative').hidden=linked || accountSelected;
+  $('prehrajtoLinked').hidden=!(linked || accountSelected);
   $('hellspyNative').hidden=linked;
   $('hellspyLinked').hidden=!linked;
   cards.forEach(clearResult);
@@ -447,6 +453,14 @@ async function generate(addon) {
     body.sktPassword=$('sktPassword').value;
     if (!body.sktUsername || !body.sktPassword) return;
   }
+  if (addon==='prehrajto') {
+    body.prehrajtoEmail=$('prehrajtoEmail').value.trim();
+    body.prehrajtoPassword=$('prehrajtoPassword').value;
+    if (Boolean(body.prehrajtoEmail) !== Boolean(body.prehrajtoPassword)) {
+      feedback(card,'Pro Přehraj.to vyplň e-mail i heslo, nebo obě pole nech prázdná.',true);
+      return;
+    }
+  }
   if (addon==='sledujteto') {
     body.sledujtetoEmail=$('sledujtetoEmail').value.trim();
     body.sledujtetoPassword=$('sledujtetoPassword').value;
@@ -479,6 +493,9 @@ for(const button of document.querySelectorAll('.generate')) {
 }
 for(const id of ['sktUsername','sktPassword']) {
   $(id).addEventListener('input',()=>{clearResult('sktorrent');refreshTorrent();});
+}
+for(const id of ['prehrajtoEmail','prehrajtoPassword']) {
+  $(id).addEventListener('input',refreshSosac);
 }
 for(const id of ['sledujtetoEmail','sledujtetoPassword']) {
   $(id).addEventListener('input',()=>{clearResult('sledujteto');refreshSledujteto();});
