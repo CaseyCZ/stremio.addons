@@ -136,3 +136,39 @@ test('Sledujteto cools down after HTTP 429 instead of retrying repeatedly', asyn
   await assert.rejects(client.search(args), /rate limited/);
   assert.equal(searchCalls, 1);
 });
+
+
+test('Sledujteto uses bounded Streamlet-style offset pagination for old episodes', async () => {
+  const offsets = [];
+  const api = createSledujtetoClient({ fetchImpl: async (url) => {
+    if (url.endsWith('/v1/token')) return response({ token: 'token-123' });
+    if (url.includes('/v1/videos?')) {
+      const offset = Number(new URL(url).searchParams.get('offset'));
+      offsets.push(offset);
+      const items = Array.from({ length: 32 }, (_, index) =>
+        file(1000 + offset + index, 'Ted Lasso S04E09 CZ'));
+      if (offset === 64) items.push(file(2026, 'Ted Lasso S01E01 CZ titulky'));
+      return response({ total: 97, items });
+    }
+    if (url.endsWith('/v1/video/2026/link')) {
+      return response({ download_link: 'https://data11.sledujteto.com/video/2026?token=short' });
+    }
+    throw Error('Unexpected request: ' + url);
+  } });
+  const streams = await findSledujtetoStreams({
+    cfg, meta: { name: 'Ted Lasso' }, type: 'series', season: 1, episode: 1
+  }, { api });
+  assert.deepEqual(offsets, [0, 32, 64]);
+  assert.equal(streams.length, 1);
+  assert.match(streams[0].url, /sledujteto\.com\/video\/2026/);
+});
+
+test('Sledujteto maps Streamlet-style CDN VTT property without dropping subtitle variants', () => {
+  const subtitles = subtitlesFromVideo({ subtitles: [
+    { language: 'cze', title: 'CZE', cdnUrl: 'https://cdn.example.org/1.vtt' },
+    { language: 'eng', title: 'EN1', cdnUrl: 'https://cdn.example.org/2.vtt' },
+    { language: 'eng', title: 'EN2', cdnUrl: 'https://cdn.example.org/3.vtt' }
+  ] }, 3);
+  assert.deepEqual(subtitles.map(item => item.lang), ['ces', 'eng', 'eng']);
+  assert.equal(new Set(subtitles.map(item => item.id)).size, 3);
+});
