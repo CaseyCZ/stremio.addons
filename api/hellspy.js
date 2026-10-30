@@ -92,6 +92,26 @@ function toStream(item, videoUrl, details) {
   };
 }
 
+function hellspySearchVariants(titles, type, year, season, episode) {
+  const primary = String(titles[0] || '').trim();
+  const alternate = String(titles[1] || '').trim();
+  if (!primary) return [];
+  const names = [];
+  if (type === 'series') {
+    const suffix = ' S' + String(season).padStart(2, '0') +
+      'E' + String(episode).padStart(2, '0');
+    names.push(primary + suffix);
+    if (alternate) names.push(alternate + suffix);
+    // Some names are indexed without zero-padding; keep the same episode.
+    names.push(primary + ' S' + season + 'E' + episode);
+  } else {
+    if (year) names.push(primary + ' ' + year);
+    names.push(primary);
+    if (alternate) names.push((alternate + ' ' + (year || '')).trim());
+  }
+  return [...new Set(names)].slice(0, 3);
+}
+
 async function findHellspyStreams({ meta, type, season, episode }, { api = client } = {}) {
   if (!['movie', 'series'].includes(type)) return [];
   if (type === 'series' && (!Number.isInteger(season) || season < 1 ||
@@ -99,13 +119,15 @@ async function findHellspyStreams({ meta, type, season, episode }, { api = clien
   const titles = titlesFromMeta(meta);
   if (!titles.length) return [];
   const year = type === 'movie' ? movieYear(meta) : '';
-  const query = type === 'series'
-    ? `${titles[0]} S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`
-    : `${titles[0]} ${year}`.trim();
-
-  // Searches are guarded by the shared client's cache and 429 cooldown.
-  const candidates = (await api.search({ query, titles, type, year, season, episode }))
-    .slice(0, MAX_STREAMS);
+  // Streamlet separates stream_search from link. Try a tightly bounded set
+  // of complete title variants only when the previous query returned no match.
+  // HTTP 429 still propagates immediately; never retry it with another query.
+  let candidates = [];
+  for (const query of hellspySearchVariants(titles, type, year, season, episode)) {
+    candidates = (await api.search({ query, titles, type, year, season, episode }))
+      .slice(0, MAX_STREAMS);
+    if (candidates.length) break;
+  }
   const streams = new Array(candidates.length);
   let cursor = 0;
   await Promise.all(Array.from({ length: Math.min(MAX_RESOLVERS, candidates.length) }, async () => {
@@ -127,4 +149,4 @@ async function findHellspyStreams({ meta, type, season, episode }, { api = clien
   return streams.filter(Boolean);
 }
 
-module.exports = { findHellspyStreams, hellspySubtitles, subtitleLanguage, safeFilename };
+module.exports = { findHellspyStreams, hellspySubtitles, subtitleLanguage, safeFilename, hellspySearchVariants };
