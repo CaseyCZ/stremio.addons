@@ -7,6 +7,7 @@ const { normalizeTitle, titleMatchScore, episodeTokens } = require('./search-mat
 
 const API = 'https://api.hellspy.to/gw/';
 const SEARCH_CACHE_MS = 10 * 60 * 1000;
+const NEGATIVE_SEARCH_CACHE_MS = 2 * 60 * 1000;
 const MAX_CACHED_SEARCHES = 100;
 
 function exactEpisode(title, season, episode) {
@@ -74,7 +75,7 @@ function createHellspyClient({ fetchImpl = globalThis.fetch, now = Date.now } = 
     const url = new URL('search', API);
     url.searchParams.set('query', lookup);
     url.searchParams.set('offset', '0');
-    url.searchParams.set('limit', '40');
+    url.searchParams.set('limit', '50');
     const response = await fetchImpl(url.toString(), {
       method: 'GET',
       headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
@@ -103,7 +104,7 @@ function createHellspyClient({ fetchImpl = globalThis.fetch, now = Date.now } = 
       .filter(Boolean)
       .sort((a, b) => b.score - a.score);
     if (searchCache.size >= MAX_CACHED_SEARCHES) searchCache.delete(searchCache.keys().next().value);
-    searchCache.set(key, { until: now() + SEARCH_CACHE_MS, items });
+    searchCache.set(key, { until: now() + (items.length ? SEARCH_CACHE_MS : NEGATIVE_SEARCH_CACHE_MS), items });
     return items;
   }
 
