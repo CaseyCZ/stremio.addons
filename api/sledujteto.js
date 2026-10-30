@@ -46,7 +46,7 @@ function subtitleLang(raw) {
 function subtitlesFromVideo(video, id) {
   const subtitles = Array.isArray(video && video.subtitles) ? video.subtitles : [];
   return subtitles.map((entry, index) => {
-    const url = directVttUrl(entry && entry.url);
+    const url = directVttUrl(entry && (entry.cdnUrl || entry.url));
     if (!url) return null;
     const language = String(entry.language || entry.lang || '').trim();
     const label = String(entry.title || language || `Stopa ${index + 1}`).trim().slice(0, 50);
@@ -160,21 +160,37 @@ function createSledujtetoClient({ fetchImpl = globalThis.fetch, now = Date.now }
     const pending = pendingSearches.get(key);
     if (pending) return (await pending).map(item => ({ ...item, video: { ...item.video } }));
     const task = (async () => {
-      const params = new URLSearchParams({ query, limit: '32', offset: '0' });
-      const data = await authorized(email, password, `/v1/videos?${params}`);
-      if (!Array.isArray(data.results)) throw Error('Invalid Sledujteto search response');
       const seen = new Set();
-      const found = data.results.map(file => {
-        const id = Number(file && file.id);
-        const name = String(file && file.name || '');
-        const score = matchingScore(name, titles, type, year, season, episode);
-        if (!Number.isSafeInteger(id) || id < 1 || !name || score < 0.75 || seen.has(id)) return null;
-        seen.add(id);
-        return { id, name, score, video: file.video || {} };
-      }).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, MAX_STREAMS);
+      const found = [];
+      const pageLimit = 32;
+      // Streamlet supports offset pagination. Only paginate if there is no
+      // matching result and the provider reports additional pages.
+      // Never run unbounded scans against a free account.
+      for (let page = 0; page < 3; page++) {
+        const offset = page * pageLimit;
+        const params = new URLSearchParams({
+          query, limit: String(pageLimit), offset: String(offset)
+        });
+        const data = await authorized(email, password, '/v1/videos?' + params);
+        const results = data && (data.results || data.items || data.videos);
+        if (!Array.isArray(results)) throw Error('Invalid Sledujteto search response');
+        for (const file of results) {
+          const id = Number(file && file.id);
+          const name = String(file && (file.name || file.title) || '');
+          const score = matchingScore(name, titles, type, year, season, episode);
+          if (!Number.isSafeInteger(id) || id < 1 || !name || score < 0.75 || seen.has(id)) continue;
+          seen.add(id);
+          found.push({ id, name, score, video: file.video || {} });
+        }
+        if (found.length || !results.length) break;
+        const total = Number(data.total || data.total_count || 0);
+        if (!Number.isFinite(total) || offset + results.length >= total) break;
+      }
+      found.sort((a, b) => b.score - a.score);
+      const limited = found.slice(0, MAX_STREAMS);
       if (searches.size >= 100) searches.delete(searches.keys().next().value);
-      searches.set(key, { items: found, until: now() + SEARCH_TTL_MS });
-      return found;
+      searches.set(key, { items: limited, until: now() + SEARCH_TTL_MS });
+      return limited;
     })();
     pendingSearches.set(key, task);
     try { return (await task).map(item => ({ ...item, video: { ...item.video } })); }
@@ -185,7 +201,7 @@ function createSledujtetoClient({ fetchImpl = globalThis.fetch, now = Date.now }
     if (!Number.isSafeInteger(id) || id < 1) return null;
     const data = await authorized(email, password, `/v1/video/${id}/link`);
     // Never cache signed media links; fetch a fresh one for each stream request.
-    return providerUrl(data.link);
+    return providerUrl(data.link || data.download_link || data.downloadLink);
   }
 
   return { search, link };
