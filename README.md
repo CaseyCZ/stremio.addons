@@ -64,7 +64,7 @@ Propojení je dobrovolné. Doplňky můžeš používat i samostatně.
 
 ## Kvalita, jazyky a titulky
 
-U dostupných videí zobrazujeme informace podle toho, co se podaří zjistit ze zdroje. Například video s názvem označujícím český dabing a kvalitu 1080p, ke kterému zdroj poskytl anglické titulky:
+Všechny doplňky používají stejný základní formát jako Sosáč: nejprve **🎧 zvuk**, potom **💬 titulky** a **🎬 kvalita**. Pokud známe původní označení souboru, následuje **🎞 název vydání**. Příklad videa označeného českým dabingem a kvalitou 1080p s dostupnými anglickými titulky:
 
 **Přehraj.to • 1080p**  
 🎧 🇨🇿 CZ  
@@ -75,7 +75,9 @@ U dostupných videí zobrazujeme informace podle toho, co se podaří zjistit ze
 - **🎧 Zvuk:** jazyk uvádíme pouze tehdy, když ho lze rozpoznat z označení videa (například „CZ dabing“). Samotné „CZ titulky“ český dabing nepotvrzují.
 - **💬 Titulky:** zobrazujeme jazyky dostupných titulkových stop, pokud je zdroj poskytuje.
 - **🎬 Kvalita:** u Přehraj.to jde o údaj odvozený z názvu vydání, nikoli o nezávisle změřené rozlišení.
-- **🎞 Název:** původní označení videa pro snadnější výběr verze.
+- **🎞 Název:** původní označení videa, pouze pokud je dostupné.
+
+U **SKTorrent P2P** zůstávají navíc údaje o seederech a velikosti. U **Bombuj** zůstává viditelný název původního přehrávače. Titulkové stopy zůstávají ve Stremiu samostatné.
 
 Neznámé informace se mohou zobrazit jako „Neuvedeno“, „Kvalita neuvedena“ nebo „Bez titulků“ (pokud zdroj žádné titulkové stopy neposkytl). Konkrétní podoba výpisu se mezi doplňky liší.
 

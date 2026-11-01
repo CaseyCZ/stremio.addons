@@ -31,6 +31,7 @@ test('Sledujteto finds the intended movie but rejects unrelated fuzzy matches an
   assert.equal(streams.length, 1);
   assert.equal(streams[0].url, 'https://data11.sledujteto.com/video/abcdef?token=secret');
   assert.equal(streams[0].name, 'Sledujte.to • HD');
+  assert.match(streams[0].title, /^🎧 Neuvedeno\n💬 🇨🇿 CZ • 🇬🇧 EN\n🎬 HD\n🎞 /);
   assert.equal(streams[0].subtitles.length, 2);
   assert.ok(streams[0].behaviorHints.filename.endsWith('.mp4'));
   assert.equal(requests.length, 3);

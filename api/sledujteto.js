@@ -4,6 +4,7 @@
 // contacted by this server. Media and VTT bytes go from the CDN to Stremio.
 const crypto = require('node:crypto');
 const { normalizeTitle, titleMatchScore, episodeTokens } = require('./search-matching');
+const { formatStreamTitle, audioFromReleaseName, qualityFromReleaseName, subtitleLanguages } = require('./stream-display');
 
 const BASE = 'https://www.sledujteto.com/api';
 const USER_AGENT = 'Kodi/plugin.video.sledujteto';
@@ -230,14 +231,16 @@ async function findSledujtetoStreams({ cfg, meta, type, season, episode }, { api
       try {
         const url = await api.link({ ...credentials, id: item.id });
         if (!url) continue;
-        const quality = item.video.is_4k ? '2160p' : item.video.is_hd ? 'HD' :
-          (/\b(?:2160p|4k)\b/i.test(item.name) ? '2160p' :
-            /\b1080p\b/i.test(item.name) ? '1080p' : 'Kvalita neuvedena');
+        const labeled = qualityFromReleaseName(item.name);
+        const quality = item.video.is_4k ? '2160p' :
+          labeled !== 'Kvalita neuvedena' ? labeled :
+            item.video.is_hd ? 'HD' : 'Kvalita neuvedena';
         const subtitles = subtitlesFromVideo(item.video, item.id);
         streams[index] = {
           name: `Sledujte.to • ${quality}`,
-          title: [`💬 ${subtitles.length ? `${subtitles.length} VTT titulků` : 'Bez ověřených VTT titulků'}`,
-            `🎬 ${quality}`, `🎞 ${item.name.slice(0, 180)}`].join('\n'),
+          title: formatStreamTitle({audio: audioFromReleaseName(item.name),
+            subtitles: subtitleLanguages(subtitles, 'Bez ověřených titulků'),
+            quality, releaseName: item.name}),
           url, subtitles, behaviorHints: {
             notWebReady: false,
             filename: `${item.name.replace(/[\\/\r\n\t]/g, '').slice(0, 160)}.mp4`

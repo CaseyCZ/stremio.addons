@@ -1,6 +1,7 @@
 'use strict';
 
 const { qualityLabel } = require('./stream-quality.js');
+const { formatStreamTitle } = require('../../api/stream-display');
 const { voeSubtitles } = require('./resolvers/voe-subtitles.js');
 
 const { languageCode, languageLabel, parseGroup } = require('./group-labels.js');
@@ -119,8 +120,10 @@ function formatBombujStream(stream) {
   return {
     ...stream,
     name: 'Bombuj • ' + provider,
-    title: '🎧 ' + audioLabel(stream) + '\n💬 ' + subtitleLabel(stream) +
-      '\n' + (direct ? '🎬 ' + quality : '🌐 Web player • ' + provider),
+    title: direct ? formatStreamTitle({audio: audioLabel(stream),
+      subtitles: subtitleLabel(stream), quality, releaseName: titleLine(stream, '🎞')})
+      : '🎧 ' + audioLabel(stream) + '\n💬 ' + subtitleLabel(stream) +
+        '\n🌐 Web player • ' + provider,
     description: undefined,
     subtitles: subtitles.length ? subtitles : undefined
   };

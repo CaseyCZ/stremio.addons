@@ -5,6 +5,7 @@
 // This service handles metadata and signed URL creation only, never media bytes.
 const crypto = require('node:crypto');
 const { acceptsCandidate, titlesFromMeta, makeQueries } = require('./prehrajto');
+const { formatStreamTitle, audioFromReleaseName, qualityFromReleaseName, subtitleLanguages } = require('./stream-display');
 
 const BASE = 'https://prehrajto.cz';
 const TOKEN_TTL_MS = 5 * 60 * 1000;
@@ -200,11 +201,12 @@ async function findPrehrajtoAccountStreams({ cfg, meta, type, season, episode },
           if (!url || seenUrls.has(url)) continue;
           seenUrls.add(url);
           const subtitles = mappedSubtitles(item.subtitles, item.id);
+          const quality = qualityFromReleaseName(item.title);
           streams[index] = {
-            name: 'Přehraj.to • Účet',
-            title: ['🎧 Neuvedeno',
-              '💬 ' + (subtitles.length ? subtitles.length + ' ověřených VTT titulků' : 'Bez ověřených titulků'),
-              '🎬 Kvalita neuvedena', '🎞 ' + item.title.slice(0, 180)].join('\n'),
+            name: 'Přehraj.to • ' + quality,
+            title: formatStreamTitle({audio: audioFromReleaseName(item.title),
+              subtitles: subtitleLanguages(subtitles, 'Bez ověřených titulků'),
+              quality, releaseName: item.title}),
             url,
             subtitles,
             behaviorHints: { notWebReady: false }

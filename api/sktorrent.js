@@ -4,6 +4,7 @@ const NodeCache = require('node-cache');
 const bencode = require('bncode');
 const crypto = require('crypto');
 const { titleMatchScore } = require('./search-matching');
+const { formatStreamTitle } = require('./stream-display');
 
 const BASE_URL = 'https://sktorrent.eu';
 const LOGIN_URL = `${BASE_URL}/torrent/login.php`;
@@ -74,7 +75,7 @@ function qualityFromText(value) {
   if (/\b720p\b/i.test(text)) return '720p';
   if (/\b480p\b/i.test(text)) return '480p';
   if (/\b360p\b/i.test(text)) return '360p';
-  return 'Torrent';
+  return 'Kvalita neuvedena';
 }
 
 function codecTags(value) {
@@ -742,18 +743,16 @@ async function findTorrentStreams({ username, password, imdbId, titles, type, se
       .replace(/\s+/g, ' ')
       .trim();
     const details = [`👥 ${candidate.seeds} seed`, `📦 ${size}`, ...tags].filter(Boolean).join(' • ');
-    const titleLines = [
-      language ? `🎧 ${language}` : null,
-      subtitleHint ? `💬 ${subtitleHint}` : null,
-      releaseName ? `🎞 ${releaseName}` : null,
-      details
-    ].filter(Boolean);
+    const displayTitle = formatStreamTitle({
+      audio: language || 'Neuvedeno', subtitles: subtitleHint || 'Neuvedeny',
+      quality, releaseName, extraLines: [details]
+    });
 
     return {
       episodePriority: candidate.episodePriority,
       stream: {
-        name: `SKTorrent • ${quality}`,
-        title: titleLines.join('\n'),
+        name: `SKTorrent P2P • ${quality}`,
+        title: displayTitle,
         infoHash: torrent.infoHash,
         fileIdx: file.index,
         fileName,

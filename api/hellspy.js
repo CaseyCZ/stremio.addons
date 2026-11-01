@@ -4,6 +4,7 @@
 // metadata only. The Stremio player fetches video and VTTs from the CDN.
 const { createHellspyClient } = require('./hellspy-experimental');
 const { normalizeTitle } = require('./search-matching');
+const { formatStreamTitle, audioFromReleaseName, qualityFromReleaseName, subtitleLanguages } = require('./stream-display');
 
 const client = createHellspyClient();
 const MAX_STREAMS = 16;
@@ -70,10 +71,7 @@ function safeFilename(raw) {
 }
 
 function releaseQuality(title) {
-  if (/\b(?:2160p|4k|uhd)\b/i.test(title)) return '2160p';
-  if (/\b1080p\b|full[ ._-]*hd/i.test(title)) return '1080p';
-  if (/\b720p\b/i.test(title)) return '720p';
-  return 'Kvalita neuvedena';
+  return qualityFromReleaseName(title);
 }
 
 function toStream(item, videoUrl, details) {
@@ -81,11 +79,8 @@ function toStream(item, videoUrl, details) {
   const quality = releaseQuality(item.title);
   return {
     name: 'HellSpy • ' + quality,
-    title: [
-      '💬 ' + (subtitles.length ? `${subtitles.length} dostupných titulků` : 'Bez titulků'),
-      '🎬 ' + quality,
-      item.title ? '🎞 ' + item.title.slice(0, 180) : null
-    ].filter(Boolean).join('\n'),
+    title: formatStreamTitle({audio: audioFromReleaseName(item.title),
+      subtitles: subtitleLanguages(subtitles), quality, releaseName: item.title}),
     url: videoUrl,
     subtitles,
     behaviorHints: { notWebReady: false, filename: safeFilename(details && details.filename) }

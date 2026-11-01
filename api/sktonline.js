@@ -2,6 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const NodeCache = require('node-cache');
 const { SocksProxyAgent } = require('socks-proxy-agent');
+const { formatStreamTitle } = require('./stream-display');
 const { getClient } = require('./sktorrent');
 
 const SKTORRENT_BASE_URL = 'https://sktorrent.eu';
@@ -296,7 +297,7 @@ function streamLanguages(text) {
 }
 
 function formatLanguages(codes) {
-  if (!codes.length) return '🌐 ?';
+  if (!codes.length) return 'Neuvedeno';
   return codes.map(code => {
     const def = languageDefForAlias(code);
     return `${def ? def.flag : '🌐'} ${code}`;
@@ -330,7 +331,9 @@ function makeStream(provider, pageTitle, url, label, referer) {
   const languages = streamLanguages(`${pageTitle || ''} ${label || ''}`);
   return {
     name: `${provider} • ${quality}`,
-    title: `🎧 ${formatLanguages(languages.audio)}\n💬 ${languages.subtitles.length ? formatLanguages(languages.subtitles) : 'Bez titulků'}\n🎬 ${quality}`,
+    title: formatStreamTitle({audio: formatLanguages(languages.audio),
+      subtitles: languages.subtitles.length ? formatLanguages(languages.subtitles) : 'Bez titulků',
+      quality, releaseName: pageTitle && !/^SKT\s*Online$/i.test(String(pageTitle).trim()) ? pageTitle : ''}),
     url,
     behaviorHints: proxyHints(referer)
   };
