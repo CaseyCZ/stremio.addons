@@ -286,6 +286,7 @@ function combinedStreamIdentity(stream) {
   if (stream.infoHash) {
     return `torrent:${String(stream.infoHash).toLowerCase()}:${Number(stream.fileIdx || 0)}`;
   }
+  if (stream.externalUrl) return `external:${String(stream.externalUrl).trim()}`;
   if (stream.url) {
     const raw = String(stream.url).trim();
     try {
