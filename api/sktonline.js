@@ -353,8 +353,10 @@ function canonicalDirectIdentity(stream) {
 function dedupeStreams(streams) {
   const seen = new Set();
   return (streams || []).filter(stream => {
-    if (!stream || !stream.url) return false;
-    const identity = canonicalDirectIdentity(stream);
+    if (!stream || (!stream.url && !stream.externalUrl)) return false;
+    const identity = stream.externalUrl
+      ? `external:${stream.externalUrl}`
+      : canonicalDirectIdentity(stream);
     if (!identity || seen.has(identity)) return false;
     seen.add(identity);
     return true;
@@ -1047,13 +1049,27 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
     const detailVideoId = onlineVideoIdFromHtml($, response.data);
     const onlineDirectLinks = links.filter(url => isSktOnlineUrl(url) && isPlayableMediaUrl(url));
 
+    const selectedEntries = onlineEntries.slice(0, 6);
     const onlineBatches = await Promise.all([
       ...(detailVideoId ? [streamsForKnownOnlineVideoId(detailVideoId, title)] : []),
-      ...onlineEntries.slice(0, 6).map(entry => streamsForOnlinePage(entry.url, finalUrl, entry.title || title)),
+      ...selectedEntries.map(entry => streamsForOnlinePage(entry.url, finalUrl, entry.title || title)),
       ...onlineDirectLinks.slice(0, 4).map(url => Promise.resolve([makeStream('SKTOnline', title, url, '', finalUrl)]))
     ]);
 
     streams.push(...onlineBatches.flat());
+
+    // If Oracle cannot read an embedded player, let the user's own browser
+    // open its page. Never pretend the iframe URL is a playable media URL.
+    selectedEntries.forEach((entry, index) => {
+      const resolved = onlineBatches[(detailVideoId ? 1 : 0) + index] || [];
+      if (resolved.length) return;
+      const languages = streamLanguages(`${entry.title || title}`);
+      streams.push({
+        name: 'SKTOnline • WEB',
+        title: `🌐 Webový přehrávač\n🎧 ${formatLanguages(languages.audio)}\n💬 Otevřít v prohlížeči`,
+        externalUrl: entry.url
+      });
+    });
     const result = dedupeStreams(streams).slice(0, 12);
     cache.set(key, result, result.length ? 120 : 60);
     return result;
