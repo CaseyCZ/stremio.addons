@@ -64,14 +64,20 @@ Propojení je dobrovolné. Doplňky můžeš používat i samostatně.
 
 ## Kvalita, jazyky a titulky
 
-U každého dostupného přehrávání se snažíme zobrazovat co nejpřehlednější informace. Například:
+U dostupných videí zobrazujeme informace podle toho, co se podaří zjistit ze zdroje. Například video s názvem označujícím český dabing a kvalitu 1080p, ke kterému zdroj poskytl anglické titulky:
 
 **Přehraj.to • 1080p**  
 🎧 🇨🇿 CZ  
 💬 🇬🇧 EN  
-🎬 1080p
+🎬 1080p  
+🎞 Ukázkový film 2026 1080p CZ dabing
 
-Kvalita a jazykové možnosti se mohou lišit podle konkrétního videa. Pokud nejsou některé informace dostupné, nemusí se zobrazit.
+- **🎧 Zvuk:** jazyk uvádíme pouze tehdy, když ho lze rozpoznat z označení videa (například „CZ dabing“). Samotné „CZ titulky“ český dabing nepotvrzují.
+- **💬 Titulky:** zobrazujeme jazyky dostupných titulkových stop, pokud je zdroj poskytuje.
+- **🎬 Kvalita:** u Přehraj.to jde o údaj odvozený z názvu vydání, nikoli o nezávisle změřené rozlišení.
+- **🎞 Název:** původní označení videa pro snadnější výběr verze.
+
+Neznámé informace se mohou zobrazit jako „Neuvedeno“, „Kvalita neuvedena“ nebo „Bez titulků“ (pokud zdroj žádné titulkové stopy neposkytl). Konkrétní podoba výpisu se mezi doplňky liší.
 
 ## Soukromí a bezpečnost
 
