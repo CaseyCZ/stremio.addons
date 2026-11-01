@@ -232,10 +232,10 @@ async function findSledujtetoStreams({ cfg, meta, type, season, episode }, { api
         if (!url) continue;
         const quality = item.video.is_4k ? '2160p' : item.video.is_hd ? 'HD' :
           (/\b(?:2160p|4k)\b/i.test(item.name) ? '2160p' :
-            /\b1080p\b/i.test(item.name) ? '1080p' : 'Direct');
+            /\b1080p\b/i.test(item.name) ? '1080p' : 'Kvalita neuvedena');
         const subtitles = subtitlesFromVideo(item.video, item.id);
         streams[index] = {
-          name: `Sledujteto • ${quality}`,
+          name: `Sledujte.to • ${quality}`,
           title: [`💬 ${subtitles.length ? `${subtitles.length} VTT titulků` : 'Bez ověřených VTT titulků'}`,
             `🎬 ${quality}`, `🎞 ${item.name.slice(0, 180)}`].join('\n'),
           url, subtitles, behaviorHints: {

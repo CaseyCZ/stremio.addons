@@ -73,7 +73,7 @@ function releaseQuality(title) {
   if (/\b(?:2160p|4k|uhd)\b/i.test(title)) return '2160p';
   if (/\b1080p\b|full[ ._-]*hd/i.test(title)) return '1080p';
   if (/\b720p\b/i.test(title)) return '720p';
-  return 'Direct';
+  return 'Kvalita neuvedena';
 }
 
 function toStream(item, videoUrl, details) {

@@ -73,7 +73,8 @@ test('registered account is optional and never returns unverified candidates', a
   assert.equal(streams.length, 1);
   assert.equal(streams[0].subtitles.length, 3);
   assert.deepEqual(streams[0].subtitles.map(x => x.lang), ['ces', 'eng', 'eng']);
-  assert.notEqual(streams[0].name, 'Přehraj.to • Direct');
+  assert.equal(streams[0].name, 'Přehraj.to • Účet');
+  assert.match(streams[0].title, /🎬 Kvalita neuvedena/);
 });
 
 test('rejects unsafe video and subtitle URLs, including fake provider hosts', () => {

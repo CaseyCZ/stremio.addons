@@ -144,9 +144,9 @@ function getHost(req) {
 
 function labels(language) {
   return {
-    cs: { name: 'SKTOnline + SKTorrent', description: 'Přímé streamy ze SKTOnline plus volitelné SKTorrent P2P torrenty.' },
-    sk: { name: 'SKTOnline + SKTorrent', description: 'Priame streamy zo SKTOnline plus voliteľné SKTorrent P2P torrenty.' },
-    en: { name: 'SKTOnline + SKTorrent', description: 'Direct SKTOnline streams plus optional SKTorrent P2P torrents.' }
+    cs: { name: 'SKT Online + SKTorrent', description: 'Přímé streamy ze SKTOnline plus volitelné SKTorrent P2P torrenty.' },
+    sk: { name: 'SKT Online + SKTorrent', description: 'Priame streamy zo SKTOnline plus voliteľné SKTorrent P2P torrenty.' },
+    en: { name: 'SKT Online + SKTorrent', description: 'SKT Online streams plus optional SKTorrent P2P torrents.' }
   }[language] || null;
 }
 
@@ -156,7 +156,7 @@ function buildManifest(cfg) {
   const variants = {
     sktonline: {
       id: 'cz.caseycz.stremio.sktonline.direct',
-      name: 'SKTOnline Direct',
+      name: 'SKT Online',
       description: 'Přímé streamy a dostupné titulky ze SKTOnline.'
     },
     sktorrent: {
@@ -561,7 +561,7 @@ app.get('/manifest.json', (req, res) => {
   res.json({
     id: 'cz.caseycz.stremio.sktonline.direct.configure',
     version: VERSION,
-    name: 'SKTOnline + SKTorrent',
+    name: 'SKT Online + SKTorrent',
     description: `Configure at ${getHost(req)}/configure`,
     types: [], resources: [], catalogs: [],
     behaviorHints: { configurable: true, configurationRequired: true }
@@ -575,7 +575,7 @@ function prehrajtoManifest(cfg = {}) {
   return {
     id: 'cz.caseycz.stremio.prehrajto.direct',
     version: VERSION,
-    name: 'Přehraj.to Direct',
+    name: 'Přehraj.to',
     description: 'Přímé MP4 streamy z Přehraj.to s titulky CZ/SK/EN, pokud jsou dostupné.',
     types: ['movie', 'series'],
     idPrefixes: [
@@ -668,8 +668,8 @@ function hellspyManifest(cfg = {}) {
   return {
     id: 'cz.caseycz.stremio.hellspy.direct.test',
     version: VERSION,
-    name: 'HellSpy Direct TEST',
-    description: 'Experimentální přímé CDN streamy HellSpy a všechny dostupné VTT titulky. Dostupnost závisí na síti.',
+    name: 'HellSpy',
+    description: 'Dostupná videa ze služby HellSpy a jejich titulky, pokud jsou k dispozici.',
     types: ['movie', 'series'],
     idPrefixes: ['tt', 'bombuj-movie-', 'bombuj-series-', 'bombuj-episode-',
       ...(sosacLinked ? ['sosac_m_', 'sosac_s_', 'sosac_ep_'] : [])],
@@ -729,8 +729,8 @@ function sledujtetoManifest(cfg = {}) {
   return {
     id: 'cz.caseycz.stremio.sledujteto.direct.test',
     version: VERSION,
-    name: 'Sledujteto Direct TEST',
-    description: 'Experimentální přímé MP4 streamy Sledujteto s vlastním účtem a dostupnými VTT titulky.',
+    name: 'Sledujte.to',
+    description: 'Přehrávání dostupných videí ze Sledujte.to s vlastním účtem a titulky, pokud jsou k dispozici.',
     types: ['movie', 'series'],
     idPrefixes: ['tt', 'bombuj-movie-', 'bombuj-series-', 'bombuj-episode-',
       ...(sosacLinked ? ['sosac_m_', 'sosac_s_', 'sosac_ep_'] : [])],

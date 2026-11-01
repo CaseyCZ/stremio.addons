@@ -170,8 +170,8 @@ test('caption selection finds Czech and Slovak even after forty English tracks',
 test('Forrest Gump audio flags and release-quality labels never invent a resolution', () => {
   const result = title => makeStream({ title }, MAYDAY, { video_url: cdn('mp4'), subtitles: [] });
   const direct = result('Forrest Gump 1994 CZ dab');
-  assert.equal(direct.name, 'Přehraj.to • Direct');
-  assert.match(direct.title, /^🎧 🇨🇿 CZ\n💬 Bez titulků\n🎬 Direct\n🎞 Forrest Gump 1994 CZ dab$/);
+  assert.equal(direct.name, 'Přehraj.to • Kvalita neuvedena');
+  assert.match(direct.title, /^🎧 🇨🇿 CZ\n💬 Bez titulků\n🎬 Kvalita neuvedena\n🎞 Forrest Gump 1994 CZ dab$/);
   assert.equal(Object.hasOwn(direct, 'description'), false);
 
   const ultra = result('Forrest Gump (1994) CZ Dabing 2160p');
@@ -188,7 +188,7 @@ test('subtitle language alone does not imply dubbed audio', () => {
     video_url: cdn('mp4'),
     subtitles: [{lang:'eng',label:'ENG',url:cdn('vtt')}]
   });
-  assert.match(stream.title, /^🎧 Neuvedeno\n💬 🇬🇧 EN\n🎬 Direct/);
+  assert.match(stream.title, /^🎧 Neuvedeno\n💬 🇬🇧 EN\n🎬 Kvalita neuvedena/);
 });
 
 test('matching and resolution work without live third-party API calls', async () => {

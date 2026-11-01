@@ -36,6 +36,7 @@ test('Prehraj.to keeps a public guest manifest and an isolated encrypted optiona
     assert.equal(running, true);
     const publicManifest = await (await fetch(origin + '/prehrajto/manifest.json')).json();
     assert.equal(publicManifest.id, 'cz.caseycz.stremio.prehrajto.direct');
+    assert.equal(publicManifest.name, 'Přehraj.to');
 
     const onlyEmail = await fetch(origin + '/api/config-token', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

@@ -65,6 +65,7 @@ test('HellSpy maps matching episodes to direct CDN with all available VTTs', asy
   assert.equal(streams[0].subtitles.length, 3);
   assert.deepEqual(streams[0].subtitles.map(track => track.lang), ['ces', 'slk', 'eng']);
   assert.equal(streams[0].behaviorHints.filename, 'Ted Lasso S04E01 CZ Titulky chemon.mp4');
+  assert.equal(streams[0].name, 'HellSpy • Kvalita neuvedena');
   assert.equal(requests.length, 3);
   assert.ok(requests.every(([, opts]) => opts.method === 'GET'));
   assert.ok(requests.some(([url, opts]) => url.endsWith('/download') && opts.redirect === 'manual'));

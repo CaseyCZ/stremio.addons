@@ -53,7 +53,7 @@ test('Sledujteto has an isolated encrypted Stremio manifest and configurator', a
 
     const manifest = await (await fetch(origin + tokenPath + '/manifest.json')).json();
     assert.equal(manifest.id, 'cz.caseycz.stremio.sledujteto.direct.test');
-    assert.equal(manifest.name, 'Sledujteto Direct TEST');
+    assert.equal(manifest.name, 'Sledujte.to');
     assert.deepEqual(manifest.resources, ['stream']);
     assert.ok(manifest.idPrefixes.includes('tt'));
 
@@ -72,6 +72,7 @@ test('Sledujteto has an isolated encrypted Stremio manifest and configurator', a
     })).json();
     const hellspyManifest = await (await fetch(origin + '/' + hellspyConfig.token + '/manifest.json')).json();
     assert.equal(hellspyManifest.id, 'cz.caseycz.stremio.hellspy.direct.test');
+    assert.equal(hellspyManifest.name, 'HellSpy');
   } finally {
     child.kill();
   }

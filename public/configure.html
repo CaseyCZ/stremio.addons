@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="canonical" href="https://130.61.49.108/stremio-addons/configure">
 <meta name="theme-color" content="#0b1020">
-<meta name="description" content="CaseyCZ Stremio Addons – SKTOnline Direct, SKTorrent P2P, Bombuj a Přehraj.to na jednom místě.">
+<meta name="description" content="CaseyCZ Stremio Addons – SKT Online, SKTorrent P2P, Bombuj a Přehraj.to na jednom místě.">
 <title>CaseyCZ Stremio Addons | Konfigurace</title>
 <style>
 :root {
@@ -168,7 +168,7 @@ input::placeholder{color:#7c8ca3}
 <main class="wrap">
   <section class="card">
     <div class="badges">
-      <span class="badge">🎬 6 doplňků (včetně testovacích)</span>
+      <span class="badge">🎬 6 doplňků</span>
       <span class="badge" id="versionBadge">📦 Verze …</span>
       <span class="badge">▶️ Stremio</span>
     </div>
@@ -202,29 +202,29 @@ input::placeholder{color:#7c8ca3}
     <div class="switch-block">
       <div class="switch-title">Vyber doplněk</div>
       <div class="mode-switch" role="tablist" aria-label="Zdroj videa">
-        <button class="mode-btn active" type="button" role="tab" id="tab-sktonline" aria-selected="true" aria-controls="sktonline" data-provider-tab="sktonline">▶️ SKTOnline</button>
+        <button class="mode-btn active" type="button" role="tab" id="tab-sktonline" aria-selected="true" aria-controls="sktonline" data-provider-tab="sktonline">▶️ SKT Online</button>
         <button class="mode-btn" type="button" role="tab" id="tab-sktorrent" aria-selected="false" aria-controls="sktorrent" data-provider-tab="sktorrent">🧲 SKTorrent</button>
         <button class="mode-btn" type="button" role="tab" id="tab-bombuj" aria-selected="false" aria-controls="bombuj" data-provider-tab="bombuj">🍿 Bombuj</button>
         <button class="mode-btn" type="button" role="tab" id="tab-prehrajto" aria-selected="false" aria-controls="prehrajto" data-provider-tab="prehrajto">▶️ Přehraj.to</button>
-        <button class="mode-btn" type="button" role="tab" id="tab-hellspy" aria-selected="false" aria-controls="hellspy" data-provider-tab="hellspy">🧪 HellSpy TEST</button>
-        <button class="mode-btn" type="button" role="tab" id="tab-sledujteto" aria-selected="false" aria-controls="sledujteto" data-provider-tab="sledujteto">🧪 Sledujteto TEST</button>
+        <button class="mode-btn" type="button" role="tab" id="tab-hellspy" aria-selected="false" aria-controls="hellspy" data-provider-tab="hellspy">🔥 HellSpy</button>
+        <button class="mode-btn" type="button" role="tab" id="tab-sledujteto" aria-selected="false" aria-controls="sledujteto" data-provider-tab="sledujteto">📺 Sledujte.to</button>
       </div>
     </div>
 
 <section class="addons" aria-label="Doplňky Stremio">
     <article class="addon" id="sktonline" role="tabpanel" aria-labelledby="tab-sktonline">
-      <div class="addon-top"><span class="provider-icon" aria-hidden="true">▶</span><span class="provider-pill">DIRECT</span></div>
-      <h2>SKTOnline</h2><p class="sub">Přímé přehrávání</p>
+      <div class="addon-top"><span class="provider-icon" aria-hidden="true">▶</span><span class="provider-pill">VIDEO</span></div>
+      <h2>SKT Online</h2><p class="sub">Přímé přehrávání</p>
       <p class="description">Vyhledá přímá videa, rozpozná dostupné kvality, jazyky a titulky.</p>
-      <ul class="features"><li>Video Direct</li><li>CZ / SK</li><li>Titulky</li></ul>
+      <ul class="features"><li>Přehrávání</li><li>CZ / SK</li><li>Titulky</li></ul>
       <div class="card-bottom">
         <p class="account-note"><span class="dot"></span> Bez přihlášení</p>
         <button class="action generate" data-addon="sktonline" type="button">Vytvořit instalační odkaz <span aria-hidden="true">→</span></button>
         <p class="feedback" role="status" aria-live="polite"></p>
         <div class="output" hidden>
           <label for="sktonlineUrl">Instalační manifest</label>
-          <div class="result-row"><input id="sktonlineUrl" readonly aria-label="SKTOnline manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
-          <a class="action install" href="#">Instalovat SKTOnline</a>
+          <div class="result-row"><input id="sktonlineUrl" readonly aria-label="SKT Online manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
+          <a class="action install" href="#">Instalovat SKT Online</a>
         </div>
       </div>
     </article>
@@ -254,7 +254,7 @@ input::placeholder{color:#7c8ca3}
       <div class="addon-top"><span class="provider-icon" aria-hidden="true">🍿</span><span class="provider-pill">FILMY & SERIÁLY</span></div>
       <h2>Bombuj</h2><p class="sub">Filmy, seriály a přehrávače</p>
       <p class="description">Procházej katalogy filmů a seriálů a vyber si z dostupných možností přehrávání.</p>
-      <ul class="features"><li>Katalogy</li><li>Cinemeta</li><li>Web / Direct</li></ul>
+      <ul class="features"><li>Katalogy</li><li>Cinemeta</li><li>Dostupná videa</li></ul>
       <div class="card-bottom">
         <p class="account-note"><span class="dot"></span> Bez přihlášení k Bombuj</p>
         <div class="native-output" id="bombujNative">
@@ -275,17 +275,17 @@ input::placeholder{color:#7c8ca3}
       </div>
     </article>
     <article class="addon" id="prehrajto" role="tabpanel" aria-labelledby="tab-prehrajto" hidden>
-      <div class="addon-top"><span class="provider-icon" aria-hidden="true">▶</span><span class="provider-pill">MP4 DIRECT</span></div>
+      <div class="addon-top"><span class="provider-icon" aria-hidden="true">▶</span><span class="provider-pill">VIDEO</span></div>
       <h2>Přehraj.to</h2><p class="sub">Přímé streamy a titulky</p>
-      <p class="description">Filmy a epizody z Přehraj.to s výběrem dostupných verzí a titulky. Bez účtu funguje původní resolver; volitelně lze použít také běžný bezplatný účet přes API v2 jako ve Streamletu.</p>
-      <ul class="features"><li>Bez účtu</li><li>MP4 direct</li><li>CZ / SK titulky</li></ul>
+      <p class="description">Filmy a epizody z Přehraj.to s výběrem dostupných verzí a titulků. Doplněk můžeš používat bez účtu nebo se svým účtem.</p>
+      <ul class="features"><li>Bez účtu</li><li>MP4</li><li>CZ / SK titulky</li></ul>
       <div class="card-bottom">
         <p class="account-note"><span class="dot"></span> Bez účtu nebo s volitelnou registrací zdarma</p>
         <div class="torrent-fields">
           <div class="field"><label for="prehrajtoEmail">Přehraj.to – e-mail (volitelné)</label><input id="prehrajtoEmail" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="E-mail registrovaného účtu"></div>
           <div class="field"><label for="prehrajtoPassword">Přehraj.to – heslo (volitelné)</label><div class="password-row"><input id="prehrajtoPassword" type="password" autocomplete="current-password" placeholder="Heslo Přehraj.to"><button class="reveal show-password" data-target="prehrajtoPassword" type="button" aria-pressed="false">Zobrazit</button></div></div>
         </div>
-        <p class="settings-hint">Pro použití API v2 vyplň obě pole. Když je necháš prázdná, funguje původní doplněk bez účtu. Placené Premium není podmínkou instalace, konkrétní odkaz ale může poskytovatel omezit.</p>
+        <p class="settings-hint">Pokud chceš použít svůj účet Přehraj.to, vyplň e-mail a heslo. Bez účtu můžeš pokračovat také. Některá videa mohou být omezena pravidly služby.</p>
         <div id="prehrajtoNative">
           <a class="action" id="prehrajtoInstall" href="#">Instalovat Přehraj.to bez účtu <span aria-hidden="true">→</span></a>
           <div class="output" style="display:block;margin-top:10px">
@@ -305,47 +305,47 @@ input::placeholder{color:#7c8ca3}
       </div>
     </article>
     <article class="addon" id="hellspy" role="tabpanel" aria-labelledby="tab-hellspy" hidden>
-      <div class="addon-top"><span class="provider-icon" aria-hidden="true">🧪</span><span class="provider-pill">DIRECT TEST</span></div>
-      <h2>HellSpy</h2><p class="sub">Experimentální přímé streamy a všechny VTT titulky</p>
-      <p class="description">Vyhledávání a metadata HellSpy; video a titulky jsou přímé CDN odkazy. Přístup ze serveru může být omezen HTTP 429.</p>
-      <ul class="features"><li>Bez účtu</li><li>CDN Direct</li><li>Všechny jazyky titulků</li></ul>
+      <div class="addon-top"><span class="provider-icon" aria-hidden="true">🔥</span><span class="provider-pill">VIDEO</span></div>
+      <h2>HellSpy</h2><p class="sub">Filmy, seriály a dostupné titulky</p>
+      <p class="description">Vyhledávání filmů a seriálů s možností přehrávání dostupných videí a výběru titulků.</p>
+      <ul class="features"><li>Bez účtu</li><li>Videa</li><li>Všechny jazyky titulků</li></ul>
       <div class="card-bottom">
-        <p class="account-note"><span class="dot"></span> Testovací doplněk – bez záruky dostupnosti</p>
+        <p class="account-note"><span class="dot"></span> Dostupnost videí se může lišit</p>
         <div id="hellspyNative">
-          <a class="action" id="hellspyInstall" href="#">Instalovat HellSpy TEST <span aria-hidden="true">→</span></a>
+          <a class="action" id="hellspyInstall" href="#">Instalovat HellSpy <span aria-hidden="true">→</span></a>
           <div class="output" style="display:block;margin-top:10px">
             <label for="hellspyUrl">Instalační manifest bez Sosáče</label>
-            <div class="result-row"><input id="hellspyUrl" readonly aria-label="HellSpy TEST manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
+            <div class="result-row"><input id="hellspyUrl" readonly aria-label="HellSpy manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
           </div>
         </div>
         <div id="hellspyLinked" hidden>
           <button class="action generate" data-addon="hellspy" type="button">Vytvořit odkaz se Sosáčem <span aria-hidden="true">→</span></button>
           <p class="feedback" role="status" aria-live="polite"></p>
           <div class="output bridge-output" hidden>
-            <label for="hellspyBridgeUrl">HellSpy TEST + propojení Sosáč</label>
+            <label for="hellspyBridgeUrl">HellSpy + propojení Sosáč</label>
             <div class="result-row"><input id="hellspyBridgeUrl" readonly aria-label="HellSpy se Sosáčem"><button class="copy-btn copy" type="button">Kopírovat</button></div>
-            <a class="action install" href="#">Instalovat HellSpy TEST se Sosáčem</a>
+            <a class="action install" href="#">Instalovat HellSpy se Sosáčem</a>
           </div>
         </div>
       </div>
     </article>
     <article class="addon" id="sledujteto" role="tabpanel" aria-labelledby="tab-sledujteto" hidden>
-      <div class="addon-top"><span class="provider-icon" aria-hidden="true">🧪</span><span class="provider-pill">MP4 DIRECT TEST</span></div>
-      <h2>Sledujteto</h2><p class="sub">Experimentální přímé MP4 streamy</p>
-      <p class="description">Vyhledávání přes účet Sledujteto a přímé video z jeho CDN. Zatím je ověřené jen vyhledávání a HTTP Range z českého PC, nikoli přehrávání ve Stremiu nebo dostupnost z Oracle.</p>
-      <ul class="features"><li>Vlastní účet</li><li>CDN Direct</li><li>VTT, pokud jsou dostupné</li></ul>
+      <div class="addon-top"><span class="provider-icon" aria-hidden="true">📺</span><span class="provider-pill">VIDEO</span></div>
+      <h2>Sledujte.to</h2><p class="sub">Filmy, seriály a dostupná videa</p>
+      <p class="description">Vyhledávání a přehrávání dostupných videí s vlastním účtem. Dostupnost jednotlivých videí závisí na službě.</p>
+      <ul class="features"><li>Vlastní účet</li><li>Videa</li><li>VTT, pokud jsou dostupné</li></ul>
       <div class="card-bottom">
-        <p class="account-note locked"><span class="dot"></span> Vyžaduje vlastní účet Sledujteto (Premium zatím netestováno)</p>
+        <p class="account-note locked"><span class="dot"></span> Vyžaduje vlastní účet Sledujte.to </p>
         <div class="torrent-fields">
-          <div class="field"><label for="sledujtetoEmail">Sledujteto – e-mail</label><input id="sledujtetoEmail" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="E-mail účtu"></div>
-          <div class="field"><label for="sledujtetoPassword">Sledujteto – heslo</label><div class="password-row"><input id="sledujtetoPassword" type="password" autocomplete="current-password" placeholder="Heslo Sledujteto"><button class="reveal show-password" data-target="sledujtetoPassword" type="button" aria-pressed="false">Zobrazit</button></div></div>
+          <div class="field"><label for="sledujtetoEmail">Sledujte.to – e-mail</label><input id="sledujtetoEmail" type="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="E-mail účtu"></div>
+          <div class="field"><label for="sledujtetoPassword">Sledujte.to – heslo</label><div class="password-row"><input id="sledujtetoPassword" type="password" autocomplete="current-password" placeholder="Heslo Sledujte.to"><button class="reveal show-password" data-target="sledujtetoPassword" type="button" aria-pressed="false">Zobrazit</button></div></div>
         </div>
-        <button class="action generate" data-addon="sledujteto" id="sledujtetoGenerate" type="button" disabled>Vytvořit šifrovaný testovací manifest <span aria-hidden="true">→</span></button>
+        <button class="action generate" data-addon="sledujteto" id="sledujtetoGenerate" type="button" disabled>Vytvořit instalační odkaz <span aria-hidden="true">→</span></button>
         <p class="feedback" role="status" aria-live="polite"></p>
         <div class="output" hidden>
           <label for="sledujtetoUrl">Šifrovaný manifest – nesdílet veřejně</label>
-          <div class="result-row"><input id="sledujtetoUrl" readonly aria-label="Sledujteto TEST manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
-          <a class="action install" href="#">Instalovat Sledujteto TEST</a>
+          <div class="result-row"><input id="sledujtetoUrl" readonly aria-label="Sledujte.to manifest"><button class="copy-btn copy" type="button">Kopírovat</button></div>
+          <a class="action install" href="#">Instalovat Sledujte.to</a>
         </div>
       </div>
     </article>
@@ -479,7 +479,7 @@ async function generate(addon) {
     if (!response.ok || !data.token) throw Error(data.error||'Instalační odkaz se nepodařilo vytvořit.');
     showResult(addon,data.token);
     feedback(card,addon==='sktorrent'?'Účet ověřen. Manifest je připravený.':
-      addon==='sledujteto'?'Šifrovaný testovací manifest je připravený. Přihlášení se ověří až při vyhledávání.':'Manifest je připravený.');
+      addon==='sledujteto'?'Instalační odkaz je připravený. Přihlášení se ověří až při vyhledávání.':'Manifest je připravený.');
   } catch (error) {
     feedback(card,error.message||'Nepodařilo se vytvořit odkaz.',true);
   } finally {

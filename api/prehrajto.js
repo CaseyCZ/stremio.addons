@@ -356,7 +356,7 @@ function releaseQuality(title) {
   if (/\b360p\b/i.test(value)) return '360p';
   if (/\bhd\b/i.test(value)) return 'HD';
   if (/\bsd\b/i.test(value)) return 'SD';
-  return 'Direct';
+  return 'Kvalita neuvedena';
 }
 
 // Only call an audio language when the release title explicitly says DAB/DUB.

@@ -30,7 +30,7 @@ test('Sledujteto finds the intended movie but rejects unrelated fuzzy matches an
   const streams = await findSledujtetoStreams({ cfg, meta: { name: 'Mayday', year: '2026' }, type: 'movie' }, { api: client });
   assert.equal(streams.length, 1);
   assert.equal(streams[0].url, 'https://data11.sledujteto.com/video/abcdef?token=secret');
-  assert.equal(streams[0].name, 'Sledujteto • HD');
+  assert.equal(streams[0].name, 'Sledujte.to • HD');
   assert.equal(streams[0].subtitles.length, 2);
   assert.ok(streams[0].behaviorHints.filename.endsWith('.mp4'));
   assert.equal(requests.length, 3);

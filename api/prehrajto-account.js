@@ -201,10 +201,10 @@ async function findPrehrajtoAccountStreams({ cfg, meta, type, season, episode },
           seenUrls.add(url);
           const subtitles = mappedSubtitles(item.subtitles, item.id);
           streams[index] = {
-            name: 'Přehraj.to • Direct (účet)',
+            name: 'Přehraj.to • Účet',
             title: ['🎧 Neuvedeno',
               '💬 ' + (subtitles.length ? subtitles.length + ' ověřených VTT titulků' : 'Bez ověřených titulků'),
-              '🎬 Direct', '🎞 ' + item.title.slice(0, 180)].join('\n'),
+              '🎬 Kvalita neuvedena', '🎞 ' + item.title.slice(0, 180)].join('\n'),
             url,
             subtitles,
             behaviorHints: { notWebReady: false }

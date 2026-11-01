@@ -29,10 +29,10 @@ Každý doplněk si můžeš nainstalovat samostatně. Vyber si jen ty, které c
 
 | Doplněk | Co nabízí | Přihlášení |
 | --- | --- | --- |
-| 🎬 **SKT Online Direct** | Filmy a seriály, přímé přehrávání a dostupné titulky. | Není potřeba |
-| ▶️ **Přehraj.to Direct** | Filmy, seriály, různé dostupné verze a titulky. | Volitelné |
-| 🔥 **HellSpy Direct** | Vyhledávání filmů a seriálů, přímé přehrávání a dostupné titulky. | Není potřeba |
-| 📺 **Sledujte.to Direct** | Filmy a seriály s přehráváním prostřednictvím vlastního účtu. | Vlastní účet |
+| 🎬 **SKT Online** | Filmy a seriály, přímé přehrávání a dostupné titulky. | Není potřeba |
+| ▶️ **Přehraj.to** | Filmy, seriály, různé dostupné verze a titulky. | Volitelné |
+| 🔥 **HellSpy** | Vyhledávání filmů a seriálů, přímé přehrávání a dostupné titulky. | Není potřeba |
+| 📺 **Sledujte.to** | Filmy a seriály s přehráváním prostřednictvím vlastního účtu. | Vlastní účet |
 | 🍿 **Bombuj** | Filmy, seriály a přehledný výběr dostupného přehrávání. | Není potřeba |
 | 🧲 **SKTorrent P2P** | Další možnosti přehrávání filmů a seriálů. | Vlastní účet SKTorrent |
 
