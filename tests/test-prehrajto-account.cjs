@@ -32,7 +32,8 @@ test('Streamlet-style API v2 uses two distinct auth/search/link steps without me
   assert.match(url, /premiumcdn\.net/);
   assert.equal(requests.length, 3);
   assert.equal(requests[0][1].method, 'POST');
-  assert.deepEqual(JSON.parse(requests[0][1].body), {
+  assert.match(requests[0][1].headers['Content-Type'], /application\/x-www-form-urlencoded/);
+  assert.deepEqual(Object.fromEntries(new URLSearchParams(requests[0][1].body)), {
     email: cfg.prehrajtoEmail, password: cfg.prehrajtoPassword
   });
   assert.ok(requests[1][0].includes('phrase=Mayday+2026'));
