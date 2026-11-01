@@ -132,7 +132,7 @@ jobs:
             const installed=await fetch(base+'/'+token+'/manifest.json');
             const manifest=await installed.json();
             if(manifest.id!=='cz.caseycz.stremio.sktonline.direct')throw Error('Wrong Direct identity');
-            if(manifest.name!=='SKTOnline Direct')throw Error('Wrong Direct label');
+            if(manifest.name!=='SKT Online')throw Error('Wrong addon label');
             if(!manifest.idPrefixes.includes('bombuj-series-'))throw Error('Bombuj ID missing');
             const tor=await request({addonType:'sktorrent',uiLanguage:'cs'});
             if(tor.status!==400)throw Error('Uncredentialed SKTorrent was accepted');
