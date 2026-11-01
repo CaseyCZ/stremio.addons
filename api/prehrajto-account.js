@@ -101,8 +101,9 @@ function createPrehrajtoAccountClient({ fetchImpl = globalThis.fetch, now = Date
     const pending = (async () => {
       const response = await fetchImpl(BASE + '/api/v2/users/login', {
         method: 'POST',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        // Streamlet's documented API module POST bodies use URL-encoded fields.
+        headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ email, password }).toString(),
         signal: AbortSignal.timeout(10000)
       });
       if (response.status === 429) cooldowns.set(key, now() + COOLDOWN_MS);
