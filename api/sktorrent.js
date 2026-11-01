@@ -3,6 +3,7 @@ const cheerio = require('cheerio');
 const NodeCache = require('node-cache');
 const bencode = require('bncode');
 const crypto = require('crypto');
+const { titleMatchScore } = require('./search-matching');
 
 const BASE_URL = 'https://sktorrent.eu';
 const LOGIN_URL = `${BASE_URL}/torrent/login.php`;
@@ -54,26 +55,6 @@ function candidateHasConflictingYears(candidate, wantedTitles) {
   if (wantedYears.length !== 1) return false;
   const candidateYears = yearsInText(candidate);
   return candidateYears.some(year => year !== wantedYears[0]);
-}
-
-function titleMatchScore(candidate, wantedTitles) {
-  const source = normalize(candidate);
-  if (!source) return 0;
-  let best = 0;
-  for (const wanted of wantedTitles || []) {
-    const target = normalize(wanted);
-    if (!target) continue;
-    if (source === target) best = Math.max(best, 1);
-    else if (source.includes(target)) best = Math.max(best, 0.98);
-    else if (target.includes(source) && source.length >= 4) best = Math.max(best, 0.85);
-    else {
-      const words = target.split(' ').filter(word => word.length > 1);
-      if (!words.length) continue;
-      const common = words.filter(word => source.includes(word)).length;
-      best = Math.max(best, common / words.length);
-    }
-  }
-  return best;
 }
 
 function humanBytes(value) {

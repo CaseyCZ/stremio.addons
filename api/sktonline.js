@@ -310,7 +310,7 @@ function qualityLabel(label, src) {
   if (/\b4k\b/i.test(text)) return '2160p';
   if (/\bfull\s*hd\b|\bfhd\b/i.test(text)) return '1080p';
   if (/\bhd\b/i.test(text)) return '720p';
-  return String(label || 'Direct').trim();
+  return label && !/^Direct$/i.test(String(label).trim()) ? String(label).trim() : 'Kvalita neuvedena';
 }
 
 function proxyHints(referer) {
