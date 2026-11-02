@@ -506,6 +506,68 @@ function mediaUrlsFromHtml($, html, pageUrl) {
   return out.filter(item => !seen.has(item.url) && seen.add(item.url));
 }
 
+function subtitleLanguageFromTrack(url, label = '', srclang = '') {
+  let filename = '';
+  try { filename = decodeURIComponent(new URL(url).pathname.split('/').pop() || ''); } catch (_) {}
+  // SKTOnline sometimes incorrectly marks slo.vtt as srclang="cs", so the
+  // filename takes precedence over the language attribute.
+  const name = stripDiacritics(filename).toLowerCase().replace(/\.(?:vtt|srt)$/i, '');
+  const hint = `${name} ${stripDiacritics(label).toLowerCase()}`;
+  if (/(?:^|[^a-z])(cze|ces|cesky|cz|czech)(?:$|[^a-z])/.test(hint)) return 'cze';
+  if (/(?:^|[^a-z])(slo|slk|slovensky|sk|slovak)(?:$|[^a-z])/.test(hint)) return 'slk';
+  if (/(?:^|[^a-z])(eng|english|en)(?:$|[^a-z])/.test(hint)) return 'eng';
+  if (/(?:^|[^a-z])(pol|polish|pl)(?:$|[^a-z])/.test(hint)) return 'pol';
+  if (/(?:^|[^a-z])(deu|ger|german|de)(?:$|[^a-z])/.test(hint)) return 'deu';
+  if (/(?:^|[^a-z])(hun|hungarian|hu)(?:$|[^a-z])/.test(hint)) return 'hun';
+  const code = stripDiacritics(srclang).toLowerCase().trim();
+  return ({ cs: 'cze', cz: 'cze', sk: 'slk', en: 'eng', de: 'deu', hu: 'hun', pl: 'pol' })[code] || code || 'und';
+}
+
+function subtitleItemsToStremio(items, pageUrl) {
+  const seen = new Set();
+  return (items || []).map(item => {
+    const url = absoluteUrl(item && item.url, pageUrl);
+    if (!url || !/^https:\/\//i.test(url) || !/\.(?:vtt|srt)(?:$|[?#])/i.test(url)) return null;
+    const host = hostOf(url);
+    if (host !== 'online.sktorrent.eu' && !/^online\d+\.sktorrent\.eu$/.test(host)) return null;
+    if (seen.has(url)) return null;
+    seen.add(url);
+    const basename = new URL(url).pathname.split('/').pop().replace(/\.(?:vtt|srt)$/i, '');
+    const videoId = new URL(url).pathname.match(/\/vtt\/(\d+)\//)?.[1] || 'unknown';
+    return {
+      id: `sktonline-${videoId}-${basename}`,
+      lang: subtitleLanguageFromTrack(url, item.label, item.srclang),
+      url
+    };
+  }).filter(Boolean);
+}
+
+function subtitleTracksFromHtml($, pageUrl) {
+  const tracks = [];
+  $('video track[src], track[src]').each((_, el) => {
+    tracks.push({
+      url: $(el).attr('src'),
+      label: $(el).attr('label'),
+      srclang: $(el).attr('srclang')
+    });
+  });
+  return subtitleItemsToStremio(tracks, pageUrl);
+}
+
+function withSubtitleTracks(stream, subtitles) {
+  if (!subtitles.length) return stream;
+  const codes = dedupe(subtitles.map(item => {
+    const def = languageDefForAlias(item.lang);
+    return def && def.code;
+  }));
+  const label = `${formatLanguages(codes)} (${subtitles.length} stop)`;
+  return {
+    ...stream,
+    subtitles,
+    title: String(stream.title || '').replace(/^💬 .*$/m, `💬 ${label}`)
+  };
+}
+
 function urlsFromHtml($, html, pageUrl) {
   const urls = [];
   const add = raw => {
@@ -570,14 +632,20 @@ function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle, html = '') {
       else url = absoluteUrl(candidate, pageUrl);
       if (!url || !isSktOnlineUrl(url) || !/\/embed\/[a-z0-9_-]+(?:&\d+)?/i.test(url)) continue;
 
-      const existing = byUrl.get(url);
+      // A detail page commonly contains both an iframe /embed/<token>&1 and
+      // metadata /embed/<token>. They point to the same player; fetching both
+      // wastes time and can make the entire provider exceed its deadline.
+      const parsed = new URL(url);
+      const token = parsed.pathname.match(/\/embed\/([a-z0-9_-]+)/i)[1].toLowerCase();
+      const identity = `${parsed.hostname.toLowerCase()}:${token}`;
+      const existing = byUrl.get(identity);
       const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim();
       if (existing) {
         if (!existing.title && cleanTitle) existing.title = cleanTitle;
         continue;
       }
       const entry = { url, title: cleanTitle };
-      byUrl.set(url, entry);
+      byUrl.set(identity, entry);
       entries.push(entry);
     }
   };
@@ -612,22 +680,17 @@ function onlineEmbedEntriesFromDetail($, pageUrl, releaseTitle, html = '') {
   add(cleanUrlText(html), releaseTitle);
 
   const pageCodes = detailAudioCodes($);
-  if (pageCodes.length && pageCodes.length === entries.length) {
-    entries.forEach((entry, index) => {
-      const codes = releaseLanguageCodesInText(entry.title);
-      if (codes.length !== 1) entry.title = `(${pageCodes[index]})`;
+  const explicitCodes = dedupe(entries.flatMap(entry => releaseLanguageCodesInText(entry.title)));
+  const releaseCodes = releaseLanguageCodesInText(releaseTitle);
+  const remainingCodes = (pageCodes.length ? pageCodes : releaseCodes)
+    .filter(code => !explicitCodes.includes(code));
+  const unlabelled = entries.filter(entry => !releaseLanguageCodesInText(entry.title).length);
+  // Explicit per-player labels are more trustworthy than the torrent's
+  // aggregate audio list, which may contain all three languages at once.
+  if (remainingCodes.length === unlabelled.length) {
+    unlabelled.forEach((entry, index) => {
+      entry.title = `${entry.title || releaseTitle} (${remainingCodes[index]})`;
     });
-  } else {
-    const explicitCodes = dedupe(entries.flatMap(entry => releaseLanguageCodesInText(entry.title)));
-    const releaseCodes = releaseLanguageCodesInText(releaseTitle);
-    const remainingCodes = releaseCodes.filter(code => !explicitCodes.includes(code));
-    if (remainingCodes.length === 1) {
-      for (const entry of entries) {
-        if (!releaseLanguageCodesInText(entry.title).length) {
-          entry.title = `${entry.title || releaseTitle} (${remainingCodes[0]})`;
-        }
-      }
-    }
   }
 
   return entries.sort((a, b) => candidateLanguagePriority(a.title) - candidateLanguagePriority(b.title));
@@ -699,7 +762,7 @@ async function searchSktorrentDetails(query, wantedTitles, trustedReference = fa
         if (!detailsUrl) return;
 
         const cardHtml = String(card.html() || '');
-        const hasPlayVideo = /play[\s_-]*video|title\s*=\s*["'][^"']*\bplay\b|malt\s*=\s*["'][^"']*\bplay\b|fa-play(?:-circle)?|glyphicon-play|online\d*\.sktorrent\.eu/i.test(cardHtml);
+        const hasPlayVideo = /play[\s_-]*video|(?:^|\/)play\.png\b|title\s*=\s*["'][^"']*\bplay\b|malt\s*=\s*["'][^"']*\bplay\b|fa-play(?:-circle)?|glyphicon-play|online\d*\.sktorrent\.eu/i.test(cardHtml);
 
         seen.add(idMatch[1]);
         newIds += 1;
@@ -745,15 +808,20 @@ async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
       });
       const pageTitle = sourceTitle || String(payload.title || '').trim() || 'SKTOnline';
       const sources = Array.isArray(payload.sources) ? payload.sources : [];
-      const result = dedupeStreams(sources.map(item => makeStream(
+      const subtitles = subtitleItemsToStremio(payload.tracks, payload.pageUrl || pageUrl);
+      const result = dedupeStreams(sources.map(item => withSubtitleTracks(makeStream(
         'SKTOnline',
         pageTitle,
         String(item && item.url || ''),
         String(item && item.label || ''),
         pageUrl
-      ))).slice(0, 8);
-      cache.set(key, result, result.length ? 10 * 60 : 60);
-      return result;
+      ), subtitles))).slice(0, 8);
+      if (result.length) {
+        cache.set(key, result, 10 * 60);
+        return result;
+      }
+      // A resolver returning no playable sources is not proof that the embed
+      // itself is empty. Try the direct page before giving up.
     } catch (error) {
       console.warn(`[resolver] page ${pageUrl}: ${error.message}`);
     }
@@ -764,8 +832,9 @@ async function streamsForOnlinePage(pageUrl, referer, sourceTitle = '') {
     const finalUrl = absoluteUrl(response.request?.res?.responseUrl || pageUrl, ONLINE_BASE_URL) || pageUrl;
     const $ = cheerio.load(response.data);
     const title = sourceTitle || $('title').text().replace(/\s+/g, ' ').trim() || 'SKTOnline';
+    const subtitles = subtitleTracksFromHtml($, finalUrl);
     let streams = mediaUrlsFromHtml($, response.data, finalUrl)
-      .map(item => makeStream('SKTOnline', title, item.url, item.label, referer || finalUrl));
+      .map(item => withSubtitleTracks(makeStream('SKTOnline', title, item.url, item.label, referer || finalUrl), subtitles));
 
     if (!streams.length) {
       const videoId = onlineVideoIdFromHtml($, response.data);
@@ -919,11 +988,12 @@ async function streamsForDirectOnlineVideo(item) {
     const $ = cheerio.load(response.data);
     const pageTitle = $('title').text().replace(/\s+/g, ' ').trim() || sourceTitle;
     const streams = [];
+    const subtitles = subtitleTracksFromHtml($, finalUrl);
 
     const add = (raw, label = '') => {
       const url = absoluteUrl(raw, finalUrl);
       if (!url || !isPlayableMediaUrl(url)) return;
-      const stream = makeStream('SKTOnline', pageTitle, url, label, finalUrl);
+      const stream = withSubtitleTracks(makeStream('SKTOnline', pageTitle, url, label, finalUrl), subtitles);
       if (/\.mp4(?:$|[?#])/i.test(url)) stream.behaviorHints = { notWebReady: false };
       streams.push(stream);
     };
@@ -1080,41 +1150,47 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
 }
 
 async function findFromSktorrentDetails(queries, titles, imdbId, client = null, type = 'movie', season = null, episode = null) {
-  // Collect every candidate returned by all useful title variants, then inspect
-  // every candidate detail. A later torrent can be the one carrying the
-  // SKTOnline iframe, so do not stop after the first Direct hit.
-  const candidates = new Map();
+  // Search and resolve progressively. Previously all 12 title variants and
+  // every torrent detail were fetched *before* returning anything, frequently
+  // exceeding the caller's 18-second limit despite a playable first result.
+  const seenCandidates = new Set();
   const historyQueries = dedupe((queries || []).filter(Boolean));
+  const started = Date.now();
+  const SOFT_BUDGET_MS = 11000;
+  const DETAIL_CONCURRENCY = 4;
+  let result = [];
 
   for (let offset = 0; offset < historyQueries.length; offset += 3) {
+    if (result.length && Date.now() - started >= SOFT_BUDGET_MS) break;
     const group = historyQueries.slice(offset, offset + 3);
-    const groups = await Promise.all(group.map(query => searchSktorrentDetails(query, titles)));
-    for (const found of groups) {
+    const foundGroups = await Promise.all(group.map(query => searchSktorrentDetails(query, titles)));
+    const candidates = [];
+    for (const found of foundGroups) {
       for (const item of found) {
         if (type === 'series' && !episodeIdentityMatches(item.name, titles, season, episode)) continue;
-        if (!candidates.has(item.id)) candidates.set(item.id, item);
+        if (seenCandidates.has(item.id)) continue;
+        seenCandidates.add(item.id);
+        candidates.push(item);
       }
     }
-  }
+    candidates.sort((a, b) => {
+      const scoreDiff = (b.score || titleMatchScore(b.name, titles)) - (a.score || titleMatchScore(a.name, titles));
+      if (scoreDiff) return scoreDiff;
+      const playVideoDiff = Number(b.hasPlayVideo) - Number(a.hasPlayVideo);
+      if (playVideoDiff) return playVideoDiff;
+      return candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
+    });
 
-  if (!candidates.size) return [];
-
-  const rankedCandidates = [...candidates.values()].sort((a, b) => {
-    const scoreDiff = (b.score || titleMatchScore(b.name, titles)) - (a.score || titleMatchScore(a.name, titles));
-    if (scoreDiff) return scoreDiff;
-    const playVideoDiff = Number(b.hasPlayVideo) - Number(a.hasPlayVideo);
-    if (playVideoDiff) return playVideoDiff;
-    return candidateLanguagePriority(a.name) - candidateLanguagePriority(b.name);
-  });
-
-  let result = [];
-  const DETAIL_CONCURRENCY = 6;
-  for (let offset = 0; offset < rankedCandidates.length; offset += DETAIL_CONCURRENCY) {
-    const batch = rankedCandidates.slice(offset, offset + DETAIL_CONCURRENCY);
-    const resolved = await Promise.all(
-      batch.map(candidate => streamsFromSktorrentDetail(candidate, client))
-    );
-    result = dedupeStreams([...result, ...resolved.flat()]);
+    for (let index = 0; index < candidates.length; index += DETAIL_CONCURRENCY) {
+      const batch = candidates.slice(index, index + DETAIL_CONCURRENCY);
+      const resolved = await Promise.all(batch.map(candidate => streamsFromSktorrentDetail(candidate, client)));
+      result = dedupeStreams([...result, ...resolved.flat()]);
+      const distinctVideos = new Set(result.map(stream =>
+        videoIdFromResolvedStream(stream) || stream.externalUrl || stream.url).filter(Boolean));
+      if (distinctVideos.size >= 3 || (result.length && Date.now() - started >= SOFT_BUDGET_MS)) {
+        return result;
+      }
+    }
   }
 
   return result;

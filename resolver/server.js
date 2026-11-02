@@ -80,6 +80,24 @@ function extractSources(html, pageUrl) {
   return out.filter(item => !seen.has(item.url) && seen.add(item.url));
 }
 
+function extractSubtitleTracks(html, pageUrl) {
+  const $ = cheerio.load(html);
+  const seen = new Set();
+  const out = [];
+  $('video track[src], track[src]').each((_, el) => {
+    const node = $(el);
+    const url = allowedOnlineUrl(absoluteUrl(node.attr('src'), pageUrl));
+    if (!url || !/\.(?:vtt|srt)$/i.test(url.pathname) || seen.has(url.toString())) return;
+    seen.add(url.toString());
+    out.push({
+      url: url.toString(),
+      label: String(node.attr('label') || '').trim(),
+      srclang: String(node.attr('srclang') || '').trim()
+    });
+  });
+  return out;
+}
+
 async function fetchOnlinePage(url, referer) {
   const target = allowedOnlineUrl(url);
   if (!target) throw new Error('URL is not an allowed SKTOnline page');
@@ -92,7 +110,8 @@ async function fetchOnlinePage(url, referer) {
   return {
     pageUrl,
     title: $('title').text().replace(/\s+/g, ' ').trim(),
-    sources: extractSources(response.data, pageUrl)
+    sources: extractSources(response.data, pageUrl),
+    tracks: extractSubtitleTracks(response.data, pageUrl)
   };
 }
 

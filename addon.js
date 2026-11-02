@@ -259,7 +259,10 @@ function replaceStreamSubtitleLine(title, value) {
 
 async function decorateSktOnlineSubtitleLabels(streams) {
   if (!Array.isArray(streams) || !streams.length) return streams || [];
-  const videoIds = uniqueStrings(streams.map(sktVideoIdFromStream).filter(Boolean));
+  // Player <track> entries are the source of truth: they include variants
+  // such as Cesky.vtt and cze_forced.vtt, not just cze.vtt / slo.vtt.
+  const videoIds = uniqueStrings(streams.filter(stream => !stream.subtitles?.length)
+    .map(sktVideoIdFromStream).filter(Boolean));
   if (!videoIds.length) return streams;
 
   const availability = new Map(await Promise.all(videoIds.map(async videoId => {
@@ -271,6 +274,7 @@ async function decorateSktOnlineSubtitleLabels(streams) {
   })));
 
   return streams.map(stream => {
+    if (Array.isArray(stream.subtitles) && stream.subtitles.length) return stream;
     const videoId = sktVideoIdFromStream(stream);
     if (!videoId) return stream;
     const hasSubtitles = availability.get(videoId) === true;
@@ -402,13 +406,13 @@ async function resolveSktOnlineSubtitles(cfg, type, requestId, parsed) {
   const combinedKey = `combined-v16:${fingerprint}:${type}:${requestId}`;
   const sourceKey = `source-videoids-v1:${fingerprint}:${type}:${requestId}`;
   let videoIds = sourceIdentityCache.get(sourceKey);
+  let knownStreams = streamCache.get(combinedKey) || [];
 
   // Backward-compatible fallback for a stream response cached before the
   // source-identity resolver ran. Normally subtitles reuse sourceKey directly.
   if (!Array.isArray(videoIds) || !videoIds.length) {
-    const combinedStreams = streamCache.get(combinedKey);
-    if (Array.isArray(combinedStreams)) {
-      videoIds = extractSktOnlineVideoIds(combinedStreams);
+    if (Array.isArray(knownStreams)) {
+      videoIds = extractSktOnlineVideoIds(knownStreams);
     }
   }
 
@@ -429,6 +433,7 @@ async function resolveSktOnlineSubtitles(cfg, type, requestId, parsed) {
       sktPassword: cfg.enableTorrents ? cfg.sktPassword : ''
     }), 22000, 'subtitle-direct-source');
     const bundle = bundleRaw && !Array.isArray(bundleRaw) ? bundleRaw : { streams: [], videoIds: [] };
+    knownStreams = Array.isArray(bundle.streams) ? bundle.streams : [];
     videoIds = Array.isArray(bundle.videoIds) ? bundle.videoIds : [];
     if (videoIds.length) sourceIdentityCache.set(sourceKey, videoIds, 10 * 60);
   }
@@ -443,7 +448,17 @@ async function resolveSktOnlineSubtitles(cfg, type, requestId, parsed) {
   }
 
   const checked = await Promise.all(candidates.map(async item => await subtitleUrlExists(item.url) ? item : null));
-  const subtitles = checked.filter(Boolean);
+  const found = [
+    ...(Array.isArray(knownStreams) ? knownStreams : []).flatMap(stream =>
+      Array.isArray(stream.subtitles) ? stream.subtitles : []),
+    ...checked.filter(Boolean)
+  ];
+  const seenUrls = new Set();
+  const subtitles = found.filter(item => {
+    if (!item || !item.url || seenUrls.has(item.url)) return false;
+    seenUrls.add(item.url);
+    return true;
+  });
   subtitleCache.set(lookupKey, subtitles, subtitles.length ? 10 * 60 : 2 * 60);
   console.log(`[subtitle] ${type}/${requestId}: videoIds=${videoIds.join(',') || '-'} tracks=${subtitles.length}`);
   return subtitles;
