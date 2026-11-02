@@ -1020,9 +1020,13 @@ async function streamsForDirectOnlineVideo(item) {
 
 async function findDirectOnlineByTitle(
   queries, titles, type, season, episode,
-  search = searchDirectOnlineVideos, resolve = streamsForDirectOnlineVideo
+  search = searchDirectOnlineVideos, resolve = streamsForDirectOnlineVideo, options = {}
 ) {
+  const deadline = Number.isFinite(options.deadline) ? options.deadline : Infinity;
+  const collectAll = options.collectAll === true;
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   const seenPages = new Set();
+  let result = [];
   const accept = (item) => type !== 'series' ||
     episodeIdentityMatches(item.title, titles, season, episode);
 
@@ -1039,11 +1043,13 @@ async function findDirectOnlineByTitle(
     }
     fresh.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
     const all = [];
-    for (const item of fresh.slice(0, 4)) {
+    for (const item of fresh.slice(0, collectAll ? 12 : 4)) {
+      if (Date.now() >= deadline) break;
       const streams = await resolve(item);
       all.push(...streams);
+      if (streams.length && Date.now() <= deadline) onProgress(streams);
       const unique = dedupeStreams(all);
-      if (unique.length >= 4) return unique.slice(0, 12);
+      if (!collectAll && unique.length >= 4) return unique.slice(0, 12);
     }
     return dedupeStreams(all).slice(0, 12);
   };
@@ -1054,12 +1060,14 @@ async function findDirectOnlineByTitle(
   // Never accept a match based only on the user's query string.
   const searchQueries = dedupe(queries || []).slice(0, 9);
   for (const query of searchQueries) {
+    if (Date.now() >= deadline) break;
     const found = await search(query, titles, 1);
     const streams = await resolveMatches([found]);
-    if (streams.length) return streams;
+    if (!collectAll && streams.length) return streams;
+    result = dedupeStreams([...result, ...streams]);
   }
 
-  if (type !== 'series' || !Number.isInteger(season) || !Number.isInteger(episode)) return [];
+  if (type !== 'series' || !Number.isInteger(season) || !Number.isInteger(episode)) return result;
 
   // Episode-specific searches are often empty even though the site's normal
   // show search has the episode on page 2+. Previously only page 1 was read,
@@ -1075,16 +1083,19 @@ async function findDirectOnlineByTitle(
   for (const showTitle of showQueries) {
     let emptyPages = 0;
     for (let page = 2; page <= 8; page += 1) {
+      if (Date.now() >= deadline) break;
       const found = await search(showTitle, titles, page);
       const streams = await resolveMatches([found]);
-      if (streams.length) return streams;
+      if (!collectAll && streams.length) return streams;
+      result = dedupeStreams([...result, ...streams]);
       emptyPages = found?.length ? 0 : emptyPages + 1;
       if (emptyPages >= 2) break;
     }
   }
-  return [];
+  return result;
 }
-async function streamsFromSktorrentDetail(candidate, client = null) {
+async function streamsFromSktorrentDetail(candidate, client = null, options = {}) {
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   const key = `skt-detail-direct-v3:${client ? client.clientKey : 'anon'}:${candidate.id}`;
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
@@ -1113,6 +1124,7 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
     for (const item of mediaUrlsFromHtml($, response.data, finalUrl)) {
       streams.push(makeStream('SKTOnline', title, item.url, item.label, finalUrl));
     }
+    if (streams.length) onProgress(streams);
 
     const links = urlsFromHtml($, response.data, finalUrl);
     const onlineEntries = onlineEmbedEntriesFromDetail($, finalUrl, title, response.data);
@@ -1124,7 +1136,10 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
       ...(detailVideoId ? [streamsForKnownOnlineVideoId(detailVideoId, title)] : []),
       ...selectedEntries.map(entry => streamsForOnlinePage(entry.url, finalUrl, entry.title || title)),
       ...onlineDirectLinks.slice(0, 4).map(url => Promise.resolve([makeStream('SKTOnline', title, url, '', finalUrl)]))
-    ]);
+    ].map(promise => Promise.resolve(promise).then(found => {
+      if (found.length) onProgress(found);
+      return found;
+    })));
 
     streams.push(...onlineBatches.flat());
 
@@ -1149,7 +1164,7 @@ async function streamsFromSktorrentDetail(candidate, client = null) {
   }
 }
 
-async function findFromSktorrentDetails(queries, titles, imdbId, client = null, type = 'movie', season = null, episode = null) {
+async function findFromSktorrentDetails(queries, titles, imdbId, client = null, type = 'movie', season = null, episode = null, options = {}) {
   // Search and resolve progressively. Previously all 12 title variants and
   // every torrent detail were fetched *before* returning anything, frequently
   // exceeding the caller's 18-second limit despite a playable first result.
@@ -1158,10 +1173,13 @@ async function findFromSktorrentDetails(queries, titles, imdbId, client = null, 
   const started = Date.now();
   const SOFT_BUDGET_MS = 11000;
   const DETAIL_CONCURRENCY = 4;
+  const deadline = Number.isFinite(options.deadline) ? options.deadline : Infinity;
+  const collectAll = options.collectAll === true;
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   let result = [];
 
   for (let offset = 0; offset < historyQueries.length; offset += 3) {
-    if (result.length && Date.now() - started >= SOFT_BUDGET_MS) break;
+    if (Date.now() >= deadline || (!collectAll && result.length && Date.now() - started >= SOFT_BUDGET_MS)) break;
     const group = historyQueries.slice(offset, offset + 3);
     const foundGroups = await Promise.all(group.map(query => searchSktorrentDetails(query, titles)));
     const candidates = [];
@@ -1182,12 +1200,22 @@ async function findFromSktorrentDetails(queries, titles, imdbId, client = null, 
     });
 
     for (let index = 0; index < candidates.length; index += DETAIL_CONCURRENCY) {
+      if (Date.now() >= deadline) break;
       const batch = candidates.slice(index, index + DETAIL_CONCURRENCY);
-      const resolved = await Promise.all(batch.map(candidate => streamsFromSktorrentDetail(candidate, client)));
-      result = dedupeStreams([...result, ...resolved.flat()]);
+      // Publish each finished detail immediately: a slower sibling must not
+      // cause its already-resolved videos to disappear at the 20s deadline.
+      const report = streams => {
+        if (!streams.length || Date.now() > deadline) return;
+        result = dedupeStreams([...result, ...streams]);
+        onProgress(streams);
+      };
+      await Promise.all(batch.map(async candidate => {
+        const streams = await streamsFromSktorrentDetail(candidate, client, { onProgress: report });
+        report(streams);
+      }));
       const distinctVideos = new Set(result.map(stream =>
         videoIdFromResolvedStream(stream) || stream.externalUrl || stream.url).filter(Boolean));
-      if (distinctVideos.size >= 3 || (result.length && Date.now() - started >= SOFT_BUDGET_MS)) {
+      if (!collectAll && (distinctVideos.size >= 3 || (result.length && Date.now() - started >= SOFT_BUDGET_MS))) {
         return result;
       }
     }
@@ -1196,21 +1224,24 @@ async function findFromSktorrentDetails(queries, titles, imdbId, client = null, 
   return result;
 }
 
-function directProviderWithin(promise, timeoutMs, label) {
-  let timer;
-  const timeout = new Promise(resolve => {
-    timer = setTimeout(() => {
-      console.warn(`[direct] ${label} timed out after ${timeoutMs}ms`);
-      resolve([]);
-    }, timeoutMs);
-  });
-  return Promise.race([
-    Promise.resolve(promise).catch(error => {
+async function collectDirectSourcesWithin(createLookups, timeoutMs = 20000) {
+  const deadline = Date.now() + timeoutMs;
+  const collected = [];
+  const report = streams => {
+    if (Date.now() <= deadline && Array.isArray(streams)) collected.push(...streams);
+  };
+  const lookups = createLookups({ deadline, report }).map(([label, lookup]) =>
+    Promise.resolve().then(lookup).then(report, error => {
       console.warn(`[direct] ${label} failed: ${error.message}`);
-      return [];
-    }),
-    timeout
+    })
+  );
+  let timer;
+  const finished = await Promise.race([
+    Promise.all(lookups).then(() => true),
+    new Promise(resolve => { timer = setTimeout(() => resolve(false), timeoutMs); })
   ]).finally(() => clearTimeout(timer));
+  if (!finished) console.warn(`[direct] SKTOnline search window reached ${timeoutMs}ms; returning ${collected.length} collected streams`);
+  return dedupeStreams(collected);
 }
 
 function videoIdFromResolvedStream(stream) {
@@ -1289,22 +1320,24 @@ async function findOnlineSourceBundle({ imdbId, titles, type, season, episode, s
     try { sktClient = getClient(sktUsername, sktPassword); } catch (_) {}
   }
 
-  const [fromDirectOnline, fromTorrentDetails] = await Promise.all([
-  directProviderWithin(findDirectOnlineByTitle(queries, titles, type, season, episode), 18000, 'SKTOnline title search'),
-  directProviderWithin(findFromSktorrentDetails(queries, titles, imdbId, sktClient, type, season, episode), 18000, 'SKTorrent detail players')
-]);
+  // Both sources share one 20-second window. Each resolved player is saved as
+  // soon as it arrives; timeout returns the snapshot instead of an empty list.
+  const resolvedAll = (await collectDirectSourcesWithin(({ deadline, report }) => [
+    ['SKTOnline title search', () => findDirectOnlineByTitle(
+      queries, titles, type, season, episode,
+      searchDirectOnlineVideos, streamsForDirectOnlineVideo,
+      { deadline, collectAll: true, onProgress: report }
+    )],
+    ['SKTorrent detail players', () => findFromSktorrentDetails(
+      queries, titles, imdbId, sktClient, type, season, episode,
+      { deadline, collectAll: true, onProgress: report }
+    )]
+  ], 20000)).slice(0, 48);
 
-const resolvedAll = dedupeStreams([
-  ...fromDirectOnline,
-  ...fromTorrentDetails
-]).slice(0, 48);
-
-  // Keep every healthy SKTOnline videoId internally for subtitles and future
-  // rediscovery, but show only the best source for each audio/subtitle variant.
+  // Keep all distinct playable URLs, their qualities and subtitle tracks.
   const videoIds = dedupe(resolvedAll.map(videoIdFromResolvedStream).filter(Boolean));
-  const resolved = selectBestSktDisplayStreams(resolvedAll);
   return {
-    streams: resolved.map(cleanResolvedStream),
+    streams: resolvedAll.map(cleanResolvedStream),
     videoIds
   };
 }
@@ -1318,6 +1351,7 @@ module.exports = {
   findOnlineSourceBundle,
   findDirectOnlineByTitle,
   findFromSktorrentDetails,
+  collectDirectSourcesWithin,
   episodeIdentityMatches,
   buildQueries
 };
