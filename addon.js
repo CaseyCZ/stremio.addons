@@ -293,6 +293,9 @@ function combinedStreamIdentity(stream) {
   if (stream.externalUrl) return `external:${String(stream.externalUrl).trim()}`;
   if (stream.url) {
     const raw = String(stream.url).trim();
+    // SKTOnline only merges identical URLs. Different CDN mirrors and video
+    // releases must stay available, even when they share a video ID/quality.
+    if (String(stream.name || '').startsWith('SKTOnline • ')) return `url:${raw}`;
     try {
       const parsed = new URL(raw);
       const path = decodeURIComponent(parsed.pathname || '');
