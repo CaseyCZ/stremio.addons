@@ -91,12 +91,15 @@ async function resolveVidapi(context, { fetchImpl = fetch,
     // merely because it has not appeared in a previous resolver test.
     const sources = [...new Set(result.data.stream_urls.filter(vidapiMediaUrl))].slice(0, 16);
     if (!sources.length) onDiagnostic({ stage: 'parse', result: 'failed', reason: 'no-public-media-url', requestUrl: url });
-    let chosen = null;
+    const resolved = [];
     for (const candidate of sources) {
       const type = /\.mp4$/i.test(new URL(candidate).pathname) ? 'mp4' : 'hls';
+      const direct = { url: candidate, type, height: 0,
+        referer: `${ORIGIN}/`, origin: ORIGIN, ephemeral: true };
       // Even a known CDN's inspection may fail transiently. The link is not
-      // removed: the player can try it and the original embed stays available.
-      if (!chosen) chosen = { url: candidate, type, height: 0 };
+      // removed: the player can try the original direct URL. Keep every
+      // distinct API alternative rather than choosing only one video URL.
+      resolved.push(direct);
       // An unknown CDN can be handed to Stremio, but MUST NOT be probed from
       // the server (untrusted upstream URLs can point to internal networks).
       if (!vidapiInspectedCdn(candidate) || type === 'mp4') {
@@ -110,13 +113,12 @@ async function resolveVidapi(context, { fetchImpl = fetch,
       if (!inspected) onDiagnostic({ stage: 'hls', result: 'failed',
         reason: 'hls-unreadable', requestUrl: candidate });
       if (!inspected) continue;
-      const height = Number.parseInt(inspected.quality || '0', 10) || 0;
-      if (!chosen || height > chosen.height) {
-        chosen = { url: candidate, type, height, quality: inspected.quality || undefined };
-      }
+      direct.height = Number.parseInt(inspected.quality || '0', 10) || 0;
+      direct.quality = inspected.quality || undefined;
     }
-    return chosen ? { url: chosen.url, type: chosen.type, quality: chosen.quality,
-      referer: `${ORIGIN}/`, origin: ORIGIN, ephemeral: true } : null;
+    resolved.sort((a, b) => b.height - a.height);
+    // Existing callers accept a single object or an array of alternatives.
+    return resolved.length === 0 ? null : resolved.length === 1 ? resolved[0] : resolved;
   } catch (error) {
     const code = String(error?.cause?.code || error?.code || '');
     const reason = error?.name === 'TimeoutError' || error?.name === 'AbortError' ? 'timeout'
