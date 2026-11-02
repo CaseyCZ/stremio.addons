@@ -350,17 +350,42 @@ function canonicalDirectIdentity(stream) {
   }
 }
 
+function canonicalExternalIdentity(raw) {
+  try {
+    const parsed = new URL(String(raw || '').trim());
+    const match = parsed.pathname.match(/^\/embed\/([a-z0-9_-]+)(?:&\d+)?$/i);
+    if (isSktOnlineUrl(parsed.href) && match) {
+      // /embed/<token> and /embed/<token>&1 open the same web player.
+      return `skt-embed:${parsed.hostname.toLowerCase()}:${match[1].toLowerCase()}`;
+    }
+    return `external:${parsed.href}`;
+  } catch (_) {
+    return `external:${String(raw || '').trim()}`;
+  }
+}
+
 function dedupeStreams(streams) {
-  const seen = new Set();
-  return (streams || []).filter(stream => {
-    if (!stream || (!stream.url && !stream.externalUrl)) return false;
+  const seen = new Map();
+  for (const stream of streams || []) {
+    if (!stream || (!stream.url && !stream.externalUrl)) continue;
     const identity = stream.externalUrl
-      ? `external:${stream.externalUrl}`
+      ? canonicalExternalIdentity(stream.externalUrl)
       : canonicalDirectIdentity(stream);
-    if (!identity || seen.has(identity)) return false;
-    seen.add(identity);
-    return true;
-  });
+    if (!identity) continue;
+    const previous = seen.get(identity);
+    if (!previous) {
+      seen.set(identity, stream);
+      continue;
+    }
+    // A direct search and a torrent detail may expose the same MP4 with
+    // different subtitle tracks. Keep their union instead of losing tracks.
+    const tracks = new Map();
+    for (const item of [...(previous.subtitles || []), ...(stream.subtitles || [])]) {
+      if (item && item.url) tracks.set(item.url, item);
+    }
+    if (tracks.size) seen.set(identity, withSubtitleTracks(previous, [...tracks.values()]));
+  }
+  return [...seen.values()];
 }
 
 
@@ -1322,7 +1347,7 @@ async function findOnlineSourceBundle({ imdbId, titles, type, season, episode, s
 
   // Both sources share one 20-second window. Each resolved player is saved as
   // soon as it arrives; timeout returns the snapshot instead of an empty list.
-  const resolvedAll = (await collectDirectSourcesWithin(({ deadline, report }) => [
+  const resolvedAll = await collectDirectSourcesWithin(({ deadline, report }) => [
     ['SKTOnline title search', () => findDirectOnlineByTitle(
       queries, titles, type, season, episode,
       searchDirectOnlineVideos, streamsForDirectOnlineVideo,
@@ -1332,12 +1357,14 @@ async function findOnlineSourceBundle({ imdbId, titles, type, season, episode, s
       queries, titles, imdbId, sktClient, type, season, episode,
       { deadline, collectAll: true, onProgress: report }
     )]
-  ], 20000)).slice(0, 48);
+  ], 20000);
 
-  // Keep all distinct playable URLs, their qualities and subtitle tracks.
+  // Keep every discovered video ID for subtitles, but show just the best
+  // player per audio/subtitle variant (with all available qualities).
   const videoIds = dedupe(resolvedAll.map(videoIdFromResolvedStream).filter(Boolean));
+  const resolved = selectBestSktDisplayStreams(resolvedAll).slice(0, 48);
   return {
-    streams: resolvedAll.map(cleanResolvedStream),
+    streams: resolved.map(cleanResolvedStream),
     videoIds
   };
 }
@@ -1352,6 +1379,7 @@ module.exports = {
   findDirectOnlineByTitle,
   findFromSktorrentDetails,
   collectDirectSourcesWithin,
+  selectBestSktDisplayStreams,
   episodeIdentityMatches,
   buildQueries
 };
